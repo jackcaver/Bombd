@@ -3,6 +3,7 @@ using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Protocols;
 using Bombd.Serialization;
+using Bombd.Simulation;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.Services;
 
@@ -14,14 +15,43 @@ public class GameBrowser : BombdService
     [Transaction("listGames")]
     public ServerGameList ListGames(TransactionContext context)
     {
-        int timeOfDeath = TimeHelper.LocalTime + 60 * 60 * 1000;
-        var gameManager = Bombd.GetService<GameManager>();
-
         var attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]);
         attributes.TryAdd("COMM_CHECKSUM", ((int)context.Connection.Platform).ToString());
 
         List<GameBrowserGame> games = Bombd.RoomManager.SearchRooms(attributes, context.Connection.Platform);
-        var gameList = new ServerGameList
+        return CreateServerGameList(games);
+    }
+
+    [Transaction("subscribeGameEvents")]
+    public ServerGameList? SubscribeGameEvents(TransactionContext context)
+    {
+        GamePlayer? player = Bombd.RoomManager.GetPlayerInRoom(context.Connection.UserId);
+        if (player == null)
+        {
+            context.Response.Error = "NotInKartPark";
+            return null;
+        }
+        
+        return CreateServerGameList(new List<GameBrowserGame> { player.Room.ToGameBrowser() });
+    }
+
+    [Transaction("unSubscribeGameEvents")]
+    public void UnsubscribeGameEvents(TransactionContext context)
+    {
+    }
+
+    [Transaction("RequestGlobalPlayerCount")]
+    public void RequestGlobalPlayerCount(TransactionContext context)
+    {
+        context.Response["GlobalPlayerCount"] = UserInfo.Count.ToString();
+    }
+    
+    private ServerGameList CreateServerGameList(List<GameBrowserGame> games)
+    {
+        int timeOfDeath = TimeHelper.LocalTime + 60 * 60 * 1000;
+        var gameManager = Bombd.GetService<GameManager>();
+        
+        return new ServerGameList
         {
             Header = new GameListHeader
             {
@@ -35,21 +65,5 @@ public class GameBrowser : BombdService
             Games = games,
             TimeOfDeath = timeOfDeath
         };
-
-        return gameList;
-    }
-
-    [Transaction("subscribeGameEvents")]
-    public ServerGameList SubscribeGameEvents(TransactionContext context) => ListGames(context);
-
-    [Transaction("unSubscribeGameEvents")]
-    public void UnsubscribeGameEvents(TransactionContext context)
-    {
-    }
-
-    [Transaction("RequestGlobalPlayerCount")]
-    public void RequestGlobalPlayerCount(TransactionContext context)
-    {
-        context.Response["GlobalPlayerCount"] = UserInfo.Count.ToString();
     }
 }

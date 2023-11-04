@@ -63,7 +63,7 @@ public abstract class BombdService
         Logger.LogInfo(_type, $"Finished initializing service {Name}:{protocolName}:{Port}");
     }
 
-    public BombdServer Bombd { get; }
+    protected BombdServer Bombd { get; }
 
     public string Uuid { get; } = CryptoHelper.GetRandomUUID();
     public string Name { get; }

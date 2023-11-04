@@ -28,7 +28,7 @@ public class GameSimulation
     private readonly StartingGrid StartingGrid = new();
     public readonly ServerType Type;
     private AiInfo AiInfo = new(0);
-    private RaceSettings? RaceSettings;
+    private EventSettings? RaceSettings;
 
     private bool WaitingForPlayerNisEvents;
     private bool WaitingForPlayerStartEvents;
@@ -97,6 +97,17 @@ public class GameSimulation
         // C PlayerFinishedRace (Broadcast?)
         // C EventResultsPreliminary
 
+        if (Type == ServerType.KartPark)
+        {
+            _syncObjects[NetObjectType.NetCoiInfoPackage] = new SyncObject
+            {
+                OwnerName = "simserver",
+                DebugTag = "CoiInfo",
+                Guid = NetObjectType.NetCoiInfoPackage,
+                Type = NetObjectType.NetCoiInfoPackage,
+                Data = NetworkWriter.Serialize(new CoiInfo())
+            };
+        }
 
         if (Type == ServerType.Competitive)
         {
@@ -315,7 +326,7 @@ public class GameSimulation
     private void UpdateAi()
     {
         if (RaceSettings == null) return;
-        int numAi = Math.Min(AiInfo.MaxDataSize, RaceSettings.MaxHumans - _players.Count);
+        int numAi = Math.Min(AiInfo.MaxDataSize, RaceSettings.MaxPlayers - _players.Count);
         AiInfo = RaceSettings.AiEnabled ? new AiInfo(numAi) : new AiInfo(0);
         UpdateSystemSyncObject(NetObjectType.AiInfo, NetworkWriter.Serialize(AiInfo));
     }
@@ -433,7 +444,7 @@ public class GameSimulation
                 byte[] array = new byte[data.Count];
                 data.CopyTo(array);
 
-                RaceSettings = NetworkReader.Deserialize<RaceSettings>(data);
+                RaceSettings = NetworkReader.Deserialize<EventSettings>(data);
                 UpdateSystemSyncObject(NetObjectType.RaceSettings, array);
 
                 break;
