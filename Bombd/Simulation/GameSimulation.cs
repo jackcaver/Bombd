@@ -1,4 +1,5 @@
 ﻿using System.Xml.Serialization;
+using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Protocols;
@@ -373,15 +374,11 @@ public class GameSimulation
             case NetMessageType.GameroomDownloadTracksComplete:
             {
                 if (player.UserId != _owner) break;
-
-                // GameroomState.LoadEventTime = TimeHelper.LocalTime + 30000;
-                // GameroomState.LockedForRacerJoinsValue = 25000.0f;
-                // GameroomState.LockedTimerValue = 20000.0f;
-
-                GameroomState.LoadEventTime = TimeHelper.LocalTime + 5000;
-                GameroomState.LockedForRacerJoinsValue = 5000.0f;
-                GameroomState.LockedTimerValue = 5000.0f;
-
+                
+                GameroomState.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.GameroomCountdownTime;
+                GameroomState.LockedForRacerJoinsValue = BombdConfig.Instance.GameroomRacerLockTime;
+                GameroomState.LockedTimerValue = BombdConfig.Instance.GameroomTimerLockTime;
+                
                 UpdateGameroomState(GameroomState.RoomState.CountingDown);
                 UpdateAi();
                 UpdateStartingGrid();

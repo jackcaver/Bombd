@@ -32,7 +32,7 @@ public class Directory : BombdService
                 {
                     new ServiceInstance
                     {
-                        HostName = Bombd.Configuration.ExternalIP,
+                        HostName = BombdConfig.Instance.ExternalIP,
                         ServerUuid = service.Uuid,
                         Port = service.Port.ToString(),
                         Protocol = service.Protocol.ToString(),

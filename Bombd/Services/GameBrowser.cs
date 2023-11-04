@@ -26,7 +26,7 @@ public class GameBrowser : BombdService
             Header = new GameListHeader
             {
                 ClusterUuid = Bombd.ClusterUuid,
-                GameManagerIp = Bombd.Configuration.ExternalIP,
+                GameManagerIp = BombdConfig.Instance.ExternalIP,
                 GameManagerPort = gameManager.Port.ToString(),
                 GameManagerUuid = gameManager.Uuid,
                 NumGamesInList = games.Count,

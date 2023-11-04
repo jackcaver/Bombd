@@ -59,7 +59,7 @@ public class GameManager : BombdService
     [Transaction("joinGame")]
     public void JoinGame(TransactionContext context)
     {
-        context.Response["listenIP"] = Bombd.Configuration.ExternalIP;
+        context.Response["listenIP"] = BombdConfig.Instance.ExternalIP;
         context.Response["listenPort"] = Bombd.GameServer.Port.ToString();
         context.Response["hashSalt"] = CryptoHelper.Salt.ToString();
         context.Response["sessionId"] = context.Connection.SessionId.ToString();
@@ -78,7 +78,7 @@ public class GameManager : BombdService
         });
 
         context.Response["gamename"] = room.Game.GameName;
-        context.Response["listenIP"] = Bombd.Configuration.ExternalIP;
+        context.Response["listenIP"] = BombdConfig.Instance.ExternalIP;
         context.Response["listenPort"] = Bombd.GameServer.Port.ToString();
         context.Response["hashSalt"] = CryptoHelper.Salt.ToString();
         context.Response["sessionId"] = context.Connection.SessionId.ToString();

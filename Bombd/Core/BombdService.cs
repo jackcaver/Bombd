@@ -27,6 +27,8 @@ public abstract class BombdService
 
     protected BombdService()
     {
+        // Used for convenience
+        Bombd = BombdServer.Instance;
         _type = GetType();
 
         ServiceAttribute? serviceAttribute = _type.GetCustomAttributes<ServiceAttribute>().FirstOrDefault();
@@ -48,8 +50,8 @@ public abstract class BombdService
             _methods[attribute.Method] = method;
             Logger.LogInfo(_type, $"-> Registered '{attribute.Method}' to {_type.Name}::{method.Name}");
         }
-
-        string address = Bombd.Configuration.ListenIP;
+        
+        string address = BombdConfig.Instance.ListenIP;
         if (Protocol == ProtocolType.TCP)
         {
             _server = new SslServer(address, Port,
@@ -61,7 +63,7 @@ public abstract class BombdService
         Logger.LogInfo(_type, $"Finished initializing service {Name}:{protocolName}:{Port}");
     }
 
-    [UsedImplicitly] public BombdServer Bombd { get; init; }
+    public BombdServer Bombd { get; }
 
     public string Uuid { get; } = CryptoHelper.GetRandomUUID();
     public string Name { get; }
@@ -162,7 +164,7 @@ public abstract class BombdService
         response["bombd_version"] = "3.2.8";
         response["bombd_builddate"] = "3/29/2010 4:52:54 PM";
         response["bombd_OS"] = "1";
-        response["bombd_ServerIP"] = Bombd.Configuration.ExternalIP;
+        response["bombd_ServerIP"] = BombdConfig.Instance.ExternalIP;
         response["bombd_ServerPort"] = Port.ToString();
         response["serveruuid"] = Uuid;
         response["clusteruuid"] = Bombd.ClusterUuid;

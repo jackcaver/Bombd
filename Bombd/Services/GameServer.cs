@@ -74,7 +74,7 @@ public class GameServer : BombdService
                 if (status == MigrationStatus.MigrationFailed) continue;
 
                 var transaction = NetcodeTransaction.MakeRequest("gamemanager", "requestDirectHostConnection");
-                transaction["listenIP"] = Bombd.Configuration.ExternalIP;
+                transaction["listenIP"] = BombdConfig.Instance.ExternalIP;
                 transaction["listenPort"] = Bombd.GameServer.Port.ToString();
                 transaction["hashSalt"] = CryptoHelper.Salt.ToString();
                 transaction["sessionId"] = connection.SessionId.ToString();
