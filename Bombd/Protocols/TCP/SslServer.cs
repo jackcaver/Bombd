@@ -1,0 +1,94 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
+using Bombd.Logging;
+using Bombd.Types.Services;
+
+namespace Bombd.Protocols.TCP;
+
+public class SslServer : IServer
+{
+    internal readonly Action<int> OnConnected;
+    internal readonly Action<int, ArraySegment<byte>, PacketType> OnData;
+    internal readonly Action<int> OnDisconnected;
+
+    private Socket? _socket;
+    private BombdService _service;
+    
+    public SslServer(
+        string address,
+        int port,
+        X509Certificate certificate,
+        BombdService service
+    )
+    {
+        Certificate = certificate;
+        Endpoint = new IPEndPoint(IPAddress.Parse(address), port);
+        _service = service;
+    }
+
+    public X509Certificate Certificate { get; }
+    public Dictionary<int, SslConnection> Connections { get; } = new();
+    public string Name => "TCP";
+    public EndPoint Endpoint { get; private set; }
+    public bool IsActive => _socket != null;
+
+    public void Start()
+    {
+        if (IsActive)
+        {
+            Logger.LogWarning<SslServer>("Server has already been started!");
+            return;
+        }
+
+        _socket = new Socket(Endpoint.AddressFamily, SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+        _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+        _socket.Bind(Endpoint);
+        _socket.Listen(128);
+
+        Endpoint = _socket.LocalEndPoint!;
+        StartAccept();
+    }
+
+    public void Send(int id, ArraySegment<byte> data, PacketType type)
+    {
+        if (Connections.TryGetValue(id, out SslConnection? connection)) connection.Send(data, type);
+    }
+
+    public void Disconnect(int id)
+    {
+        if (Connections.TryGetValue(id, out SslConnection? connection)) connection.Disconnect();
+    }
+
+    public void Stop()
+    {
+        if (!IsActive) return;
+
+        _socket.Close();
+        _socket.Dispose();
+        _socket = null;
+
+        foreach (SslConnection session in Connections.Values) session.Disconnect();
+
+        Connections.Clear();
+    }
+
+    private async void StartAccept()
+    {
+        if (!IsActive) return;
+
+        try
+        {
+            Socket client = await _socket.AcceptAsync();
+            var session = new SslConnection(_service, this);
+            Connections.TryAdd(session.Id, session);
+            session.Connect(client);
+        }
+        catch (Exception e)
+        {
+            // log later ig
+        }
+
+        StartAccept();
+    }
+}

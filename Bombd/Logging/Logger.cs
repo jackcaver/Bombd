@@ -1,0 +1,63 @@
+﻿using System.Collections.Concurrent;
+
+namespace Bombd.Logging;
+
+public class Logger
+{
+    private const LogLevel MaxLevel = LogLevel.Debug;
+    private static readonly ConcurrentQueue<LogEntry> LogQueue = new();
+
+    static Logger()
+    {
+        var thread = new Thread(() =>
+        {
+            while (true)
+            {
+                if (LogQueue.TryDequeue(out LogEntry log) && log.Level <= MaxLevel)
+                {
+                    string now = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+
+                    Console.ForegroundColor = GetLogColor(log.Level);
+                    Console.Write($"[{now}] [{log.Level}] [{log.Type}]: ");
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine(log.Message);
+                }
+
+                Thread.Sleep(10);
+            }
+        });
+
+        thread.Start();
+    }
+
+    private static ConsoleColor GetLogColor(LogLevel level)
+    {
+        return level switch
+        {
+            LogLevel.Error => ConsoleColor.Red,
+            LogLevel.Warning => ConsoleColor.Yellow,
+            LogLevel.Debug => ConsoleColor.Magenta,
+            _ => ConsoleColor.White
+        };
+    }
+
+    public static void LogError<T>(string message) => Log<T>(LogLevel.Error, message);
+    public static void LogWarning<T>(string message) => Log<T>(LogLevel.Warning, message);
+    public static void LogInfo<T>(string message) => Log<T>(LogLevel.Info, message);
+    public static void LogDebug<T>(string message) => Log<T>(LogLevel.Debug, message);
+
+    public static void Log<T>(LogLevel level, string message)
+    {
+        LogQueue.Enqueue(new LogEntry { Level = level, Message = message, Type = typeof(T).Name });
+    }
+
+    public static void LogError(Type type, string message) => Log(type, LogLevel.Error, message);
+    public static void LogWarning(Type type, string message) => Log(type, LogLevel.Warning, message);
+    public static void LogInfo(Type type, string message) => Log(type, LogLevel.Info, message);
+    public static void LogDebug(Type type, string message) => Log(type, LogLevel.Debug, message);
+
+    public static void Log(Type type, LogLevel level, string message)
+    {
+        LogQueue.Enqueue(new LogEntry { Level = level, Message = message, Type = type.Name });
+    }
+}

@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "5GWCdgVxieVUNslZu3j10jbvAJUl5pXDCxhb8s2s9SfC/0JGOxQRoNRLFZ6khg7nr11YYTnYBKRYiEdJORJGyg==",
+  "success": true,
+  "projectFilePath": "/mnt/d/projects/Bombd/Bombd/Bombd.csproj",
+  "expectedPackageFiles": [
+    "/home/aidan/.nuget/packages/jetbrains.annotations/2023.3.0-eap3/jetbrains.annotations.2023.3.0-eap3.nupkg.sha512"
+  ],
+  "logs": []
+}
