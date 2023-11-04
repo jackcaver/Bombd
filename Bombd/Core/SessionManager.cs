@@ -47,10 +47,13 @@ public class SessionManager
 
     public void UnregisterSession(ConnectionBase connection)
     {
+        _sessionLock.Wait();
+        
         if (!_sessions.TryGetValue(connection.SessionId, out Session? session))
         {
             Logger.LogWarning<SessionManager>(
                 $"Tried to unregister session for {connection.Username}, but they didn't have one!");
+            _sessionLock.Release();
             return;
         }
 
@@ -62,8 +65,10 @@ public class SessionManager
         if (session.ConnectedServices.Count == 0)
         {
             Logger.LogInfo<SessionManager>(
-                $"Destroying session for {connection.Service.Name} since all services have been disconnected.");
+                $"Destroying session for {connection.Username} since all services have been disconnected.");
             _sessions.TryRemove(connection.SessionId, out _);
         }
+
+        _sessionLock.Release();
     }
 }
