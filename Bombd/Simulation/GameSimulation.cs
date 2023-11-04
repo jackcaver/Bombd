@@ -594,7 +594,7 @@ public class GameSimulation
 
                 byte[] b = new byte[data.Count];
                 data.CopyTo(b, 0);
-                File.WriteAllBytes("/mnt/c/Users/Aidan/Desktop/" + type, b);
+                File.WriteAllBytes(type.ToString(), b);
 
                 break;
             }
