@@ -76,6 +76,7 @@ public class GameBrowser : BombdService
     {
         // TODO: Search based on all parameters, not just the game attributes.
         var searchData = NetworkReader.Deserialize<GameSearchData>(context.Request["searchData"]);
+        // NOTE: It's currently automatically creating games if it finds none.
         List<GameBrowserGame> games = Bombd.RoomManager.SearchRooms(searchData.Attributes, context.Connection.Platform);
         return CreateServerGameList(games);
     }
