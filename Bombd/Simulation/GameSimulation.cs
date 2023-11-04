@@ -626,7 +626,7 @@ public class GameSimulation
                 if (WaitingForPlayerStartEvents && _playerStates.Values.All(x => x.ReadyForEvent))
                 {
                     ArraySegment<byte> eventStartMessageData =
-                        NetworkWriter.Serialize(new GenericInt32(TimeHelper.LocalTime + 5000));
+                        NetworkWriter.Serialize(new GenericInt32(TimeHelper.LocalTime + BombdConfig.Instance.EventCountdownTime));
                     using NetworkWriterPooled writer = NetworkWriterPool.Get();
                     ArraySegment<byte> eventStartMessage =
                         NetworkMessages.PackData(writer, eventStartMessageData, NetMessageType.EventStart);
