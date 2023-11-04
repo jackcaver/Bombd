@@ -134,7 +134,7 @@ public abstract class BombdService
             connection.SessionId = sessionKey;
         }
         
-        Platform platform = GameTitleHelper.FromTitleId(ticket.ServiceId[7..^3]);
+        Platform platform = PlatformHelper.FromTitleId(ticket.ServiceId[7..^3]);
         if (platform == Platform.Unknown)
         {
             response.Error = "UnknownGameServiceId";

@@ -7,9 +7,9 @@ public enum Platform
     ModNation = 186793
 }
 
-public static class GameTitleHelper
+public static class PlatformHelper
 {
-    private static readonly Dictionary<string, Platform> GameIdLookup = new();
+    private static readonly Dictionary<string, Platform> TitleIdLookup = new();
 
     // NetcodeLibVersion = 3.4.20
     public static readonly string[] KartingTitleIds =
@@ -51,11 +51,11 @@ public static class GameTitleHelper
         "NPUA70074"
     };
 
-    static GameTitleHelper()
+    static PlatformHelper()
     {
-        KartingTitleIds.ToList().ForEach(id => GameIdLookup.Add(id, Platform.Karting));
-        ModNationTitleIds.ToList().ForEach(id => GameIdLookup.Add(id, Platform.ModNation));
+        KartingTitleIds.ToList().ForEach(id => TitleIdLookup.Add(id, Platform.Karting));
+        ModNationTitleIds.ToList().ForEach(id => TitleIdLookup.Add(id, Platform.ModNation));
     }
 
-    public static Platform FromTitleId(string id) => GameIdLookup.GetValueOrDefault(id, Platform.Unknown);
+    public static Platform FromTitleId(string id) => TitleIdLookup.GetValueOrDefault(id, Platform.Unknown);
 }
