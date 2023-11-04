@@ -4,7 +4,9 @@ using Bombd.Helpers;
 using Bombd.Protocols;
 using Bombd.Serialization;
 using Bombd.Simulation;
+using Bombd.Types.Events;
 using Bombd.Types.GameBrowser;
+using Bombd.Types.GameManager;
 using Bombd.Types.Services;
 
 namespace Bombd.Services;
@@ -12,6 +14,12 @@ namespace Bombd.Services;
 [Service("gamebrowser", 10412, ProtocolType.TCP)]
 public class GameBrowser : BombdService
 {
+    public GameBrowser()
+    {
+        Bombd.GameServer.OnPlayerJoined += OnPlayerJoin;
+        Bombd.GameServer.OnPlayerLeft += OnPlayerLeft;
+    }
+    
     [Transaction("listGames")]
     public ServerGameList ListGames(TransactionContext context)
     {
@@ -32,14 +40,18 @@ public class GameBrowser : BombdService
             return null;
         }
         
+        player.ListeningForGameEvents = true;
         return CreateServerGameList(new List<GameBrowserGame> { player.Room.ToGameBrowser() });
     }
-
+    
     [Transaction("unSubscribeGameEvents")]
     public void UnsubscribeGameEvents(TransactionContext context)
     {
+        GamePlayer? player = Bombd.RoomManager.GetPlayerInRoom(context.Connection.UserId);
+        if (player == null) return;
+        player.ListeningForGameEvents = false;
     }
-
+    
     [Transaction("RequestGlobalPlayerCount")]
     public void RequestGlobalPlayerCount(TransactionContext context)
     {
@@ -65,5 +77,29 @@ public class GameBrowser : BombdService
             Games = games,
             TimeOfDeath = timeOfDeath
         };
+    }
+    
+    private void OnPlayerJoin(object? sender, PlayerJoinEventArgs args)
+    {
+        var request = NetcodeTransaction.MakeRequest(Name, "gameEvent");
+        request["eventType"] = "playerJoined";
+        request["gameinfo"] = Convert.ToBase64String(NetworkWriter.Serialize(args.Room.ToGameBrowser()));
+        foreach (GamePlayer player in args.Room.Game.Players)
+        {
+            if (!player.ListeningForGameEvents) continue;
+            SendTransactionToUser(player.UserId, request);
+        }
+    }
+
+    private void OnPlayerLeft(object? sender, PlayerLeaveEventArgs args)
+    {
+        var request = NetcodeTransaction.MakeRequest(Name, "gameEvent");
+        request["eventType"] = "playerLeft";
+        request["gameinfo"] = Convert.ToBase64String(NetworkWriter.Serialize(args.Room.ToGameBrowser()));
+        foreach (GamePlayer player in args.Room.Game.Players)
+        {
+            if (!player.ListeningForGameEvents) continue;
+            SendTransactionToUser(player.UserId, request);
+        }
     }
 }

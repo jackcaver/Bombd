@@ -10,6 +10,7 @@ public class GamePlayer
     public List<string> Guests = new();
     public int PlayerId;
 
+    public bool ListeningForGameEvents;
     public GameRoom Room;
     public Action<ArraySegment<byte>, PacketType> Send;
     public int UserId;

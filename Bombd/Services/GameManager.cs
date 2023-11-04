@@ -21,41 +21,7 @@ public class GameManager : BombdService
         Bombd.GameServer.OnPlayerJoined += OnPlayerJoin;
         Bombd.GameServer.OnPlayerLeft += OnPlayerLeft;
     }
-
-    private void OnPlayerJoin(object? sender, PlayerJoinEventArgs args)
-    {
-        GamePlayer newPlayer = args.Player;
-        GameManagerGame game = args.Room.Game;
-
-        string requestName = args.WasMigration ? "gameMigrationSuccess" : "joinGameCompleted";
-        SendTransactionToUser(newPlayer.UserId, requestName, game);
-
-        var request = NetcodeTransaction.MakeRequest(Name, "playerJoined", new PlayerJoinInfo
-        {
-            PlayerName = newPlayer.Username,
-            PlayerId = newPlayer.PlayerId,
-            UserId = newPlayer.UserId,
-            GuestCount = newPlayer.Guests.Count
-        });
-
-        foreach (GamePlayer player in args.Room.Game.Players)
-        {
-            if (player.UserId == newPlayer.UserId) continue;
-            SendTransactionToUser(player.UserId, request);
-        }
-    }
-
-    private void OnPlayerLeft(object? sender, PlayerLeaveEventArgs args)
-    {
-        var request = NetcodeTransaction.MakeRequest(Name, "playerLeft", new PlayerLeaveInfo
-        {
-            PlayerName = args.PlayerName,
-            Reason = args.Reason
-        });
-
-        foreach (GamePlayer player in args.Room.Game.Players) SendTransactionToUser(player.UserId, request);
-    }
-
+    
     [Transaction("joinGame")]
     public void JoinGame(TransactionContext context)
     {
@@ -118,5 +84,39 @@ public class GameManager : BombdService
             Attributes = attributes,
             PlayerIdList = players
         });
+    }
+    
+    private void OnPlayerJoin(object? sender, PlayerJoinEventArgs args)
+    {
+        GamePlayer newPlayer = args.Player;
+        GameManagerGame game = args.Room.Game;
+
+        string requestName = args.WasMigration ? "gameMigrationSuccess" : "joinGameCompleted";
+        SendTransactionToUser(newPlayer.UserId, requestName, game);
+
+        var request = NetcodeTransaction.MakeRequest(Name, "playerJoined", new PlayerJoinInfo
+        {
+            PlayerName = newPlayer.Username,
+            PlayerId = newPlayer.PlayerId,
+            UserId = newPlayer.UserId,
+            GuestCount = newPlayer.Guests.Count
+        });
+
+        foreach (GamePlayer player in args.Room.Game.Players)
+        {
+            if (player.UserId == newPlayer.UserId) continue;
+            SendTransactionToUser(player.UserId, request);
+        }
+    }
+
+    private void OnPlayerLeft(object? sender, PlayerLeaveEventArgs args)
+    {
+        var request = NetcodeTransaction.MakeRequest(Name, "playerLeft", new PlayerLeaveInfo
+        {
+            PlayerName = args.PlayerName,
+            Reason = args.Reason
+        });
+
+        foreach (GamePlayer player in args.Room.Game.Players) SendTransactionToUser(player.UserId, request);
     }
 }
