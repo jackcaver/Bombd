@@ -27,7 +27,7 @@ public class GameSimulation
     private readonly SpectatorInfo SpectatorInfo = new();
     private readonly StartingGrid StartingGrid = new();
     public readonly ServerType Type;
-    private AiInfo AiInfo = new(0);
+    private AiInfo AiInfo = new(string.Empty, 0);
     private EventSettings? RaceSettings;
 
     private bool WaitingForPlayerNisEvents;
@@ -326,8 +326,10 @@ public class GameSimulation
     private void UpdateAi()
     {
         if (RaceSettings == null) return;
+        var owner = _players.Find(x => x.UserId == _owner);
+        string username = owner?.Username ?? string.Empty;
         int numAi = Math.Min(AiInfo.MaxDataSize, RaceSettings.MaxPlayers - _players.Count);
-        AiInfo = RaceSettings.AiEnabled ? new AiInfo(numAi) : new AiInfo(0);
+        AiInfo = RaceSettings.AiEnabled ? new AiInfo(username, numAi) : new AiInfo(username, 0);
         UpdateSystemSyncObject(NetObjectType.AiInfo, NetworkWriter.Serialize(AiInfo));
     }
 

@@ -9,7 +9,7 @@ public class AiInfo : INetworkWritable
 
     public readonly NetAiData[] DataSet = new NetAiData[MaxDataSize];
 
-    public AiInfo(int startingAiCount = MaxDataSize)
+    public AiInfo(string owner, int startingAiCount = MaxDataSize)
     {
         List<AiDefinition> definitions = AiDefinition.GetRandomDefinitions(startingAiCount);
         Count = startingAiCount;
@@ -18,8 +18,7 @@ public class AiInfo : INetworkWritable
             var ai = new NetAiData();
             if (startingAiCount > i)
             {
-                // ai.OwnerName = NetworkMessages.SimServerName;
-                ai.OwnerName = "Arihzi";
+                ai.OwnerName = owner;
                 ai.UidName = "online_ai_" + i;
                 ai.AiName = definitions[i].Name;
                 ai.AiProfile = definitions[i].Profile;
