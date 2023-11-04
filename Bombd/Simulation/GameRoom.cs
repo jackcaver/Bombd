@@ -16,16 +16,18 @@ public class GameRoom
 
     private int _gameCreationTime = TimeHelper.LocalTime;
     private int _lastPlayerJoinTime = TimeHelper.LocalTime;
-
+    
     public GameRoom(GameManagerGame game, int maxSlots, ServerType type, Platform platform, int ownerId)
     {
         Game = game;
+        Platform = platform;
         GameSimulation = new GameSimulation(type, platform, ownerId, Game.Players);
         _slots = Enumerable.Repeat(false, maxSlots).ToList();
         MaxSlots = maxSlots;
         NumFreeSlots = maxSlots;
     }
 
+    public Platform Platform { get; }
     public int MaxSlots { get; }
     public int NumFreeSlots { get; private set; }
     public int UsedSlots => MaxSlots - NumFreeSlots;
@@ -50,6 +52,7 @@ public class GameRoom
         _playerIdLookup[playerId] = player;
         _userIdLookup[userId] = player;
         Game.Players.Add(player);
+        _lastPlayerJoinTime = TimeHelper.LocalTime;
 
         return player;
     }
@@ -106,10 +109,12 @@ public class GameRoom
     public GameBrowserGame ToGameBrowser() =>
         new()
         {
+            Platform = Platform,
             TimeSinceLastPlayerJoined = TimeHelper.LocalTime - _lastPlayerJoinTime,
             Players = new GameBrowserPlayerList(Game.Players),
             GameName = Game.GameName,
             DisplayName = Game.GameName,
-            Attributes = Game.Attributes
+            Attributes = Game.Attributes,
+            NumFreeSlots = NumFreeSlots
         };
 }

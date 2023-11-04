@@ -257,7 +257,7 @@ public abstract class BombdService
         // Connect is a shared set of methods provided by all services.
         if (request.ServiceName == Name || isGameBrowserRedirect)
         {
-            BombdService? redirect = isGameBrowserRedirect ? Bombd.GetService<GameManager>() : null;
+            BombdService? redirect = isGameBrowserRedirect ? Bombd.GetService<GameBrowser>() : null;
             value = HandleServiceTransaction(connection, request, response, redirect);
         }
         else

@@ -57,6 +57,21 @@ public class GameBrowser : BombdService
     {
         context.Response["GlobalPlayerCount"] = UserInfo.Count.ToString();
     }
+
+    [Transaction("requestPlayerCount")]
+    public void RequestPlayerCount(TransactionContext context)
+    {
+        var request = NetworkReader.Deserialize<GamePlayerCounts>(context.Request["requestParams"]);
+        Bombd.RoomManager.FillCreationPlayerCounts(request);
+        context.Response["requestParams"] = Convert.ToBase64String(NetworkWriter.Serialize(request));
+    }
+
+    [Transaction("requestBusiestCount")]
+    public void RequestBusiestCount(TransactionContext context)
+    {
+        var creations = Bombd.RoomManager.GetBusiestCreations();
+        context.Response["BusiestGames"] = Convert.ToBase64String(NetworkWriter.Serialize(creations));
+    }
     
     private ServerGameList CreateServerGameList(List<GameBrowserGame> games)
     {

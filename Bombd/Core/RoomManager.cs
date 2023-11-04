@@ -1,4 +1,5 @@
-﻿using Bombd.Helpers;
+﻿using System.Collections.Concurrent;
+using Bombd.Helpers;
 using Bombd.Simulation;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
@@ -8,9 +9,12 @@ namespace Bombd.Core;
 
 public class RoomManager
 {
-    private readonly Dictionary<int, GameRoom> _roomIds = new();
-    private readonly Dictionary<string, GameRoom> _rooms = new();
-    private readonly Dictionary<int, GameRoom> _userRooms = new();
+    private readonly ConcurrentDictionary<int, GameRoom> _roomIds = new();
+    private readonly ConcurrentDictionary<string, GameRoom> _rooms = new();
+    private readonly ConcurrentDictionary<int, GameRoom> _userRooms = new();
+    private readonly ConcurrentDictionary<int, int> _creationPlayerCounts = new();
+    private readonly SemaphoreSlim _playerCountLock = new(1);
+    
     private int _nextGameId;
 
     public List<GameRoom> GetRooms() => new(_rooms.Values);
@@ -32,19 +36,12 @@ public class RoomManager
         GameRoom? room = GetRoomByUser(userId);
         return room?.GetPlayerByUserId(userId);
     }
-
-    public GamePlayer? GetPlayerById(int playerId)
-    {
-        if (_roomIds.TryGetValue(playerId >>> 8, out GameRoom? room)) return room.GetPlayerByPlayerId(playerId);
-
-        return null;
-    }
-
+    
     public GamePlayer? TryJoinRoom(string username, int userId, GameRoom room)
     {
         GamePlayer? player = room.TryJoin(username, userId);
         if (player == null) return null;
-
+        IncrementPlayerCount(room);
         _userRooms[player.UserId] = room;
         return player;
     }
@@ -52,6 +49,7 @@ public class RoomManager
     public GamePlayer JoinRoom(string username, int userId, int playerId, GameRoom room)
     {
         GamePlayer player = room.Join(username, userId, playerId);
+        IncrementPlayerCount(room);
         _userRooms[player.UserId] = room;
         return player;
     }
@@ -60,8 +58,9 @@ public class RoomManager
     {
         GameRoom? room = GetRoomByUser(userId);
         if (room == null) return false;
-
-        _userRooms.Remove(userId);
+        
+        DecrementPlayerCount(room);
+        _userRooms.Remove(userId, out _);
 
         GamePlayer player = room.GetPlayerByUserId(userId);
         return room.TryLeave(player.PlayerId);
@@ -102,22 +101,60 @@ public class RoomManager
 
         return room;
     }
-
-    public Dictionary<int, int> GetCreationPlayerCounts(Platform platform)
+    
+    public GameBrowserBusiestList GetBusiestCreations()
     {
-        IEnumerable<GameRoom> rooms = new List<GameRoom>(_rooms.Values).Where(
-            room => room.Game.Attributes.ContainsKey("TRACK_CREATIONID"));
-
-        Dictionary<int, int> counts = new();
-        foreach (GameRoom room in rooms)
+        var busiest = new GameBrowserBusiestList();
+        
+        _playerCountLock.Wait();
+        
+        var creations = _creationPlayerCounts.ToList();
+        creations.Sort((z, a) => a.Value.CompareTo(z.Value));
+        foreach (var creation in creations)
         {
-            int creationId = int.Parse(room.Game.Attributes["TRACK_CREATIONID"]);
-            if (!counts.TryAdd(creationId, room.UsedSlots)) counts[creationId] += room.UsedSlots;
+            if (busiest.Count == GameBrowserBusiestList.MaxSize) break;
+            if (creation.Value == 0) continue;
+            busiest.Add(creation.Key);
         }
-
-        return counts;
+        
+        _playerCountLock.Wait();
+        return busiest;
     }
 
+    public void FillCreationPlayerCounts(GamePlayerCounts counts)
+    {
+        _playerCountLock.Wait();
+        foreach (int key in counts.Data.Keys.Where(key => _creationPlayerCounts.ContainsKey(key)))
+        {
+            counts.Data[key] = _creationPlayerCounts[key];
+        }
+        _playerCountLock.Release();
+    }
+
+    private void IncrementPlayerCount(GameRoom room)
+    {
+        _playerCountLock.Wait();
+        if (room.Game.Attributes.TryGetValue("TRACK_CREATIONID", out string? attribute))
+        {
+            if (!int.TryParse(attribute, out int creationId)) return;
+            if (!_creationPlayerCounts.TryAdd(creationId, 1)) 
+                _creationPlayerCounts[creationId] += 1;
+        }
+        _playerCountLock.Release();
+    }
+    
+    private void DecrementPlayerCount(GameRoom room)
+    {
+        _playerCountLock.Wait();
+        if (room.Game.Attributes.TryGetValue("TRACK_CREATIONID", out string? attribute))
+        {
+            if (!int.TryParse(attribute, out int creationId)) return;
+            if (_creationPlayerCounts.TryGetValue(creationId, out int playerCount))
+                _creationPlayerCounts[creationId] = playerCount - 1;
+        }
+        _playerCountLock.Release();
+    }
+    
     public List<GameBrowserGame> SearchRooms(GameAttributes attributes, Platform id, bool createIfNoneExist = true)
     {
         List<GameRoom> rooms = new List<GameRoom>(_rooms.Values).Where(room =>
