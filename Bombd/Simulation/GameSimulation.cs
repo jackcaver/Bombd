@@ -396,13 +396,6 @@ public class GameSimulation
             case NetMessageType.SpectatorInfo:
             {
                 SpectatorInfo = NetworkReader.Deserialize<SpectatorInfo>(data);
-                
-                if (SpectatorInfo.RaceState == RaceState.PostRace)
-                
-                Logger.LogDebug<GameSimulation>($"Current RaceState is {SpectatorInfo.RaceState}");
-                Logger.LogDebug<GameSimulation>($"Current RaceEndServerTime is {SpectatorInfo.RaceEndServerTime}");
-                Logger.LogDebug<GameSimulation>($"Current PostRaceServerTime is {SpectatorInfo.PostRaceServerTime}");
-                
                 UpdateSystemSyncObject(NetObjectType.SpectatorInfo, NetworkWriter.Serialize(SpectatorInfo));
                 break;
             }
