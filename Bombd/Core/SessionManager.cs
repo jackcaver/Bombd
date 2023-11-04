@@ -2,22 +2,21 @@
 using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Protocols;
-using Bombd.Types.Authentication;
 using Bombd.Types.Services;
 
-namespace Bombd.Types.Network;
+namespace Bombd.Core;
 
 public class SessionManager
 {
-    private readonly ConcurrentDictionary<int, Session> _sessions = new();
     private readonly SemaphoreSlim _sessionLock = new(1);
-    
+    private readonly ConcurrentDictionary<int, Session> _sessions = new();
+
     public Session GetSession(ConnectionBase connection) => _sessions[connection.SessionId];
-    
+
     public void RegisterSession(ConnectionBase connection)
     {
         _sessionLock.Wait();
-        
+
         int sessionId = connection.SessionId;
         if (!_sessions.TryGetValue(sessionId, out Session? session))
         {
@@ -28,38 +27,42 @@ public class SessionManager
                 GameName = string.Empty,
                 HashSalt = hashSalt
             };
-            
+
             connection.SessionId = sessionId;
             _sessions[sessionId] = session;
-            
+
             Logger.LogInfo<SessionManager>($"Registered new session for {connection.Username}.");
         }
-        
+
         connection.HashSalt = session.HashSalt;
         if (connection.Service.Name != "directory")
         {
             session.ConnectedServices.Add(connection.Service.Name);
-            Logger.LogInfo<SessionManager>($"Added {connection.Service.Name} to {connection.Username}'s registered services.");   
+            Logger.LogInfo<SessionManager>(
+                $"Added {connection.Service.Name} to {connection.Username}'s registered services.");
         }
 
         _sessionLock.Release();
     }
-    
+
     public void UnregisterSession(ConnectionBase connection)
     {
-        if (!_sessions.TryGetValue(connection.SessionId, out var session))
+        if (!_sessions.TryGetValue(connection.SessionId, out Session? session))
         {
-            Logger.LogWarning<SessionManager>($"Tried to unregister session for {connection.Username}, but they didn't have one!");
+            Logger.LogWarning<SessionManager>(
+                $"Tried to unregister session for {connection.Username}, but they didn't have one!");
             return;
         }
-        
+
         session.ConnectedServices.Remove(connection.Service.Name);
-        
-        Logger.LogInfo<SessionManager>($"Removed {connection.Service.Name} from {connection.Username}'s registered services.");
-        
+
+        Logger.LogInfo<SessionManager>(
+            $"Removed {connection.Service.Name} from {connection.Username}'s registered services.");
+
         if (session.ConnectedServices.Count == 0)
         {
-            Logger.LogInfo<SessionManager>($"Destroying session for {connection.Service.Name} since all services have been disconnected.");
+            Logger.LogInfo<SessionManager>(
+                $"Destroying session for {connection.Service.Name} since all services have been disconnected.");
             _sessions.TryRemove(connection.SessionId, out _);
         }
     }

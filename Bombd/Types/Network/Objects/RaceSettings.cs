@@ -1,21 +1,21 @@
 ﻿using Bombd.Serialization;
 
-namespace Bombd.Types.Network.NetObjects;
+namespace Bombd.Types.Network.Objects;
 
 public class RaceSettings : INetworkWritable, INetworkReadable
 {
-    public string TrackName = string.Empty;
-    public int CreationId;
-    public int MaxPlayers;
-    public int NumLaps;
-    public int KartSpeed;
-    public int RaceType;
     public bool AiEnabled;
+    public int CreationId;
+    public string Description = string.Empty;
+    public int KartSpeed;
+    public int MaxHumans;
+    public int MaxPlayers;
+    public int MinHumans;
+    public int NumLaps;
     public int OwnerNetcodeUserId;
     public bool Private;
-    public int MinHumans;
-    public int MaxHumans;
-    public string Description = string.Empty;
+    public int RaceType;
+    public string TrackName = string.Empty;
 
     public void Read(NetworkReader reader)
     {
@@ -39,7 +39,7 @@ public class RaceSettings : INetworkWritable, INetworkReadable
         MinHumans = reader.ReadInt32();
         MaxHumans = reader.ReadInt32();
     }
-    
+
     public void Write(NetworkWriter writer)
     {
         writer.Write(TrackName, 0x40);
@@ -63,7 +63,7 @@ public class RaceSettings : INetworkWritable, INetworkReadable
         writer.Write(8); // 0x80 - MaxHumans?
         writer.Write(0); // 0x84 - Padding?
         writer.Write(0); // 0x88
-        
+
         writer.Write(string.Empty, 0x40);
         writer.Write(Description, 0x80);
     }

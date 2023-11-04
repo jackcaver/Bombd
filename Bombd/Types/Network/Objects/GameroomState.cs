@@ -1,6 +1,6 @@
 ﻿using Bombd.Serialization;
 
-namespace Bombd.Types.Network.NetObjects;
+namespace Bombd.Types.Network.Objects;
 
 public class GameroomState : INetworkWritable
 {
@@ -14,14 +14,15 @@ public class GameroomState : INetworkWritable
         CountingDownPaused,
         RaceInProgress
     }
-    
-    public RoomState State = RoomState.None;
+
+    public bool HasEventVetoOccured;
+    public bool IsLeaderVetoAvailable;
     public int LoadEventTime;
     public float LockedForRacerJoinsValue;
     public float LockedTimerValue;
-    public bool IsLeaderVetoAvailable;
-    public bool HasEventVetoOccured;
-    
+
+    public RoomState State = RoomState.None;
+
     public void Write(NetworkWriter writer)
     {
         writer.Write((int)State);
@@ -32,5 +33,4 @@ public class GameroomState : INetworkWritable
         writer.Write(HasEventVetoOccured);
         writer.Clear(0x2);
     }
-    
 }

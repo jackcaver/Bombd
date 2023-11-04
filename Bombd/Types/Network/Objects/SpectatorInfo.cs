@@ -1,18 +1,18 @@
 ﻿using Bombd.Serialization;
 
-namespace Bombd.Types.Network.NetObjects;
+namespace Bombd.Types.Network.Objects;
 
 public class SpectatorInfo : INetworkWritable
 {
     public const int LeaderboardSize = 8;
-    
-    public int RaceState;
     public readonly int[] LeaderboardNameUids = new int[LeaderboardSize];
-    public int RaceLeaderLapNumber;
-    public int TotalLapNumber;
-    public int RaceEndServerTime;
     public int PostRaceServerTime;
-    
+    public int RaceEndServerTime;
+    public int RaceLeaderLapNumber;
+
+    public int RaceState;
+    public int TotalLapNumber;
+
     public void Write(NetworkWriter writer)
     {
         // writer.Write(RaceState);
@@ -22,7 +22,7 @@ public class SpectatorInfo : INetworkWritable
         // writer.Write(TotalLapNumber);
         // writer.Write(RaceEndServerTime);
         // writer.Write(PostRaceServerTime);
-        
+
         writer.Clear(24);
     }
 }

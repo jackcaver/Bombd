@@ -1,10 +1,8 @@
 ﻿using System.Runtime.CompilerServices;
 using Bombd.Helpers;
 using Bombd.Services;
-using Bombd.Types.Network;
-using Bombd.Types.Services;
 
-namespace Bombd;
+namespace Bombd.Core;
 
 public class BombdServer
 {
@@ -20,7 +18,7 @@ public class BombdServer
     public BombdServer(BombdConfiguration configuration)
     {
         Configuration = configuration;
-        
+
         // I don't believe the gameserver ever actually gets directly sent
         // via directory, plus GameManager and GameBrowser are going to need
         // access to it anyway.

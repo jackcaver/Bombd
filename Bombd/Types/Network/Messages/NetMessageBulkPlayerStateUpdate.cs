@@ -1,4 +1,5 @@
 ﻿using Bombd.Serialization;
+using Bombd.Simulation;
 
 namespace Bombd.Types.Network.Messages;
 
@@ -7,11 +8,11 @@ public struct NetMessageBulkPlayerStateUpdate : INetworkMessage
     public NetMessageType Type => NetMessageType.BulkPlayerStateUpdate;
 
     public ICollection<PlayerState> StateUpdates;
-    
+
     public void Write(NetworkWriter writer)
     {
         writer.Write(StateUpdates.Count);
-        foreach (var state in StateUpdates)
+        foreach (PlayerState state in StateUpdates)
         {
             writer.Write(state.NameUid);
             writer.Write(state.PlayerConnectId);

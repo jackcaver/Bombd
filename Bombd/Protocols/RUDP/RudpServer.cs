@@ -1,33 +1,33 @@
 ﻿using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using Bombd.Core;
 using Bombd.Logging;
-using Bombd.Types.Services;
 
 namespace Bombd.Protocols.RUDP;
 
 public class RudpServer : IServer
 {
     public const long Timestep = 66;
-
-    internal readonly HashSet<EndPoint> connectionsToRemove = new();
     private readonly byte[] _recv = new byte[1040];
+
+    private readonly BombdService _service;
 
     private readonly Stopwatch _watch = new();
     public readonly Dictionary<EndPoint, RudpConnection> Connections = new();
-    
-    
+
+    internal readonly HashSet<EndPoint> connectionsToRemove = new();
+
+
     private long _accumulatedTime;
     private EndPoint _clientEndpoint = new IPEndPoint(IPAddress.Any, 0);
     private EndPoint _endpoint;
     private long _lastTime;
-
-    private BombdService _service;
     private Socket? _socket;
 
     public RudpServer(
         string address,
-        int port, 
+        int port,
         BombdService service)
     {
         Endpoint = new IPEndPoint(IPAddress.Parse(address), port);
@@ -61,7 +61,7 @@ public class RudpServer : IServer
     {
         // TODO: Implement this???
     }
-    
+
     private bool ReceiveFrom(out ArraySegment<byte> segment)
     {
         segment = default;
@@ -72,7 +72,7 @@ public class RudpServer : IServer
 
             int size = _socket.ReceiveFrom(_recv, 0, _recv.Length, SocketFlags.None,
                 ref _clientEndpoint);
-            
+
             segment = new ArraySegment<byte>(_recv, 0, size);
 
             return true;
@@ -105,7 +105,7 @@ public class RudpServer : IServer
             connection.OnData(segment);
             return;
         }
-        
+
         connection = new RudpConnection(_clientEndpoint, _service, this);
         Connections.Add(_clientEndpoint, connection);
         connection.OnData(segment);

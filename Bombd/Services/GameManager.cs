@@ -1,12 +1,14 @@
 ﻿using Bombd.Attributes;
+using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Protocols;
 using Bombd.Serialization;
+using Bombd.Serialization.Wrappers;
+using Bombd.Simulation;
 using Bombd.Types.Events;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
-using Bombd.Types.Network;
-using Bombd.Types.Network.Requests;
+using Bombd.Types.Requests;
 using Bombd.Types.Services;
 
 namespace Bombd.Services;
@@ -24,10 +26,10 @@ public class GameManager : BombdService
     {
         GamePlayer newPlayer = args.Player;
         GameManagerGame game = args.Room.Game;
-        
+
         string requestName = args.WasMigration ? "gameMigrationSuccess" : "joinGameCompleted";
         SendTransactionToUser(newPlayer.UserId, requestName, game);
-        
+
         var request = NetcodeTransaction.MakeRequest(Name, "playerJoined", new PlayerJoinInfo
         {
             PlayerName = newPlayer.Username,
@@ -68,7 +70,7 @@ public class GameManager : BombdService
     [Transaction("hostGame")]
     public void HostGame(TransactionContext context)
     {
-        var room = Bombd.RoomManager.CreateRoom(new CreateGameRequest
+        GameRoom room = Bombd.RoomManager.CreateRoom(new CreateGameRequest
         {
             Platform = context.Connection.Platform,
             Attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]),
@@ -80,7 +82,7 @@ public class GameManager : BombdService
         context.Response["listenPort"] = Bombd.GameServer.Port.ToString();
         context.Response["hashSalt"] = CryptoHelper.Salt.ToString();
         context.Response["sessionId"] = context.Connection.SessionId.ToString();
-        
+
         Bombd.GameServer.AddPlayerToJoinQueue(context.Connection.UserId, room.Game.GameName);
     }
 
@@ -92,21 +94,22 @@ public class GameManager : BombdService
     [Transaction("leaveCurrentGame")]
     public void LeaveCurrentGame(TransactionContext context)
     {
-        Bombd.GameServer.AddPlayerToLeaveQueue(context.Connection.UserId, context.Connection.Username, "Player left game");
+        Bombd.GameServer.AddPlayerToLeaveQueue(context.Connection.UserId, context.Connection.Username,
+            "Player left game");
     }
 
     [Transaction("migrateToGame")]
     public void MigrateToGame(TransactionContext context)
     {
-        context.Request.TryGet("gamename", out var gameName);
+        context.Request.TryGet("gamename", out string gameName);
         if (!int.TryParse(context.Request["numPlayers"], out int numPlayers)) numPlayers = 0;
         List<GenericInt32> players =
             NetworkReader.Deserialize<GenericInt32>(context.Request["playerIdList"], numPlayers);
 
         GameAttributes? attributes = null;
-        if (context.Request.Has("attributes")) 
+        if (context.Request.Has("attributes"))
             attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]);
-        
+
         Bombd.GameServer.AddMigrationGroup(new GameMigrationRequest
         {
             HostUserId = context.Connection.UserId,

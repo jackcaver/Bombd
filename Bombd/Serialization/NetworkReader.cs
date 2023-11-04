@@ -38,7 +38,7 @@ public class NetworkReader
         serializable.Read(reader);
         return serializable;
     }
-    
+
     public static T Deserialize<T>(string encoded) where T : INetworkReadable, new()
     {
         using NetworkReaderPooled reader = NetworkReaderPool.Get(encoded);
@@ -51,14 +51,14 @@ public class NetworkReader
     {
         using NetworkReaderPooled reader = NetworkReaderPool.Get(encoded);
         var arr = new List<T>(count);
-        
+
         for (int i = 0; i < count; ++i)
         {
             var serializable = new T();
             serializable.Read(reader);
             arr.Add(serializable);
         }
-        
+
         return arr;
     }
 

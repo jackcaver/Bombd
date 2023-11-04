@@ -1,6 +1,4 @@
-﻿using Bombd.Serialization;
-
-namespace Bombd.Types.Network;
+﻿namespace Bombd.Serialization.Wrappers;
 
 public struct GenericInt32 : INetworkWritable, INetworkReadable
 {
@@ -24,7 +22,6 @@ public struct GenericInt32 : INetworkWritable, INetworkReadable
     {
         _data = reader.ReadInt32();
     }
-    
-    public static implicit operator int(GenericInt32 value) => value._data;
 
+    public static implicit operator int(GenericInt32 value) => value._data;
 }

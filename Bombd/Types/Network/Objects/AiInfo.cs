@@ -1,25 +1,17 @@
 ﻿using Bombd.Serialization;
-using Bombd.Types.Network.Messages;
 
-namespace Bombd.Types.Network.NetObjects;
+namespace Bombd.Types.Network.Objects;
 
 public class AiInfo : INetworkWritable
 {
     public const int MaxDataSize = 10;
-    
-    public class NetAiData
-    {
-        public string OwnerName = string.Empty;
-        public string UidName = string.Empty;
-        public string AiName = string.Empty;
-        public string AiProfile = string.Empty;
-    }
-    
-    public readonly NetAiData[] DataSet = new NetAiData[MaxDataSize];
     public readonly int Count;
+
+    public readonly NetAiData[] DataSet = new NetAiData[MaxDataSize];
+
     public AiInfo(int startingAiCount = MaxDataSize)
     {
-        var definitions = AiDefinition.GetRandomDefinitions(startingAiCount);
+        List<AiDefinition> definitions = AiDefinition.GetRandomDefinitions(startingAiCount);
         Count = startingAiCount;
         for (int i = 0; i < DataSet.Length; ++i)
         {
@@ -32,18 +24,27 @@ public class AiInfo : INetworkWritable
                 ai.AiName = definitions[i].Name;
                 ai.AiProfile = definitions[i].Profile;
             }
+
             DataSet[i] = ai;
         }
     }
-    
+
     public void Write(NetworkWriter writer)
     {
-        foreach (var ai in DataSet)
+        foreach (NetAiData ai in DataSet)
         {
             writer.Write(ai.OwnerName, 32);
             writer.Write(ai.UidName, 128);
             writer.Write(ai.AiName, 32);
             writer.Write(ai.AiProfile, 32);
         }
+    }
+
+    public class NetAiData
+    {
+        public string AiName = string.Empty;
+        public string AiProfile = string.Empty;
+        public string OwnerName = string.Empty;
+        public string UidName = string.Empty;
     }
 }

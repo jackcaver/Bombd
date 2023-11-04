@@ -1,7 +1,6 @@
 ﻿using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Text;
-using Bombd.Helpers;
 
 namespace Bombd.Serialization;
 
@@ -12,33 +11,33 @@ public class NetworkWriter
     private byte[] _buffer = new byte[DefaultCapacity];
     public int Offset;
     public int Capacity => _buffer.Length;
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Reset()
     {
         Offset = 0;
     }
-    
+
     public static ArraySegment<byte> Serialize(INetworkWritable writable)
     {
         using NetworkWriterPooled writer = NetworkWriterPool.Get();
         writer.Write(writable);
-        var data = writer.ToArraySegment();
+        ArraySegment<byte> data = writer.ToArraySegment();
         byte[] array = new byte[data.Count];
         data.CopyTo(array);
         return new ArraySegment<byte>(array);
     }
-    
+
     public static ArraySegment<byte> Serialize<T>(List<T> writables) where T : INetworkWritable
     {
         using NetworkWriterPooled writer = NetworkWriterPool.Get();
-        foreach (var writable in writables) writer.Write(writable);
-        var data = writer.ToArraySegment();
+        foreach (T writable in writables) writer.Write(writable);
+        ArraySegment<byte> data = writer.ToArraySegment();
         byte[] array = new byte[data.Count];
         data.CopyTo(array);
         return new ArraySegment<byte>(array);
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void EnsureCapacity(int value)
     {
@@ -170,7 +169,7 @@ public class NetworkWriter
     public void Write(string value, int size)
     {
         EnsureCapacity(Offset + size);
-        
+
         if (string.IsNullOrEmpty(value))
         {
             Clear(size);
@@ -183,7 +182,7 @@ public class NetworkWriter
         int written = Encoding.ASCII.GetBytes(value, 0, len, _buffer, Offset);
         Offset += written;
         Clear(size - written);
-        
+
         // _buffer[Offset + written] = 0;
         // Offset += size;
     }

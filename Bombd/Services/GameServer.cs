@@ -1,13 +1,14 @@
 ﻿using Bombd.Attributes;
+using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
+using Bombd.Serialization.Wrappers;
+using Bombd.Simulation;
 using Bombd.Types.Events;
-using Bombd.Types.GameBrowser;
 using Bombd.Types.Network;
-using Bombd.Types.Network.Messages;
-using Bombd.Types.Network.Requests;
+using Bombd.Types.Requests;
 using Bombd.Types.Services;
 
 namespace Bombd.Services;
@@ -16,11 +17,11 @@ namespace Bombd.Services;
 public class GameServer : BombdService
 {
     private const int MigrationTimeout = 10000;
-    
+
     private readonly List<PlayerJoinRequest> _playerJoinQueue = new();
     private readonly List<PlayerLeaveRequest> _playerLeaveQueue = new();
-    private readonly List<MigrationGroup> _playerMigrationGroups = new();
     private readonly SemaphoreSlim _playerLock = new(1);
+    private readonly List<MigrationGroup> _playerMigrationGroups = new();
     public event EventHandler<PlayerJoinEventArgs>? OnPlayerJoined;
     public event EventHandler<PlayerLeaveEventArgs>? OnPlayerLeft;
 
@@ -32,7 +33,7 @@ public class GameServer : BombdService
             // This shouldn't be normally possible, so we don't need to send back errors or anything, just return.
             GameRoom? currentRoom = Bombd.RoomManager.GetRoomByUser(request.HostUserId);
             if (currentRoom == null) return;
-            
+
             GameRoom migratedRoom;
             if (request.GameName != null) migratedRoom = Bombd.RoomManager.GetRoomByName(request.GameName)!;
             else
@@ -54,17 +55,14 @@ public class GameServer : BombdService
             };
 
             var gamemanager = Bombd.GetService<GameManager>();
-            foreach (var playerId in request.PlayerIdList)
+            foreach (GenericInt32 playerId in request.PlayerIdList)
             {
                 GamePlayer player = currentRoom.GetPlayerByPlayerId(playerId);
-                var connection = UserInfo[player.UserId];
+                ConnectionBase connection = UserInfo[player.UserId];
 
                 var status = MigrationStatus.WaitingForDisconnect;
-                if (!migratedRoom.RequestSlot(out int slot))
-                {
-                    status = MigrationStatus.MigrationFailed;
-                }
-                
+                if (!migratedRoom.RequestSlot(out int slot)) status = MigrationStatus.MigrationFailed;
+
                 group.Players.Add(new MigratingPlayer
                 {
                     OldPlayerId = playerId,
@@ -74,7 +72,7 @@ public class GameServer : BombdService
                 });
 
                 if (status == MigrationStatus.MigrationFailed) continue;
-                
+
                 var transaction = NetcodeTransaction.MakeRequest("gamemanager", "requestDirectHostConnection");
                 transaction["listenIP"] = Bombd.Configuration.ExternalIP;
                 transaction["listenPort"] = Bombd.GameServer.Port.ToString();
@@ -82,7 +80,7 @@ public class GameServer : BombdService
                 transaction["sessionId"] = connection.SessionId.ToString();
                 gamemanager.SendTransactionToUser(connection.UserId, transaction);
             }
-            
+
             _playerMigrationGroups.Add(group);
         }
         finally
@@ -90,7 +88,7 @@ public class GameServer : BombdService
             _playerLock.Release();
         }
     }
-    
+
     public void AddPlayerToLeaveQueue(int userId, string username, string reason)
     {
         _playerLock.Wait();
@@ -118,7 +116,7 @@ public class GameServer : BombdService
             {
                 UserId = userId,
                 GameName = gameName,
-                Timestamp = TimeHelper.LocalTime,
+                Timestamp = TimeHelper.LocalTime
             });
         }
         finally
@@ -140,22 +138,24 @@ public class GameServer : BombdService
                 continue;
             }
 
-            var room = player.Room;
-            
+            GameRoom room = player.Room;
+
             if (Bombd.RoomManager.TryLeaveCurrentRoom(request.UserId))
             {
                 Logger.LogInfo<GameServer>($"{request.Username} left {room.Game.GameName}.");
-                player.Room.Simulation.OnPlayerLeft(player);
+                player.Room.GameSimulation.OnPlayerLeft(player);
                 OnPlayerLeft?.Invoke(this, new PlayerLeaveEventArgs
                 {
                     Room = room,
                     PlayerName = request.Username,
-                    Reason = request.Reason,
+                    Reason = request.Reason
                 });
             }
             else
+            {
                 Logger.LogWarning<GameServer>(
                     $"{request.Username} tried to leave {room.Game.GameName}, but operation failed.");
+            }
         }
 
         _playerLeaveQueue.Clear();
@@ -165,7 +165,7 @@ public class GameServer : BombdService
     private void HandlePlayerJoinRequests()
     {
         _playerLock.Wait();
-        
+
         // TODO: If someone is in the join queue too long, discard their request
         // This usually only happens if someone closed the connection.
         for (int i = 0; i < _playerJoinQueue.Count; ++i)
@@ -193,12 +193,12 @@ public class GameServer : BombdService
                     // For convenience, we attach the send method directly to the game player object,
                     // so that no lookups have to be performed within the simulation server environment.
                     player.Send = (bytes, type) => SendToUser(player.UserId, bytes, type);
-                    
+
                     Logger.LogInfo<GameServer>($"{player.Username} joined {gameRoom.Game.GameName}.");
-                    
+
                     // Make sure to tell both the simulation instance and anything subscribed to game events
                     // about the new player that joined.
-                    gameRoom.Simulation.OnPlayerJoin(player);
+                    gameRoom.GameSimulation.OnPlayerJoin(player);
                     OnPlayerJoined?.Invoke(this, new PlayerJoinEventArgs
                     {
                         Room = gameRoom,
@@ -207,8 +207,10 @@ public class GameServer : BombdService
                     });
                 }
                 else
+                {
                     Logger.LogWarning<GameServer>(
                         $"{connection.Username} tried to join {gameRoom.Game.GameName}, but operation failed.");
+                }
 
                 _playerJoinQueue.RemoveAt(i--);
             }
@@ -223,7 +225,7 @@ public class GameServer : BombdService
         for (int i = 0; i < _playerMigrationGroups.Count; ++i)
         {
             MigrationGroup group = _playerMigrationGroups[i];
-            foreach (var player in group.Players)
+            foreach (MigratingPlayer player in group.Players)
             {
                 if (player.Status >= MigrationStatus.Migrated) continue;
                 if (TimeHelper.LocalTime > group.Timestamp + MigrationTimeout)
@@ -231,29 +233,25 @@ public class GameServer : BombdService
                     player.Status = MigrationStatus.MigrationFailed;
                     continue;
                 }
-                
+
                 if (!UserInfo.TryGetValue(player.UserId, out ConnectionBase? connection))
                 {
                     if (player.Status == MigrationStatus.WaitingForDisconnect)
-                    {
                         player.Status = MigrationStatus.WaitingForConnect;
-                    }
-                    
+
                     continue;
                 }
-                
+
                 if (player.Status == MigrationStatus.WaitingForConnect && connection.IsConnected)
-                {
                     player.Status = MigrationStatus.Migrated;
-                }
             }
 
             bool isMigrationComplete = group.Players.All(player => player.Status >= MigrationStatus.Migrated);
             if (!isMigrationComplete) continue;
-            
+
             // Now that all users are connected to the gameserver, let's add them to the game room
-            var room = group.Room;
-            foreach (var player in group.Players)
+            GameRoom room = group.Room;
+            foreach (MigratingPlayer player in group.Players)
             {
                 // In case the player closed their game during migration or if something else caused a disconnection.
                 if (!UserInfo.TryGetValue(player.UserId, out ConnectionBase? connection) || !connection.IsConnected)
@@ -268,7 +266,7 @@ public class GameServer : BombdService
 
                 gamePlayer.Send = (bytes, type) => SendToUser(gamePlayer.UserId, bytes, type);
                 Logger.LogInfo<GameServer>($"{gamePlayer.Username} migrated to {room.Game.GameName}.");
-                room.Simulation.OnPlayerJoin(gamePlayer);
+                room.GameSimulation.OnPlayerJoin(gamePlayer);
                 OnPlayerJoined?.Invoke(this, new PlayerJoinEventArgs
                 {
                     Room = room,
@@ -280,7 +278,7 @@ public class GameServer : BombdService
             List<GenericInt32> migratedPlayers = group.Players
                 .Where(player => player.Status == MigrationStatus.Migrated)
                 .Select(player => new GenericInt32(player.OldPlayerId)).ToList();
-            
+
             List<GenericInt32> unmigratedPlayers = group.Players
                 .Where(player => player.Status == MigrationStatus.MigrationFailed)
                 .Select(player => new GenericInt32(player.OldPlayerId)).ToList();
@@ -292,30 +290,28 @@ public class GameServer : BombdService
             transaction["numPlayersNotMigrated"] = unmigratedPlayers.Count.ToString();
             transaction["playersNotMigrated"] = Convert.ToBase64String(NetworkWriter.Serialize(unmigratedPlayers));
             transaction["playersMigrated"] = Convert.ToBase64String(NetworkWriter.Serialize(migratedPlayers));
-            foreach (var player in group.OldRoom.Game.Players)
-            {
-                gamemanager.SendTransactionToUser(player.UserId, transaction);   
-            }
-            
-            
+            foreach (GamePlayer player in group.OldRoom.Game.Players)
+                gamemanager.SendTransactionToUser(player.UserId, transaction);
+
+
             _playerMigrationGroups.RemoveAt(i--);
-            
         }
+
         _playerLock.Release();
     }
-    
+
     protected override void OnGamedata(ConnectionBase connection, ArraySegment<byte> data)
     {
         // I think there should definitely be better session management storage.
         // But I'm still not entirely sure how to handle it. Seek feedback from others.
-        var player = Bombd.RoomManager.GetPlayerInRoom(connection.UserId);
+        GamePlayer? player = Bombd.RoomManager.GetPlayerInRoom(connection.UserId);
         if (player == null) return;
-        
+
         // Not sure if there's any actual need for the sender, we already know who this is from the
         // connection id? Do more research, I suppose.
         using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
-        var message = NetworkMessages.Unpack(reader, out var type, out var sender);
-        
+        ArraySegment<byte> message = NetworkMessages.Unpack(reader, out NetMessageType type, out int sender);
+
         player.OnNetworkMessage(type, message);
     }
 
@@ -326,9 +322,9 @@ public class GameServer : BombdService
         {
             // Don't bother updating game sessions that are empty
             if (room.Game.Players.Count == 0) continue;
-            room.Simulation.Tick();
+            room.GameSimulation.Tick();
         }
-        
+
         // Handling player join/leave requests after the main server operations so there's
         // no potential issue with concurrency.
         // e.g. someone joins mid tick
@@ -336,17 +332,15 @@ public class GameServer : BombdService
         HandlePlayerLeaveRequests();
         HandlePlayerJoinRequests();
     }
-    
+
     public override void OnDisconnected(ConnectionBase connection)
     {
         Bombd.SessionManager.UnregisterSession(connection);
         UserInfo.TryRemove(connection.UserId, out _);
-        
+
         if (Bombd.RoomManager.GetPlayerInRoom(connection.UserId) != null)
-        {
-            AddPlayerToLeaveQueue(connection.UserId, connection.Username, "Disconnected");    
-        }
-        
+            AddPlayerToLeaveQueue(connection.UserId, connection.Username, "Disconnected");
+
         Logger.LogInfo<GameServer>($"{connection.Username} has been disconnected.");
     }
 
@@ -368,12 +362,12 @@ public class GameServer : BombdService
 
     private class MigratingPlayer
     {
-        public MigrationStatus Status;
-        public int UserId;
         public int OldPlayerId;
         public int PlayerId;
+        public MigrationStatus Status;
+        public int UserId;
     }
-    
+
     private struct PlayerJoinRequest
     {
         public int UserId;

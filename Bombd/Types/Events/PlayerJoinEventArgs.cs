@@ -1,4 +1,4 @@
-﻿using Bombd.Types.Network;
+﻿using Bombd.Simulation;
 
 namespace Bombd.Types.Events;
 

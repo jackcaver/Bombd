@@ -1,6 +1,6 @@
 ﻿using Bombd.Attributes;
+using Bombd.Core;
 using Bombd.Protocols;
-using Bombd.Types.Services;
 
 namespace Bombd.Services;
 

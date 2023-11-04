@@ -5,18 +5,18 @@ namespace Bombd.Types.Network.Messages;
 public struct NetMessageSyncObjectCreate : INetworkMessage, INetworkReadable
 {
     public NetMessageType Type => NetMessageType.SyncObjectCreate;
-    
+
     public string OwnerName;
     public string DebugTag;
     public int ObjectType;
     public NetObjectMessageType MessageType;
     public int Guid;
     public ArraySegment<byte> Data;
-    
+
     public void Write(NetworkWriter writer)
     {
         writer.Write(Guid);
-        writer.Write((int) MessageType);
+        writer.Write((int)MessageType);
         switch (MessageType)
         {
             case NetObjectMessageType.Create:

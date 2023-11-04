@@ -1,5 +1,5 @@
 ﻿using Bombd.Serialization;
-using Bombd.Types.Network;
+using Bombd.Simulation;
 
 namespace Bombd.Types.GameManager;
 

@@ -1,50 +1,47 @@
 ﻿using System.Xml.Serialization;
-using Bombd.Extensions;
 using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
-using Bombd.Services;
+using Bombd.Serialization.Wrappers;
+using Bombd.Types.Network;
 using Bombd.Types.Network.Messages;
-using Bombd.Types.Network.NetObjects;
+using Bombd.Types.Network.Objects;
 
-namespace Bombd.Types.Network;
+namespace Bombd.Simulation;
 
-public class Simulation
+public class GameSimulation
 {
-    private readonly Dictionary<int, PlayerState> _playerStates = new();
-    private readonly Dictionary<int, SyncObject> _syncObjects = new();
-    private readonly List<GamePlayer> _players;
-    private readonly XmlSerializer _stateSerializer = new(typeof(PlayerState));
-    public readonly ServerType Type;
-    
-    public readonly Platform Platform;
-    public bool IsKarting => Platform == Platform.Karting;
-    public bool IsModnation => Platform == Platform.ModNation;
-    
-    private readonly int _seed = CryptoHelper.GetRandomSecret();
     private readonly int _owner;
+    private readonly List<GamePlayer> _players;
+    private readonly Dictionary<int, PlayerState> _playerStates = new();
+
+    private readonly int _seed = CryptoHelper.GetRandomSecret();
+    private readonly XmlSerializer _stateSerializer = new(typeof(PlayerState));
+    private readonly Dictionary<int, SyncObject> _syncObjects = new();
+    private readonly GameroomState GameroomState = new();
+
+    public readonly Platform Platform;
 
     private readonly SpectatorInfo SpectatorInfo = new();
-    private readonly GameroomState GameroomState = new();
     private readonly StartingGrid StartingGrid = new();
+    public readonly ServerType Type;
     private AiInfo AiInfo = new(0);
     private RaceSettings? RaceSettings;
 
     private bool WaitingForPlayerNisEvents;
     private bool WaitingForPlayerStartEvents;
-    
-    public Simulation(ServerType type, Platform platform, int owner, List<GamePlayer> players)
+
+    public GameSimulation(ServerType type, Platform platform, int owner, List<GamePlayer> players)
     {
         Type = type;
         Platform = platform;
         _players = players;
         _owner = owner;
-        
-        Logger.LogInfo<Simulation>($"Starting SimServer with Type = {{Type}}, Platform = {platform}");
-        
-        
-        
+
+        Logger.LogInfo<GameSimulation>($"Starting SimServer with Type = {{Type}}, Platform = {platform}");
+
+
         // COMPETITIVE RACE FLOW - SENDER UID = DCE7631C, USER ID = 0xAE967D6D - 4 PLAYER RACE WITH AI, 2 HUMANS, 2 AI
         // S CreateSyncObject SpectactorInfo 0x221c7baf
         // S UpdateSyncObject SpectatorInfo ; 0 bytes
@@ -70,7 +67,7 @@ public class Simulation
         // C GameroomRequestStartEvent ; Owner wants to start the event
         // S UpdateSyncObject GameroomState ; Sets state to DownloadingTracks, last integer is 0x5404?
         // C GameroomDownloadTracksComplete ; Owner tells server that they finished downloading tracks
-            // Wait until this message is received from all players before continuing.
+        // Wait until this message is received from all players before continuing.
         // S UpdateSyncObject GameroomState ; Sets state to CountingDown, sets LoadEventTime to when event should start (30 seconds from now), sets LockedForRacerJoinsValue to 25000.0f, LockedTimerValue = 20000.0f
         // S UpdateSyncObject SimServerAIInfo ; Contains AI relevant to the race settings (2 ai in this case, 
         // S UpdateSyncObject StartingGrid ; Contains all players/ai now in the race, uses username uids for players, string hash of uid name for ai
@@ -83,25 +80,23 @@ public class Simulation
         // S ArbitratedItemCreate ; Basically sends back exactly what the client sent it a second ago
         // C ArbitratedItemCreateBlock
         // C ReadyForNisStart ; Owner tells server they finished loading and are ready for the intro movie
-            // Wait until this message is received from all players before continuing.
+        // Wait until this message is received from all players before continuing.
         // S UpdateSyncObject GameroomState ; Last value set to 0x6104?
         // S NisStart ;  Tells client that they can begin the video, includes value for current timestamp?
         // S UpdateSyncObject GameroomState ; Last value set to 0x5404?
         // The 0xE packets should start being broadcasted periodically, assumed to be GenericGameplay?
         // C ReadyForEventStart ; Owner tells server they finished watching the intro movie
-            // Wait until this message is received from all players before continuing.
+        // Wait until this message is received from all players before continuing.
         // S UpdateSyncObject GameroomState ; Last value set to 0x6104?
         // S EventStart ; Tells client that the race has begun, includes timestamp for start time
-        
-        
+
+
         // AFTER RACE
-        
+
         // C PlayerFinishedRace (Broadcast?)
         // C EventResultsPreliminary
-        
-        
-        
-        
+
+
         if (Type == ServerType.Competitive)
         {
             _syncObjects[NetObjectType.SpectatorInfo] = new SyncObject
@@ -112,7 +107,7 @@ public class Simulation
                 Type = NetObjectType.SpectatorInfo,
                 Data = NetworkWriter.Serialize(SpectatorInfo)
             };
-            
+
             _syncObjects[NetObjectType.AiInfo] = new SyncObject
             {
                 OwnerName = "simserver",
@@ -121,7 +116,7 @@ public class Simulation
                 Type = NetObjectType.AiInfo,
                 Data = NetworkWriter.Serialize(AiInfo)
             };
-            
+
             _syncObjects[NetObjectType.ModnationGameroomState] = new SyncObject
             {
                 OwnerName = "simserver",
@@ -130,7 +125,7 @@ public class Simulation
                 Type = NetObjectType.ModnationGameroomState,
                 Data = NetworkWriter.Serialize(GameroomState)
             };
-            
+
             _syncObjects[NetObjectType.ModnationStartingGrid] = new SyncObject
             {
                 OwnerName = "simserver",
@@ -139,7 +134,7 @@ public class Simulation
                 Type = NetObjectType.ModnationStartingGrid,
                 Data = NetworkWriter.Serialize(StartingGrid)
             };
-            
+
             _syncObjects[NetObjectType.RaceSettings] = new SyncObject
             {
                 OwnerName = "simserver",
@@ -150,14 +145,17 @@ public class Simulation
         }
     }
 
+    public bool IsKarting => Platform == Platform.Karting;
+    public bool IsModnation => Platform == Platform.ModNation;
+
     public void OnPlayerJoin(GamePlayer player)
     {
         // Don't actually know if this is random per room or random per player,
         // I assume it's used for determinism, but I don't know?
         player.SendReliableMessage(new NetMessageRandomSeed { Seed = CryptoHelper.GetRandomSecret() });
-        
+
         // Tell everybody else about yourself
-        foreach (var peer in _players)
+        foreach (GamePlayer peer in _players)
         {
             peer.SendReliableMessage(new NetMessagePlayerSessionInfo
             {
@@ -166,9 +164,9 @@ public class Simulation
                 UserId = player.UserId
             });
         }
-        
+
         // Tell the player about everyone who is in the game.
-        foreach (var peer in _players)
+        foreach (GamePlayer peer in _players)
         {
             if (player == peer) continue;
             player.SendReliableMessage(new NetMessagePlayerSessionInfo
@@ -180,7 +178,7 @@ public class Simulation
         }
 
         // Initialize any sync objects that exist
-        foreach (var syncObject in _syncObjects.Values)
+        foreach (SyncObject syncObject in _syncObjects.Values)
         {
             var message = new NetMessageSyncObjectCreate
             {
@@ -188,21 +186,21 @@ public class Simulation
                 DebugTag = syncObject.DebugTag,
                 Guid = syncObject.Guid,
                 ObjectType = syncObject.Type,
-                OwnerName = syncObject.OwnerName,
+                OwnerName = syncObject.OwnerName
             };
-            
+
             // Needs to be sent twice with a create and update message,
             // they use the same net message type in Modnation despite having
             // separate network event types, but whatever.
             player.SendReliableMessage(message);
-            
+
             // If the segment is empty, it probably hasn't been initialized
             // by the owner yet, don't send it.
             if (syncObject.Data.Count != 0)
             {
                 message.Data = syncObject.Data;
                 message.MessageType = NetObjectMessageType.Update;
-                player.SendReliableMessage(message);   
+                player.SendReliableMessage(message);
             }
         }
     }
@@ -211,33 +209,34 @@ public class Simulation
     {
         // Make sure we're not still keeping track of the player's state even after they left.
         _playerStates.Remove(player.UserId);
-        
+
         // Destroy all sync objects owned by the player, this will realistically only be the player info object,
         // but just to be safe search for all owned objects anyway.
-        var owned = _syncObjects.Where(x => x.Value.OwnerUserId == player.UserId);
-        foreach (var pair in owned)
+        IEnumerable<KeyValuePair<int, SyncObject>>
+            owned = _syncObjects.Where(x => x.Value.OwnerUserId == player.UserId);
+        foreach (KeyValuePair<int, SyncObject> pair in owned)
         {
             var message = new NetMessageSyncObjectCreate
             {
                 MessageType = NetObjectMessageType.Remove,
                 Guid = pair.Key
             };
-            
+
             Broadcast(player, message, PacketType.ReliableGameData);
             _syncObjects.Remove(pair.Key);
         }
-        
+
         // Tell everybody else in the lobby why we left...
         Broadcast(player, new NetMessagePlayerLeave
         {
             PlayerName = player.Username,
-            Reason = 0   
+            Reason = 0
         }, PacketType.ReliableGameData);
     }
-    
+
     public void Broadcast(GamePlayer sender, ArraySegment<byte> data, PacketType type)
     {
-        foreach (var player in _players)
+        foreach (GamePlayer player in _players)
         {
             if (player == sender) continue;
             player.Send(data, type);
@@ -246,9 +245,9 @@ public class Simulation
 
     public void Broadcast(GamePlayer sender, INetworkMessage message, PacketType type)
     {
-        using var writer = NetworkWriterPool.Get();
-        var payload = NetworkMessages.Pack(writer, message);
-        foreach (var player in _players)
+        using NetworkWriterPooled writer = NetworkWriterPool.Get();
+        ArraySegment<byte> payload = NetworkMessages.Pack(writer, message);
+        foreach (GamePlayer player in _players)
         {
             if (player == sender) continue;
             player.Send(payload, type);
@@ -257,38 +256,32 @@ public class Simulation
 
     public void Broadcast(INetworkMessage message, PacketType type)
     {
-        using var writer = NetworkWriterPool.Get();
-        var payload = NetworkMessages.Pack(writer, message);
-        foreach (var player in _players)
-        {
-            player.Send(payload, type);
-        }
+        using NetworkWriterPooled writer = NetworkWriterPool.Get();
+        ArraySegment<byte> payload = NetworkMessages.Pack(writer, message);
+        foreach (GamePlayer player in _players) player.Send(payload, type);
     }
 
     public void BroadcastPlayerStates()
     {
-        Logger.LogInfo<Simulation>("Broadcasting bulk state update to all players in game room");
-        
-        using var writer = NetworkWriterPool.Get();
-        var message = NetworkMessages.Pack(writer, new NetMessageBulkPlayerStateUpdate
+        Logger.LogInfo<GameSimulation>("Broadcasting bulk state update to all players in game room");
+
+        using NetworkWriterPooled writer = NetworkWriterPool.Get();
+        ArraySegment<byte> message = NetworkMessages.Pack(writer, new NetMessageBulkPlayerStateUpdate
         {
             StateUpdates = _playerStates.Values
         });
-        
-        foreach (var player in _players)
-        {
-            player.Send(message, PacketType.ReliableGameData);
-        }
+
+        foreach (GamePlayer player in _players) player.Send(message, PacketType.ReliableGameData);
     }
 
     public void UpdateGameroomState(GameroomState.RoomState state)
     {
-        Logger.LogInfo<Simulation>($"Setting GameRoomState to {state}");
-        if (_syncObjects.TryGetValue(NetObjectType.ModnationGameroomState, out var syncObject))
+        Logger.LogInfo<GameSimulation>($"Setting GameRoomState to {state}");
+        if (_syncObjects.TryGetValue(NetObjectType.ModnationGameroomState, out SyncObject? syncObject))
         {
             GameroomState.State = state;
             syncObject.Data = NetworkWriter.Serialize(GameroomState);
-                    
+
             var message = new NetMessageSyncObjectCreate
             {
                 MessageType = NetObjectMessageType.Update,
@@ -298,15 +291,15 @@ public class Simulation
                 OwnerName = syncObject.OwnerName,
                 Data = syncObject.Data
             };
-                    
-            Broadcast(message, PacketType.ReliableGameData);   
+
+            Broadcast(message, PacketType.ReliableGameData);
         }
     }
-    
+
     private void UpdateSystemSyncObject(int guid, ArraySegment<byte> data)
     {
-        if (!_syncObjects.TryGetValue(guid, out var syncObject)) return;
-        
+        if (!_syncObjects.TryGetValue(guid, out SyncObject? syncObject)) return;
+
         syncObject.Data = data;
         var message = new NetMessageSyncObjectCreate
         {
@@ -314,7 +307,7 @@ public class Simulation
             Guid = syncObject.Guid,
             Data = syncObject.Data
         };
-        
+
         Broadcast(message, PacketType.ReliableGameData);
     }
 
@@ -329,15 +322,16 @@ public class Simulation
     private void UpdateStartingGrid()
     {
         StartingGrid.Clear();
-        foreach (var state in _playerStates.Values) StartingGrid.Add((int)state.NameUid);
+        foreach (PlayerState state in _playerStates.Values) StartingGrid.Add((int)state.NameUid);
         for (int i = 0; i < AiInfo.Count; ++i)
         {
             int nameUid = CryptoHelper.StringHash32(AiInfo.DataSet[i].UidName);
             StartingGrid.Add(nameUid);
         }
+
         UpdateSystemSyncObject(NetObjectType.ModnationStartingGrid, NetworkWriter.Serialize(StartingGrid));
     }
-    
+
     public void OnNetworkMessage(GamePlayer player, NetMessageType type, ArraySegment<byte> data)
     {
         // if (type != NetMessageType.MessageUnreliableBlock && type != NetMessageType.VoipPacket)
@@ -345,7 +339,7 @@ public class Simulation
         //     Logger.LogDebug<Simulation>($"Received NetMessage {type} from {player.Username} ({(uint)player.UserId}:{(uint)player.PlayerId})");   
         // }
         //
-        
+
         switch (type)
         {
             case NetMessageType.PlayerLeave:
@@ -358,14 +352,14 @@ public class Simulation
             case NetMessageType.GameroomReady:
             {
                 if (player.UserId != _owner) break;
-                
+
                 UpdateGameroomState(GameroomState.RoomState.Ready);
                 break;
             }
             case NetMessageType.GameroomStopTimer:
             {
                 if (player.UserId != _owner) break;
-                
+
                 UpdateGameroomState(GameroomState.RoomState.CountingDownPaused);
                 break;
             }
@@ -379,15 +373,15 @@ public class Simulation
             case NetMessageType.GameroomDownloadTracksComplete:
             {
                 if (player.UserId != _owner) break;
-                
+
                 // GameroomState.LoadEventTime = TimeHelper.LocalTime + 30000;
                 // GameroomState.LockedForRacerJoinsValue = 25000.0f;
                 // GameroomState.LockedTimerValue = 20000.0f;
-                
+
                 GameroomState.LoadEventTime = TimeHelper.LocalTime + 5000;
                 GameroomState.LockedForRacerJoinsValue = 5000.0f;
                 GameroomState.LockedTimerValue = 5000.0f;
-                
+
                 UpdateGameroomState(GameroomState.RoomState.CountingDown);
                 UpdateAi();
                 UpdateStartingGrid();
@@ -407,19 +401,16 @@ public class Simulation
             {
                 // Only the host should be allowed to start the event I'm fairly sure
                 if (player.UserId != _owner) break;
-                
+
                 UpdateGameroomState(GameroomState.RoomState.DownloadingTracks);
                 break;
             }
             case NetMessageType.EventResultsPreliminary:
             {
-                using var reader = NetworkReaderPool.Get(data);
-                using var writer = NetworkWriterPool.Get();
-                var message = NetworkMessages.PackData(writer, data, NetMessageType.EventResultsFinal);
-                foreach (var racer in _players)
-                {
-                    racer.Send(message, PacketType.ReliableGameData);
-                }
+                using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
+                using NetworkWriterPooled writer = NetworkWriterPool.Get();
+                ArraySegment<byte> message = NetworkMessages.PackData(writer, data, NetMessageType.EventResultsFinal);
+                foreach (GamePlayer racer in _players) racer.Send(message, PacketType.ReliableGameData);
 
                 break;
             }
@@ -431,9 +422,9 @@ public class Simulation
             case NetMessageType.InviteSessionJoinDataModnation:
             case NetMessageType.InviteRequestJoin:
             {
-                using var reader = NetworkReaderPool.Get(data);
-                using var writer = NetworkWriterPool.Get();
-                var message = NetworkMessages.PackData(writer, data, type);
+                using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
+                using NetworkWriterPooled writer = NetworkWriterPool.Get();
+                ArraySegment<byte> message = NetworkMessages.PackData(writer, data, type);
                 Broadcast(player, message, PacketType.ReliableGameData);
                 break;
             }
@@ -441,13 +432,13 @@ public class Simulation
             {
                 // Only the host should be allowed to update event settings I'm fairly sure
                 if (player.UserId != _owner) break;
-                
+
                 byte[] array = new byte[data.Count];
                 data.CopyTo(array);
-                
+
                 RaceSettings = NetworkReader.Deserialize<RaceSettings>(data);
                 UpdateSystemSyncObject(NetObjectType.RaceSettings, array);
-                
+
                 break;
             }
             case NetMessageType.VoipPacket:
@@ -460,12 +451,13 @@ public class Simulation
                 // The only unreliable message block I've seen get sent is just input data,
                 // and it just gets broadcasted to all other players, should probably check for other conditions?
                 // But it seems fine for now.
-                using var writer = NetworkWriterPool.Get();
-                var message = NetworkMessages.PackData(writer, data, NetMessageType.MessageUnreliableBlock);
+                using NetworkWriterPooled writer = NetworkWriterPool.Get();
+                ArraySegment<byte> message =
+                    NetworkMessages.PackData(writer, data, NetMessageType.MessageUnreliableBlock);
                 Broadcast(player, message, PacketType.UnreliableGameData);
                 break;
             }
-            
+
             case NetMessageType.PlayerStateUpdate:
             {
                 if (IsModnation)
@@ -473,7 +465,7 @@ public class Simulation
                     PlayerState state;
                     try
                     {
-                        using var reader = NetworkReaderPool.Get(data);
+                        using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
                         using var stringReader = new StringReader(reader.ReadString(0x320));
                         state = (PlayerState)_stateSerializer.Deserialize(stringReader)!;
                     }
@@ -481,46 +473,47 @@ public class Simulation
                     {
                         // TODO: Disconnect the user since this shouldn't ever happen
                         // with normal gamedata.
-                        Logger.LogWarning<Simulation>($"Failed to parse playerStateUpdate for {player.Username}");
+                        Logger.LogWarning<GameSimulation>($"Failed to parse playerStateUpdate for {player.Username}");
                         break;
                     }
-                
+
                     _playerStates[player.UserId] = state;
-                    BroadcastPlayerStates();   
+                    BroadcastPlayerStates();
                 }
-                
+
                 break;
             }
 
             case NetMessageType.SyncObjectUpdate:
             {
-                using var reader = NetworkReaderPool.Get(data);
+                using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
                 int guid = reader.ReadInt32();
-                var objectData = reader.ReadBytes(reader.ReadInt32());
-                if (_syncObjects.TryGetValue(guid, out var syncedObject))
+                byte[] objectData = reader.ReadBytes(reader.ReadInt32());
+                if (_syncObjects.TryGetValue(guid, out SyncObject? syncedObject))
                 {
                     // Don't let players update objects they don't own.
                     if (syncedObject.OwnerUserId != player.UserId)
                     {
-                        Logger.LogInfo<Simulation>($"Denying update request for SyncObject({syncedObject.Guid}) from {player.Username} since they don't own it.");
+                        Logger.LogInfo<GameSimulation>(
+                            $"Denying update request for SyncObject({syncedObject.Guid}) from {player.Username} since they don't own it.");
                         break;
                     }
-                        
-                    Logger.LogInfo<Simulation>($"Updating SyncObject with Guid = {syncedObject.Guid}");
+
+                    Logger.LogInfo<GameSimulation>($"Updating SyncObject with Guid = {syncedObject.Guid}");
                     syncedObject.Data = new ArraySegment<byte>(objectData);
-                    
-                    using var writer = NetworkWriterPool.Get();
-                    var message = NetworkMessages.PackData(writer, data, type);
+
+                    using NetworkWriterPooled writer = NetworkWriterPool.Get();
+                    ArraySegment<byte> message = NetworkMessages.PackData(writer, data, type);
                     Broadcast(player, message, PacketType.ReliableGameData);
                 }
 
                 break;
             }
-            
+
             case NetMessageType.SyncObjectCreate:
             {
                 if (IsModnation)
-                { 
+                {
                     var message = NetworkReader.Deserialize<NetMessageSyncObjectCreate>(data);
                     if (message.MessageType == NetObjectMessageType.Create)
                     {
@@ -532,36 +525,38 @@ public class Simulation
                             OwnerUserId = player.UserId,
                             Type = message.ObjectType
                         };
-                        
-                        Logger.LogInfo<Simulation>($"Creating SyncObject with Guid = {syncedObject.Guid}, DebugTag = {syncedObject.DebugTag}, OwnerName = {syncedObject.OwnerName}");
-                        
+
+                        Logger.LogInfo<GameSimulation>(
+                            $"Creating SyncObject with Guid = {syncedObject.Guid}, DebugTag = {syncedObject.DebugTag}, OwnerName = {syncedObject.OwnerName}");
+
                         _syncObjects[syncedObject.Guid] = syncedObject;
                     }
                     else if (message.MessageType == NetObjectMessageType.Update)
                     {
-                        if (_syncObjects.TryGetValue(message.Guid, out var syncedObject))
+                        if (_syncObjects.TryGetValue(message.Guid, out SyncObject? syncedObject))
                         {
                             // Don't let players update objects they don't own.
                             if (syncedObject.OwnerUserId != player.UserId)
                             {
-                                Logger.LogInfo<Simulation>($"Denying update request for SyncObject({syncedObject.Guid}) from {player.Username} since they don't own it.");
+                                Logger.LogInfo<GameSimulation>(
+                                    $"Denying update request for SyncObject({syncedObject.Guid}) from {player.Username} since they don't own it.");
                                 break;
                             }
-                            
-                            Logger.LogInfo<Simulation>($"Updating SyncObject with Guid = {syncedObject.Guid}");
+
+                            Logger.LogInfo<GameSimulation>($"Updating SyncObject with Guid = {syncedObject.Guid}");
                             byte[] array = new byte[message.Data.Count];
                             message.Data.CopyTo(array);
                             syncedObject.Data = new ArraySegment<byte>(array);
                         }
                     }
-                    
+
                     // Send the sync object event to everybody else in the server
                     // TODO: Make sure it's valid
-                    Broadcast(player, message, PacketType.ReliableGameData);    
+                    Broadcast(player, message, PacketType.ReliableGameData);
                 }
                 else if (IsKarting)
                 {
-                    var reader = NetworkReaderPool.Get(data);
+                    NetworkReaderPooled reader = NetworkReaderPool.Get(data);
                     var syncObject = new SyncObject
                     {
                         OwnerUserId = player.UserId,
@@ -570,26 +565,27 @@ public class Simulation
                         Type = reader.ReadInt32(),
                         Guid = reader.ReadInt32()
                     };
-                    
-                    Logger.LogInfo<Simulation>($"Creating SyncObject with Guid = {syncObject.Guid}, DebugTag = {syncObject.DebugTag}, OwnerName = {syncObject.OwnerName}");
+
+                    Logger.LogInfo<GameSimulation>(
+                        $"Creating SyncObject with Guid = {syncObject.Guid}, DebugTag = {syncObject.DebugTag}, OwnerName = {syncObject.OwnerName}");
                     _syncObjects[syncObject.Guid] = syncObject;
-                    
-                    using var writer = NetworkWriterPool.Get();
-                    var message = NetworkMessages.PackData(writer, data, type);
+
+                    using NetworkWriterPooled writer = NetworkWriterPool.Get();
+                    ArraySegment<byte> message = NetworkMessages.PackData(writer, data, type);
                     Broadcast(player, message, PacketType.ReliableGameData);
                 }
-                
+
                 break;
             }
-            
+
             default:
             {
-                Logger.LogWarning<Simulation>("Unhandled network message type: " + type);
+                Logger.LogWarning<GameSimulation>("Unhandled network message type: " + type);
 
                 byte[] b = new byte[data.Count];
                 data.CopyTo(b, 0);
-                File.WriteAllBytes("/mnt/c/Users/Aidan/Desktop/" + type.ToString(), b);
-                
+                File.WriteAllBytes("/mnt/c/Users/Aidan/Desktop/" + type, b);
+
                 break;
             }
         }
@@ -612,44 +608,41 @@ public class Simulation
                     UpdateGameroomState(GameroomState.RoomState.RaceInProgress);
                     WaitingForPlayerNisEvents = true;
                 }
+
                 break;
             }
             case GameroomState.RoomState.RaceInProgress:
             {
-
                 if (WaitingForPlayerNisEvents && _playerStates.Values.All(x => x.ReadyForNis))
                 {
-
                     WaitingForPlayerNisEvents = false;
-                    var eventStartMessageData = NetworkWriter.Serialize(new GenericInt32(TimeHelper.LocalTime));
-                    using var writer = NetworkWriterPool.Get();
-                    var eventStartMessage = NetworkMessages.PackData(writer, eventStartMessageData, NetMessageType.NisStart);
-                    foreach (var racer in _players)
-                    {
-                        racer.Send(eventStartMessage, PacketType.ReliableGameData);
-                    }
+                    ArraySegment<byte> eventStartMessageData =
+                        NetworkWriter.Serialize(new GenericInt32(TimeHelper.LocalTime));
+                    using NetworkWriterPooled writer = NetworkWriterPool.Get();
+                    ArraySegment<byte> eventStartMessage =
+                        NetworkMessages.PackData(writer, eventStartMessageData, NetMessageType.NisStart);
+                    foreach (GamePlayer racer in _players) racer.Send(eventStartMessage, PacketType.ReliableGameData);
 
                     WaitingForPlayerStartEvents = true;
                 }
 
                 if (WaitingForPlayerStartEvents && _playerStates.Values.All(x => x.ReadyForEvent))
                 {
-                    var eventStartMessageData = NetworkWriter.Serialize(new GenericInt32(TimeHelper.LocalTime + 5000));
-                    using var writer = NetworkWriterPool.Get();
-                    var eventStartMessage = NetworkMessages.PackData(writer, eventStartMessageData, NetMessageType.EventStart);
-                    foreach (var racer in _players)
-                    {
-                        racer.Send(eventStartMessage, PacketType.ReliableGameData);
-                    }
-                    
+                    ArraySegment<byte> eventStartMessageData =
+                        NetworkWriter.Serialize(new GenericInt32(TimeHelper.LocalTime + 5000));
+                    using NetworkWriterPooled writer = NetworkWriterPool.Get();
+                    ArraySegment<byte> eventStartMessage =
+                        NetworkMessages.PackData(writer, eventStartMessageData, NetMessageType.EventStart);
+                    foreach (GamePlayer racer in _players) racer.Send(eventStartMessage, PacketType.ReliableGameData);
+
                     WaitingForPlayerStartEvents = false;
                 }
-                
+
                 break;
             }
         }
     }
-    
+
     public void Tick()
     {
         if (Type == ServerType.Competitive) TickGameRoom();

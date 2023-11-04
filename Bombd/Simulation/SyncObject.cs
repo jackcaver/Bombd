@@ -1,6 +1,4 @@
-﻿using Bombd.Serialization;
-
-namespace Bombd.Types.Network;
+﻿namespace Bombd.Simulation;
 
 public class SyncObject
 {

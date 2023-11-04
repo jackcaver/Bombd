@@ -5,7 +5,7 @@ namespace Bombd.Types.Network.Messages;
 public struct NetMessagePlayerLeave : INetworkMessage, INetworkReadable
 {
     public NetMessageType Type => NetMessageType.PlayerLeave;
-    
+
     public LeaveReason Reason;
     public string PlayerName;
 
@@ -14,7 +14,7 @@ public struct NetMessagePlayerLeave : INetworkMessage, INetworkReadable
         Reason = (LeaveReason)reader.ReadInt32();
         PlayerName = reader.ReadString(0x20);
     }
-    
+
     public void Write(NetworkWriter writer)
     {
         writer.Write((int)Reason);

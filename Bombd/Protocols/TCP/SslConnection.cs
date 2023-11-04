@@ -1,10 +1,10 @@
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Timers;
+using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
-using System.Timers;
-using Bombd.Types.Services;
 using Timer = System.Timers.Timer;
 
 namespace Bombd.Protocols.TCP;
@@ -13,7 +13,7 @@ public class SslConnection : ConnectionBase
 {
     private const int MaxMessageSize = 8192;
     private const int KeepAliveFrequency = 3000;
-    
+
     // u32 MsgLength
     // char Md5Digest[16]
     // char Protocol
@@ -49,17 +49,17 @@ public class SslConnection : ConnectionBase
         // Socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 3);
 
         IsConnected = true;
-        
+
         try
         {
             _sslStream = new SslStream(new NetworkStream(Socket, false), false);
-            _sslStream.AuthenticateAsServer(Server.Certificate, false,  SslProtocols.Ssl3 | SslProtocols.Tls, false);
+            _sslStream.AuthenticateAsServer(Server.Certificate, false, SslProtocols.Ssl3 | SslProtocols.Tls, false);
 
             _keepAliveTimer = new Timer(KeepAliveFrequency);
             _keepAliveTimer.Elapsed += OnKeepAliveTimerElapsed;
             _keepAliveTimer.AutoReset = false;
             _keepAliveTimer.Enabled = true;
-            
+
             StartReceive();
         }
         catch (Exception ex)
@@ -72,11 +72,11 @@ public class SslConnection : ConnectionBase
     public override void Disconnect()
     {
         if (!IsConnected) return;
-        
+
         try
         {
             _keepAliveTimer?.Dispose();
-            
+
             try
             {
                 _sslStream.ShutdownAsync().Wait();
@@ -109,12 +109,12 @@ public class SslConnection : ConnectionBase
         if (State > ConnectionState.WaitingForConnection) Service.OnDisconnected(this);
         IsConnected = false;
     }
-    
+
     private void OnKeepAliveTimerElapsed(object? source, ElapsedEventArgs e)
     {
         Send(ArraySegment<byte>.Empty, PacketType.KeepAlive);
     }
-    
+
     public override void Send(ArraySegment<byte> data, PacketType type)
     {
         if (!IsConnected) return;
@@ -167,7 +167,7 @@ public class SslConnection : ConnectionBase
                 Disconnect();
                 return;
             }
-            
+
             payloadSize = ((_recv[0] << 24) | (_recv[1] << 16) | (_recv[2] << 8) | _recv[3]) -
                           (MessageHeaderSize - 4);
             if (payloadSize < 0 || payloadSize > MaxMessageSize)
@@ -175,7 +175,7 @@ public class SslConnection : ConnectionBase
                 Disconnect();
                 return;
             }
-            
+
             type = (PacketType)_recv[20];
             if (payloadSize != 0)
             {
@@ -190,7 +190,7 @@ public class SslConnection : ConnectionBase
                     }
 
                     offset += len;
-                } while (offset < payloadSize);   
+                } while (offset < payloadSize);
             }
         }
         catch (Exception)
@@ -207,7 +207,7 @@ public class SslConnection : ConnectionBase
             else if (State == ConnectionState.WaitingForTimeSync) HandleTimeSync(data);
             else Service.OnData(this, data, type);
         }
-        
+
         StartReceive();
     }
 }

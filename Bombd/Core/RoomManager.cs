@@ -1,20 +1,20 @@
 ﻿using Bombd.Helpers;
-using Bombd.Services;
+using Bombd.Simulation;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
-using Bombd.Types.Network.Requests;
+using Bombd.Types.Requests;
 
-namespace Bombd.Types.Network;
+namespace Bombd.Core;
 
 public class RoomManager
 {
-    private readonly Dictionary<string, GameRoom> _rooms = new();
     private readonly Dictionary<int, GameRoom> _roomIds = new();
+    private readonly Dictionary<string, GameRoom> _rooms = new();
     private readonly Dictionary<int, GameRoom> _userRooms = new();
     private int _nextGameId;
-    
+
     public List<GameRoom> GetRooms() => new(_rooms.Values);
-    
+
     public GameRoom? GetRoomByUser(int userId)
     {
         if (_userRooms.TryGetValue(userId, out GameRoom? room)) return room;
@@ -29,17 +29,14 @@ public class RoomManager
 
     public GamePlayer? GetPlayerInRoom(int userId)
     {
-        var room = GetRoomByUser(userId);
+        GameRoom? room = GetRoomByUser(userId);
         return room?.GetPlayerByUserId(userId);
     }
 
     public GamePlayer? GetPlayerById(int playerId)
     {
-        if (_roomIds.TryGetValue(playerId >>> 8, out GameRoom? room))
-        {
-            return room.GetPlayerByPlayerId(playerId);
-        }
-        
+        if (_roomIds.TryGetValue(playerId >>> 8, out GameRoom? room)) return room.GetPlayerByPlayerId(playerId);
+
         return null;
     }
 
@@ -58,14 +55,14 @@ public class RoomManager
         _userRooms[player.UserId] = room;
         return player;
     }
-    
+
     public bool TryLeaveCurrentRoom(int userId)
     {
         GameRoom? room = GetRoomByUser(userId);
         if (room == null) return false;
 
         _userRooms.Remove(userId);
-        
+
         GamePlayer player = room.GetPlayerByUserId(userId);
         return room.TryLeave(player.PlayerId);
     }
@@ -80,11 +77,11 @@ public class RoomManager
         request.Attributes.TryAdd("__MAX_PLAYERS", "8");
         request.Attributes.TryAdd("SERVER_TYPE", "kartPark");
         request.Attributes.TryAdd("COMM_CHECKSUM", ((int)request.Platform).ToString());
-        
+
         // If we can't parse the number of players, just default to an existing number.
-        if (!int.TryParse(request.Attributes["__MAX_PLAYERS"], out int maxSlots)) 
+        if (!int.TryParse(request.Attributes["__MAX_PLAYERS"], out int maxSlots))
             maxSlots = 8;
-        
+
         var type = ServerType.KartPark;
         if (request.Attributes["SERVER_TYPE"] == "competitive")
             type = ServerType.Competitive;
@@ -99,26 +96,23 @@ public class RoomManager
             Players = new GameManagerPlayerList(),
             Attributes = request.Attributes
         }, maxSlots, type, request.Platform, request.OwnerUserId);
-        
+
         _rooms[name] = room;
         _roomIds[id] = room;
-        
+
         return room;
     }
 
     public Dictionary<int, int> GetCreationPlayerCounts(Platform platform)
     {
-        var rooms = new List<GameRoom>(_rooms.Values).Where(
+        IEnumerable<GameRoom> rooms = new List<GameRoom>(_rooms.Values).Where(
             room => room.Game.Attributes.ContainsKey("TRACK_CREATIONID"));
 
         Dictionary<int, int> counts = new();
-        foreach (var room in rooms)
+        foreach (GameRoom room in rooms)
         {
             int creationId = int.Parse(room.Game.Attributes["TRACK_CREATIONID"]);
-            if (!counts.TryAdd(creationId, room.UsedSlots))
-            {
-                counts[creationId] += room.UsedSlots;
-            }
+            if (!counts.TryAdd(creationId, room.UsedSlots)) counts[creationId] += room.UsedSlots;
         }
 
         return counts;
@@ -140,7 +134,8 @@ public class RoomManager
             return true;
         }).ToList();
 
-        if (rooms.Count == 0 && createIfNoneExist) rooms.Add(CreateRoom(new CreateGameRequest { Attributes = attributes, Platform = id }));
+        if (rooms.Count == 0 && createIfNoneExist)
+            rooms.Add(CreateRoom(new CreateGameRequest { Attributes = attributes, Platform = id }));
 
         return rooms.Select(room => room.ToGameBrowser()).ToList();
     }

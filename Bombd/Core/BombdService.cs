@@ -12,9 +12,10 @@ using Bombd.Protocols.TCP;
 using Bombd.Serialization;
 using Bombd.Services;
 using Bombd.Types.Authentication;
+using Bombd.Types.Services;
 using JetBrains.Annotations;
 
-namespace Bombd.Types.Services;
+namespace Bombd.Core;
 
 public abstract class BombdService
 {
@@ -23,7 +24,7 @@ public abstract class BombdService
     private readonly IServer _server;
     private readonly Type _type;
     protected readonly ConcurrentDictionary<int, ConnectionBase> UserInfo = new();
-    
+
     protected BombdService()
     {
         _type = GetType();
@@ -110,7 +111,7 @@ public abstract class BombdService
             response.Error = "TicketParseFail";
             return false;
         }
-        
+
         if (request.TryGet("SessionKey", out string? encodedSessionKey))
         {
             byte[] sessionKeyBytes;
@@ -123,17 +124,17 @@ public abstract class BombdService
                 response.Error = "InvalidSessionKey";
                 return false;
             }
-            
+
             if (sessionKeyBytes.Length != 4)
             {
                 response.Error = "InvalidSessionKey";
                 return false;
             }
-            
+
             sessionKeyBytes.ReadInt32BE(0, out int sessionKey);
             connection.SessionId = sessionKey;
         }
-        
+
         Platform platform = PlatformHelper.FromTitleId(ticket.ServiceId[7..^3]);
         if (platform == Platform.Unknown)
         {
@@ -145,11 +146,11 @@ public abstract class BombdService
         connection.UserId = CryptoHelper.StringHash32Upper(ticket.OnlineId + ticket.IssuerId);
         connection.Platform = platform;
         Bombd.SessionManager.RegisterSession(connection);
-        
+
         // Used so other players can communicate with this player
         // without having access to user-specific session data.
         UserInfo[connection.UserId] = connection;
-        
+
         if (this is GameServer)
         {
             // I don't think the game even cares what value it gets here,
@@ -169,17 +170,18 @@ public abstract class BombdService
         response["userid"] = connection.UserId.ToString();
 
         // Only the GameManager needs to be sent the matchmaking configuration.
-        if (this is Bombd.Services.GameManager)
+        if (this is GameManager)
         {
             byte[] config = File.ReadAllBytes("Data/MatchmakingConfiguration.xml");
             response["MMConfigFile"] = Convert.ToBase64String(config);
             response["MMConfigFileSize"] = config.Length.ToString();
         }
-        
+
         return true;
     }
-    
-    private object? HandleServiceTransaction(ConnectionBase connection, NetcodeTransaction request, NetcodeTransaction response, BombdService? redirect = null)
+
+    private object? HandleServiceTransaction(ConnectionBase connection, NetcodeTransaction request,
+        NetcodeTransaction response, BombdService? redirect = null)
     {
         // This is a kind of weird solution, but it's only the case in LittleBigPlanet Karting
         // that all gamebrowser requests get redirected to the gamemanager.
@@ -189,14 +191,14 @@ public abstract class BombdService
             Logger.LogInfo(_type, $"HandleServiceTransaction: Transaction is being redirected to {redirect.Name}");
             service = redirect;
         }
-        
+
         if (service._methods.TryGetValue(request.MethodName, out MethodInfo? method))
         {
             // Logger.LogInfo(_type, $"HandleServiceTransaction: Got transaction ({request.MethodName})");
 
             try
             {
-                var session = Bombd.SessionManager.GetSession(connection);
+                Session session = Bombd.SessionManager.GetSession(connection);
                 var context = new TransactionContext
                 {
                     Session = session,
@@ -241,19 +243,19 @@ public abstract class BombdService
             connection.Disconnect();
             return;
         }
-        
+
         Logger.LogInfo(_type, $"HandleServiceTransaction: Got transaction ({request.MethodName})");
 
         NetcodeTransaction response = request.MakeResponse();
         object? value = null;
-        
+
         // Karting has gamebrowser redirect to the gamemanager for whatever reason, so...
-        bool isGameBrowserRedirect = (request.ServiceName == "gamebrowser" && Name == "gamemanager");
-        
+        bool isGameBrowserRedirect = request.ServiceName == "gamebrowser" && Name == "gamemanager";
+
         // Connect is a shared set of methods provided by all services.
         if (request.ServiceName == Name || isGameBrowserRedirect)
         {
-            BombdService? redirect = isGameBrowserRedirect ? Bombd.GetService<Bombd.Services.GameManager>() : null;
+            BombdService? redirect = isGameBrowserRedirect ? Bombd.GetService<GameManager>() : null;
             value = HandleServiceTransaction(connection, request, response, redirect);
         }
         else
@@ -263,7 +265,7 @@ public abstract class BombdService
         }
 
         if (value != null && string.IsNullOrEmpty(response.Error)) response.SetObject(value);
-        
+
         connection.Send(response.ToArraySegment(), PacketType.ReliableNetcodeData);
     }
 
@@ -283,10 +285,7 @@ public abstract class BombdService
 
     public void SendToUser(int userId, ArraySegment<byte> data, PacketType type)
     {
-        if (UserInfo.TryGetValue(userId, out ConnectionBase? connection))
-        {
-            connection.Send(data, type);
-        }
+        if (UserInfo.TryGetValue(userId, out ConnectionBase? connection)) connection.Send(data, type);
     }
 
     public void OnData(ConnectionBase connection, ArraySegment<byte> data, PacketType type)
@@ -319,13 +318,13 @@ public abstract class BombdService
     {
         Logger.LogWarning(_type, "OnGamedata: This service is unable to handle this packet type.");
     }
-    
+
     public virtual void OnDisconnected(ConnectionBase connection)
     {
         // The directory server is only used to tell the game about other servers, don't destroy our
         // session yet just because it got disconnected.
         if (Name != "directory") Bombd.SessionManager.UnregisterSession(connection);
-        
+
         UserInfo.TryRemove(connection.UserId, out _);
         Logger.LogInfo(_type, $"{connection.Username} has been disconnected.");
     }

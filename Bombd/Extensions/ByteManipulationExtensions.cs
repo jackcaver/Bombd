@@ -21,7 +21,7 @@ public static class ByteManipulationExtensions
 
         return 2;
     }
-    
+
     public static int WriteInt32BE(this byte[] b, int offset, int value)
     {
         b[offset + 0] = (byte)(value >> 24);
@@ -31,7 +31,7 @@ public static class ByteManipulationExtensions
 
         return 4;
     }
-    
+
     public static int WriteUint32BE(this byte[] b, int offset, uint value)
     {
         b[offset + 0] = (byte)(value >> 24);
@@ -68,15 +68,15 @@ public static class ByteManipulationExtensions
 
         return 2;
     }
-    
+
     public static ushort ReadInt32BE(this byte[] b, int offset, out int value)
     {
         value = 0;
-        value |= (b[offset + 0] << 24);
-        value |= (b[offset + 1] << 16);
-        value |= (b[offset + 2] << 8);
-        value |= (b[offset + 3] << 0);
-        
+        value |= b[offset + 0] << 24;
+        value |= b[offset + 1] << 16;
+        value |= b[offset + 2] << 8;
+        value |= b[offset + 3] << 0;
+
         return 4;
     }
 
@@ -87,7 +87,7 @@ public static class ByteManipulationExtensions
         value |= (uint)(b[offset + 1] << 16);
         value |= (uint)(b[offset + 2] << 8);
         value |= (uint)(b[offset + 3] << 0);
-        
+
         return 4;
     }
 }

@@ -1,4 +1,5 @@
 ﻿using Bombd.Attributes;
+using Bombd.Core;
 using Bombd.Protocols;
 using Bombd.Types.Directory;
 using Bombd.Types.Services;
@@ -17,14 +18,6 @@ public class Directory : BombdService
     [Transaction("getServiceList")]
     public ClusterInfo GetServiceList(TransactionContext context)
     {
-        // I'm fairly sure the session key is just the session id that was
-        // returned from the login on the player connect side of things.
-        // But we don't use session keys in this implementation, should we?
-        // I figure connection id is enough, the only issue would be potential
-        // UDP spoofing on the gameserver side of things, but if we send back a unique
-        // hash salt then that's less of a concern, although maybe we should use the session id
-        // field there, I don't know, look more into this at a later date.
-
         var info = new ClusterInfo
         {
             ClusterUuid = Bombd.ClusterUuid

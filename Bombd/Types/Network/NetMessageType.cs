@@ -3,12 +3,13 @@
 public enum NetMessageType : byte
 {
     KartNetState = 2,
-    
+
     ItemHitConfirm = 0xa, // Generic
     TeamMessage = 0xb,
     SecondaryCollision = 0xc, // Generic
     WandererUpdate = 0xd, // Generic
     GenericMessage0Xe = 0xe,
+
     // 0x10 Generic
     ItemDestroy = 0x11, // Generic
     ItemMoveData = 0x12,
@@ -27,6 +28,7 @@ public enum NetMessageType : byte
     EventSettingsUpdate = 0x1f,
     TextChatMsg = 0x20,
     SeriesResults = 0x21,
+
     // 0x24,
     GameroomReady = 0x25,
     LeaderChangeRequest = 0x27,
@@ -60,7 +62,7 @@ public enum NetMessageType : byte
     GameroomStopTimer = 0x2e,
     PlayerFinishedEvent = 0x2f,
     SpectatorInfo = 0x30,
-    
+
     InviteChallengeMessageModnation = 0x31,
     InviteSessionJoinDataModnation = 0x32,
 

@@ -70,7 +70,7 @@ public class RudpMessage
     public void EncodeUnreliableGamedata(ArraySegment<byte> data)
     {
         Protocol = PacketType.UnreliableGameData;
-        
+
         _offset += _data.WriteUint8(_offset, (byte)PacketType.UnreliableGameData);
         _offset += _data.WriteUint8(_offset, 0xfe);
         _offset += _data.WriteUint16BE(_offset, 0xffff);
@@ -102,7 +102,7 @@ public class RudpMessage
     public void EncodeHandshake(int sessionId, int secret)
     {
         Protocol = PacketType.Handshake;
-        
+
         _offset += _data.WriteUint8(_offset, (byte)PacketType.Handshake);
         _offset += _data.WriteUint8(_offset, 0);
 
@@ -135,7 +135,7 @@ public class RudpMessage
     {
         Protocol = PacketType.Reset;
         Sequence = sequence;
-        
+
         _offset += _data.WriteUint8(_offset, (byte)PacketType.KeepAlive);
         _offset += _data.WriteUint8(_offset, 0);
         _offset += _data.WriteUint16BE(_offset, 0);

@@ -1,4 +1,5 @@
 ﻿using Bombd.Attributes;
+using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Protocols;
 using Bombd.Serialization;
@@ -39,17 +40,13 @@ public class GameBrowser : BombdService
     }
 
     [Transaction("subscribeGameEvents")]
-    public ServerGameList SubscribeGameEvents(TransactionContext context)
-    {
-        return ListGames(context);
-    }
+    public ServerGameList SubscribeGameEvents(TransactionContext context) => ListGames(context);
 
     [Transaction("unSubscribeGameEvents")]
     public void UnsubscribeGameEvents(TransactionContext context)
     {
-        
     }
-    
+
     [Transaction("RequestGlobalPlayerCount")]
     public void RequestGlobalPlayerCount(TransactionContext context)
     {

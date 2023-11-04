@@ -1,4 +1,4 @@
-﻿namespace Bombd;
+﻿namespace Bombd.Core;
 
 public class BombdConfiguration
 {

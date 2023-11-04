@@ -1,19 +1,18 @@
 ﻿using Bombd.Helpers;
-using Bombd.Services;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
 
-namespace Bombd.Types.Network;
+namespace Bombd.Simulation;
 
 public class GameRoom
 {
     private readonly Dictionary<int, GamePlayer> _playerIdLookup = new();
-    private readonly Dictionary<int, GamePlayer> _userIdLookup = new();
-    
-    public readonly GameManagerGame Game;
-    
-    public readonly Simulation Simulation;
     private readonly List<bool> _slots;
+    private readonly Dictionary<int, GamePlayer> _userIdLookup = new();
+
+    public readonly GameManagerGame Game;
+
+    public readonly GameSimulation GameSimulation;
 
     private int _gameCreationTime = TimeHelper.LocalTime;
     private int _lastPlayerJoinTime = TimeHelper.LocalTime;
@@ -21,7 +20,7 @@ public class GameRoom
     public GameRoom(GameManagerGame game, int maxSlots, ServerType type, Platform platform, int ownerId)
     {
         Game = game;
-        Simulation = new Simulation(type, platform, ownerId, Game.Players);
+        GameSimulation = new GameSimulation(type, platform, ownerId, Game.Players);
         _slots = Enumerable.Repeat(false, maxSlots).ToList();
         MaxSlots = maxSlots;
         NumFreeSlots = maxSlots;
@@ -47,11 +46,11 @@ public class GameRoom
             Username = username,
             Room = this
         };
-            
+
         _playerIdLookup[playerId] = player;
         _userIdLookup[userId] = player;
         Game.Players.Add(player);
-            
+
         return player;
     }
 
@@ -59,7 +58,7 @@ public class GameRoom
     {
         if (FreeSlot(playerId))
         {
-            var player = _playerIdLookup[playerId];
+            GamePlayer player = _playerIdLookup[playerId];
             _userIdLookup.Remove(player.UserId);
             _playerIdLookup.Remove(playerId);
             Game.Players.Remove(player);
@@ -68,7 +67,7 @@ public class GameRoom
 
         return false;
     }
-    
+
     public bool RequestSlot(out int playerId)
     {
         playerId = 0;
@@ -76,7 +75,7 @@ public class GameRoom
 
         int index = _slots.FindIndex(x => !x);
         if (index == -1) return false;
-        
+
         _lastPlayerJoinTime = TimeHelper.LocalTime;
         _slots[index] = true;
         NumFreeSlots--;
@@ -84,7 +83,7 @@ public class GameRoom
         playerId = (Game.GameId << 8) | (index & 0x3f);
         return true;
     }
-    
+
     public bool FreeSlot(int slot)
     {
         int gameId = slot >>> 8;
@@ -100,10 +99,10 @@ public class GameRoom
 
         return false;
     }
-    
+
     public GamePlayer GetPlayerByUserId(int userId) => _userIdLookup[userId];
     public GamePlayer GetPlayerByPlayerId(int playerId) => _playerIdLookup[playerId];
-    
+
     public GameBrowserGame ToGameBrowser() =>
         new()
         {

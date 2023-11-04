@@ -1,20 +1,20 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
+using Bombd.Core;
 using Bombd.Logging;
-using Bombd.Types.Services;
 
 namespace Bombd.Protocols.TCP;
 
 public class SslServer : IServer
 {
+    private readonly BombdService _service;
     internal readonly Action<int> OnConnected;
     internal readonly Action<int, ArraySegment<byte>, PacketType> OnData;
     internal readonly Action<int> OnDisconnected;
 
     private Socket? _socket;
-    private BombdService _service;
-    
+
     public SslServer(
         string address,
         int port,
@@ -50,16 +50,6 @@ public class SslServer : IServer
         StartAccept();
     }
 
-    public void Send(int id, ArraySegment<byte> data, PacketType type)
-    {
-        if (Connections.TryGetValue(id, out SslConnection? connection)) connection.Send(data, type);
-    }
-
-    public void Disconnect(int id)
-    {
-        if (Connections.TryGetValue(id, out SslConnection? connection)) connection.Disconnect();
-    }
-
     public void Stop()
     {
         if (!IsActive) return;
@@ -71,6 +61,16 @@ public class SslServer : IServer
         foreach (SslConnection session in Connections.Values) session.Disconnect();
 
         Connections.Clear();
+    }
+
+    public void Send(int id, ArraySegment<byte> data, PacketType type)
+    {
+        if (Connections.TryGetValue(id, out SslConnection? connection)) connection.Send(data, type);
+    }
+
+    public void Disconnect(int id)
+    {
+        if (Connections.TryGetValue(id, out SslConnection? connection)) connection.Disconnect();
     }
 
     private async void StartAccept()
