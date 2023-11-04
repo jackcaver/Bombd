@@ -80,22 +80,25 @@ public class RoomManager
         // If we can't parse the number of players, just default to an existing number.
         if (!int.TryParse(request.Attributes["__MAX_PLAYERS"], out int maxSlots))
             maxSlots = 8;
-
+        
         var type = ServerType.KartPark;
         if (request.Attributes["SERVER_TYPE"] == "competitive")
             type = ServerType.Competitive;
-
+        else if (request.Platform == Platform.Karting)
+            type = ServerType.Pod;
+        
         int id = ++_nextGameId;
-        string name = "gm_zone_" + (uint)id;
-        var room = new GameRoom(new GameManagerGame
+        string name = $"gm_{request.Attributes["SERVER_TYPE"].ToLower()}_{id}";
+        var game = new GameManagerGame
         {
             GameName = name,
             GameBrowserName = name,
             GameId = id,
             Players = new GameManagerPlayerList(),
             Attributes = request.Attributes
-        }, maxSlots, type, request.Platform, request.OwnerUserId);
-
+        };
+        var room = new GameRoom(game, type, request.Platform, maxSlots, request.OwnerUserId);
+        
         _rooms[name] = room;
         _roomIds[id] = room;
 
@@ -159,6 +162,7 @@ public class RoomManager
     {
         List<GameRoom> rooms = new List<GameRoom>(_rooms.Values).Where(room =>
         {
+            if (room.Platform != id) return false;
             if (room.NumFreeSlots == 0) return false;
             foreach (KeyValuePair<string, string> attribute in attributes)
             {

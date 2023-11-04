@@ -24,8 +24,6 @@ public class GameBrowser : BombdService
     public ServerGameList ListGames(TransactionContext context)
     {
         var attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]);
-        attributes.TryAdd("COMM_CHECKSUM", ((int)context.Connection.Platform).ToString());
-
         List<GameBrowserGame> games = Bombd.RoomManager.SearchRooms(attributes, context.Connection.Platform);
         return CreateServerGameList(games);
     }
@@ -78,8 +76,6 @@ public class GameBrowser : BombdService
     {
         // TODO: Search based on all parameters, not just the game attributes.
         var searchData = NetworkReader.Deserialize<GameSearchData>(context.Request["searchData"]);
-        searchData.Attributes.TryAdd("COMM_CHECKSUM", ((int)context.Connection.Platform).ToString());
-        
         List<GameBrowserGame> games = Bombd.RoomManager.SearchRooms(searchData.Attributes, context.Connection.Platform);
         return CreateServerGameList(games);
     }

@@ -17,7 +17,7 @@ public class GameRoom
     private int _gameCreationTime = TimeHelper.LocalTime;
     private int _lastPlayerJoinTime = TimeHelper.LocalTime;
     
-    public GameRoom(GameManagerGame game, int maxSlots, ServerType type, Platform platform, int ownerId)
+    public GameRoom(GameManagerGame game, ServerType type, Platform platform, int maxSlots, int ownerId)
     {
         Game = game;
         Platform = platform;
