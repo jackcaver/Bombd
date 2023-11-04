@@ -44,6 +44,23 @@ public class NetworkMessages
         return payload;
     }
 
+    public static ArraySegment<byte> PackInt(NetworkWriter writer, int value, NetMessageType type)
+    {
+        writer.Reset();
+
+        writer.Write((byte)type);
+        writer.Offset += 3;
+        writer.Write(SimServerUID);
+        writer.Write(value);
+        
+        ArraySegment<byte> payload = writer.ToArraySegment();
+        int size = payload.Count;
+        payload[2] = (byte)(size >> 8);
+        payload[3] = (byte)(size >> 0);
+
+        return payload;
+    }
+    
     public static ArraySegment<byte> Unpack(NetworkReader reader, out NetMessageType type, out int sender)
     {
         type = (NetMessageType)reader.ReadInt8();

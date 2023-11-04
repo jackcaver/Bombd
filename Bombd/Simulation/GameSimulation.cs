@@ -1,4 +1,5 @@
-﻿using System.Xml.Serialization;
+﻿using System.Text;
+using System.Xml.Serialization;
 using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
@@ -23,15 +24,17 @@ public class GameSimulation
     private readonly GameroomState GameroomState = new();
 
     public readonly Platform Platform;
-
-    private readonly SpectatorInfo SpectatorInfo = new();
-    private readonly StartingGrid StartingGrid = new();
     public readonly ServerType Type;
+    
+    private SpectatorInfo SpectatorInfo = new();
+    private StartingGrid StartingGrid = new();
     private AiInfo AiInfo = new(string.Empty, 0);
     private EventSettings? RaceSettings;
-
+    private List<EventResult> EventResults = new();
+    
     private bool WaitingForPlayerNisEvents;
     private bool WaitingForPlayerStartEvents;
+    private bool SentEventResults;
 
     public GameSimulation(ServerType type, Platform platform, int owner, List<GamePlayer> players)
     {
@@ -234,28 +237,59 @@ public class GameSimulation
                 Guid = pair.Key
             };
 
-            Broadcast(player, message, PacketType.ReliableGameData);
+            BroadcastMessage(player, message, PacketType.ReliableGameData);
             _syncObjects.Remove(pair.Key);
         }
 
         // Tell everybody else in the lobby why we left...
-        Broadcast(player, new NetMessagePlayerLeave
+        BroadcastMessage(player, new NetMessagePlayerLeave
         {
             PlayerName = player.Username,
             Reason = 0
         }, PacketType.ReliableGameData);
     }
 
-    public void Broadcast(GamePlayer sender, ArraySegment<byte> data, PacketType type)
+    public void BroadcastVoipData(GamePlayer sender, ArraySegment<byte> data)
     {
+        foreach (var player in _players)
+        {
+            if (player == sender) continue;
+            player.Send(data, PacketType.VoipData);
+        }
+    }
+    
+    public void BroadcastGenericIntMessage(int value, NetMessageType messageType, PacketType packetType)
+    {
+        using NetworkWriterPooled writer = NetworkWriterPool.Get();
+        ArraySegment<byte> message = NetworkMessages.PackInt(writer, value, messageType);
+        foreach (GamePlayer player in _players)
+        {
+            player.Send(message, packetType);
+        }
+    }
+    
+    public void BroadcastGenericMessage(GamePlayer sender, ArraySegment<byte> data, NetMessageType messageType, PacketType packetType)
+    {
+        using NetworkWriterPooled writer = NetworkWriterPool.Get();
+        ArraySegment<byte> message = NetworkMessages.PackData(writer, data, messageType);
         foreach (GamePlayer player in _players)
         {
             if (player == sender) continue;
-            player.Send(data, type);
+            player.Send(message, packetType);
+        }
+    }
+    
+    public void BroadcastGenericMessage(ArraySegment<byte> data, NetMessageType messageType, PacketType packetType)
+    {
+        using NetworkWriterPooled writer = NetworkWriterPool.Get();
+        ArraySegment<byte> message = NetworkMessages.PackData(writer, data, messageType);
+        foreach (GamePlayer player in _players)
+        {
+            player.Send(message, packetType);
         }
     }
 
-    public void Broadcast(GamePlayer sender, INetworkMessage message, PacketType type)
+    public void BroadcastMessage(GamePlayer sender, INetworkMessage message, PacketType type)
     {
         using NetworkWriterPooled writer = NetworkWriterPool.Get();
         ArraySegment<byte> payload = NetworkMessages.Pack(writer, message);
@@ -265,14 +299,14 @@ public class GameSimulation
             player.Send(payload, type);
         }
     }
-
-    public void Broadcast(INetworkMessage message, PacketType type)
+    
+    public void BroadcastMessage(INetworkMessage message, PacketType type)
     {
         using NetworkWriterPooled writer = NetworkWriterPool.Get();
         ArraySegment<byte> payload = NetworkMessages.Pack(writer, message);
         foreach (GamePlayer player in _players) player.Send(payload, type);
     }
-
+    
     public void BroadcastPlayerStates()
     {
         Logger.LogInfo<GameSimulation>("Broadcasting bulk state update to all players in game room");
@@ -285,29 +319,14 @@ public class GameSimulation
 
         foreach (GamePlayer player in _players) player.Send(message, PacketType.ReliableGameData);
     }
-
-    public void UpdateGameroomState(GameroomState.RoomState state)
+    
+    public void UpdateGameroomState(RoomState state)
     {
         Logger.LogInfo<GameSimulation>($"Setting GameRoomState to {state}");
-        if (_syncObjects.TryGetValue(NetObjectType.ModnationGameroomState, out SyncObject? syncObject))
-        {
-            GameroomState.State = state;
-            syncObject.Data = NetworkWriter.Serialize(GameroomState);
-
-            var message = new NetMessageSyncObjectCreate
-            {
-                MessageType = NetObjectMessageType.Update,
-                DebugTag = syncObject.DebugTag,
-                Guid = syncObject.Guid,
-                ObjectType = syncObject.Type,
-                OwnerName = syncObject.OwnerName,
-                Data = syncObject.Data
-            };
-
-            Broadcast(message, PacketType.ReliableGameData);
-        }
+        GameroomState.State = state;
+        UpdateSystemSyncObject(NetObjectType.ModnationGameroomState, NetworkWriter.Serialize(GameroomState));
     }
-
+    
     private void UpdateSystemSyncObject(int guid, ArraySegment<byte> data)
     {
         if (!_syncObjects.TryGetValue(guid, out SyncObject? syncObject)) return;
@@ -320,7 +339,7 @@ public class GameSimulation
             Data = syncObject.Data
         };
 
-        Broadcast(message, PacketType.ReliableGameData);
+        BroadcastMessage(message, PacketType.ReliableGameData);
     }
 
     private void UpdateAi()
@@ -348,11 +367,10 @@ public class GameSimulation
 
     public void OnNetworkMessage(GamePlayer player, NetMessageType type, ArraySegment<byte> data)
     {
-        // if (type != NetMessageType.MessageUnreliableBlock && type != NetMessageType.VoipPacket)
-        // {
-        //     Logger.LogDebug<Simulation>($"Received NetMessage {type} from {player.Username} ({(uint)player.UserId}:{(uint)player.PlayerId})");   
-        // }
-        //
+        if (type != NetMessageType.MessageUnreliableBlock && type != NetMessageType.VoipPacket)
+        {
+            // Logger.LogDebug<GameSimulation>($"Received NetMessage {type} from {player.Username} ({(uint)player.UserId}:{(uint)player.PlayerId})");   
+        }
 
         switch (type)
         {
@@ -360,28 +378,32 @@ public class GameSimulation
             {
                 var message = NetworkReader.Deserialize<NetMessagePlayerLeave>(data);
                 message.PlayerName = player.Username;
-                Broadcast(message, PacketType.ReliableGameData);
+                BroadcastMessage(message, PacketType.ReliableGameData);
                 break;
             }
             case NetMessageType.GameroomReady:
             {
                 if (player.UserId != _owner) break;
-
-                UpdateGameroomState(GameroomState.RoomState.Ready);
+                UpdateGameroomState(RoomState.Ready);
                 break;
             }
             case NetMessageType.GameroomStopTimer:
             {
                 if (player.UserId != _owner) break;
-
-                UpdateGameroomState(GameroomState.RoomState.CountingDownPaused);
+                UpdateGameroomState(RoomState.CountingDownPaused);
                 break;
             }
             case NetMessageType.SpectatorInfo:
             {
-                byte[] array = new byte[data.Count];
-                data.CopyTo(array);
-                UpdateSystemSyncObject(NetObjectType.SpectatorInfo, array);
+                SpectatorInfo = NetworkReader.Deserialize<SpectatorInfo>(data);
+                
+                if (SpectatorInfo.RaceState == RaceState.PostRace)
+                
+                Logger.LogDebug<GameSimulation>($"Current RaceState is {SpectatorInfo.RaceState}");
+                Logger.LogDebug<GameSimulation>($"Current RaceEndServerTime is {SpectatorInfo.RaceEndServerTime}");
+                Logger.LogDebug<GameSimulation>($"Current PostRaceServerTime is {SpectatorInfo.PostRaceServerTime}");
+                
+                UpdateSystemSyncObject(NetObjectType.SpectatorInfo, NetworkWriter.Serialize(SpectatorInfo));
                 break;
             }
             case NetMessageType.GameroomDownloadTracksComplete:
@@ -392,7 +414,7 @@ public class GameSimulation
                 GameroomState.LockedForRacerJoinsValue = BombdConfig.Instance.GameroomRacerLockTime;
                 GameroomState.LockedTimerValue = BombdConfig.Instance.GameroomTimerLockTime;
                 
-                UpdateGameroomState(GameroomState.RoomState.CountingDown);
+                UpdateGameroomState(RoomState.CountingDown);
                 UpdateAi();
                 UpdateStartingGrid();
                 break;
@@ -411,17 +433,24 @@ public class GameSimulation
             {
                 // Only the host should be allowed to start the event I'm fairly sure
                 if (player.UserId != _owner) break;
-
-                UpdateGameroomState(GameroomState.RoomState.DownloadingTracks);
+                UpdateGameroomState(RoomState.DownloadingTracks);
                 break;
             }
             case NetMessageType.EventResultsPreliminary:
             {
-                using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
-                using NetworkWriterPooled writer = NetworkWriterPool.Get();
-                ArraySegment<byte> message = NetworkMessages.PackData(writer, data, NetMessageType.EventResultsFinal);
-                foreach (GamePlayer racer in _players) racer.Send(message, PacketType.ReliableGameData);
-
+                List<EventResult> results;
+                try
+                {
+                    using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
+                    results = EventResult.Deserialize(reader.ReadString(reader.Capacity));
+                }
+                catch (Exception)
+                {
+                    Logger.LogWarning<GameSimulation>($"Failed to parse EventResultsPreliminary for {player.Username}");
+                    break;
+                }
+                
+                EventResults.AddRange(results);
                 break;
             }
             case NetMessageType.PlayerFinishedEvent:
@@ -432,10 +461,7 @@ public class GameSimulation
             case NetMessageType.InviteSessionJoinDataModnation:
             case NetMessageType.InviteRequestJoin:
             {
-                using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
-                using NetworkWriterPooled writer = NetworkWriterPool.Get();
-                ArraySegment<byte> message = NetworkMessages.PackData(writer, data, type);
-                Broadcast(player, message, PacketType.ReliableGameData);
+                BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
                 break;
             }
             case NetMessageType.EventSettingsUpdate:
@@ -453,7 +479,7 @@ public class GameSimulation
             }
             case NetMessageType.VoipPacket:
             {
-                Broadcast(player, data, PacketType.VoipData);
+                BroadcastVoipData(player, data);
                 break;
             }
             case NetMessageType.MessageUnreliableBlock:
@@ -461,13 +487,10 @@ public class GameSimulation
                 // The only unreliable message block I've seen get sent is just input data,
                 // and it just gets broadcasted to all other players, should probably check for other conditions?
                 // But it seems fine for now.
-                using NetworkWriterPooled writer = NetworkWriterPool.Get();
-                ArraySegment<byte> message =
-                    NetworkMessages.PackData(writer, data, NetMessageType.MessageUnreliableBlock);
-                Broadcast(player, message, PacketType.UnreliableGameData);
+                BroadcastGenericMessage(player, data, NetMessageType.MessageUnreliableBlock, PacketType.UnreliableGameData);
                 break;
             }
-
+            
             case NetMessageType.PlayerStateUpdate:
             {
                 if (IsModnation)
@@ -476,7 +499,7 @@ public class GameSimulation
                     try
                     {
                         using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
-                        using var stringReader = new StringReader(reader.ReadString(0x320));
+                        using var stringReader = new StringReader(reader.ReadString(reader.Capacity));
                         state = (PlayerState)_stateSerializer.Deserialize(stringReader)!;
                     }
                     catch (Exception)
@@ -508,13 +531,10 @@ public class GameSimulation
                             $"Denying update request for SyncObject({syncedObject.Guid}) from {player.Username} since they don't own it.");
                         break;
                     }
-
+                    
                     Logger.LogInfo<GameSimulation>($"Updating SyncObject with Guid = {syncedObject.Guid}");
                     syncedObject.Data = new ArraySegment<byte>(objectData);
-
-                    using NetworkWriterPooled writer = NetworkWriterPool.Get();
-                    ArraySegment<byte> message = NetworkMessages.PackData(writer, data, type);
-                    Broadcast(player, message, PacketType.ReliableGameData);
+                    BroadcastGenericMessage(player, data, NetMessageType.SyncObjectUpdate, PacketType.ReliableGameData);
                 }
 
                 break;
@@ -562,7 +582,7 @@ public class GameSimulation
 
                     // Send the sync object event to everybody else in the server
                     // TODO: Make sure it's valid
-                    Broadcast(player, message, PacketType.ReliableGameData);
+                    BroadcastMessage(player, message, PacketType.ReliableGameData);
                 }
                 else if (IsKarting)
                 {
@@ -579,10 +599,7 @@ public class GameSimulation
                     Logger.LogInfo<GameSimulation>(
                         $"Creating SyncObject with Guid = {syncObject.Guid}, DebugTag = {syncObject.DebugTag}, OwnerName = {syncObject.OwnerName}");
                     _syncObjects[syncObject.Guid] = syncObject;
-
-                    using NetworkWriterPooled writer = NetworkWriterPool.Get();
-                    ArraySegment<byte> message = NetworkMessages.PackData(writer, data, type);
-                    Broadcast(player, message, PacketType.ReliableGameData);
+                    BroadcastGenericMessage(player, data, NetMessageType.SyncObjectCreate, PacketType.ReliableGameData);
                 }
 
                 break;
@@ -604,10 +621,9 @@ public class GameSimulation
     private void TickGameRoom()
     {
         // TODO: Exclude players who joined after the countdown
-
         switch (GameroomState.State)
         {
-            case GameroomState.RoomState.CountingDown:
+            case RoomState.CountingDown:
             {
                 // Wait until the timer has finished counting down, then broadcast to everyone that the race is in progress
                 if (TimeHelper.LocalTime >= GameroomState.LoadEventTime)
@@ -615,39 +631,43 @@ public class GameSimulation
                     GameroomState.LoadEventTime = 0;
                     GameroomState.LockedTimerValue = 0.0f;
                     GameroomState.LockedForRacerJoinsValue = 0.0f;
-                    UpdateGameroomState(GameroomState.RoomState.RaceInProgress);
+                    UpdateGameroomState(RoomState.RaceInProgress);
                     WaitingForPlayerNisEvents = true;
                 }
 
                 break;
             }
-            case GameroomState.RoomState.RaceInProgress:
+            case RoomState.RaceInProgress:
             {
                 if (WaitingForPlayerNisEvents && _playerStates.Values.All(x => x.ReadyForNis))
                 {
                     WaitingForPlayerNisEvents = false;
-                    ArraySegment<byte> eventStartMessageData =
-                        NetworkWriter.Serialize(new GenericInt32(TimeHelper.LocalTime));
-                    using NetworkWriterPooled writer = NetworkWriterPool.Get();
-                    ArraySegment<byte> eventStartMessage =
-                        NetworkMessages.PackData(writer, eventStartMessageData, NetMessageType.NisStart);
-                    foreach (GamePlayer racer in _players) racer.Send(eventStartMessage, PacketType.ReliableGameData);
-
+                    BroadcastGenericIntMessage(TimeHelper.LocalTime, NetMessageType.NisStart, PacketType.ReliableGameData);
                     WaitingForPlayerStartEvents = true;
                 }
-
+                
                 if (WaitingForPlayerStartEvents && _playerStates.Values.All(x => x.ReadyForEvent))
                 {
-                    ArraySegment<byte> eventStartMessageData =
-                        NetworkWriter.Serialize(new GenericInt32(TimeHelper.LocalTime + BombdConfig.Instance.EventCountdownTime));
-                    using NetworkWriterPooled writer = NetworkWriterPool.Get();
-                    ArraySegment<byte> eventStartMessage =
-                        NetworkMessages.PackData(writer, eventStartMessageData, NetMessageType.EventStart);
-                    foreach (GamePlayer racer in _players) racer.Send(eventStartMessage, PacketType.ReliableGameData);
-
+                    int countdown = TimeHelper.LocalTime + BombdConfig.Instance.EventCountdownTime;
+                    BroadcastGenericIntMessage(countdown, NetMessageType.EventStart, PacketType.ReliableGameData);
                     WaitingForPlayerStartEvents = false;
                 }
 
+                if (SpectatorInfo.RaceState == RaceState.WaitingForRaceEnd && 
+                    TimeHelper.LocalTime >= SpectatorInfo.RaceEndServerTime && !SentEventResults)
+                {
+                    SentEventResults = true;
+                    var xml = Encoding.ASCII.GetBytes(EventResult.Serialize(EventResults));
+                    BroadcastGenericMessage(xml, NetMessageType.EventResultsFinal, PacketType.ReliableGameData);
+                }
+                
+                if (SpectatorInfo.RaceState == RaceState.PostRace &&
+                    TimeHelper.LocalTime >= SpectatorInfo.PostRaceServerTime)
+                {
+                    SentEventResults = false;
+                    UpdateGameroomState(RoomState.Ready);
+                }
+                
                 break;
             }
         }

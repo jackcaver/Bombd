@@ -2,27 +2,33 @@
 
 namespace Bombd.Types.Network.Objects;
 
-public class SpectatorInfo : INetworkWritable
+public class SpectatorInfo : INetworkWritable, INetworkReadable
 {
-    public const int LeaderboardSize = 8;
-    public readonly int[] LeaderboardNameUids = new int[LeaderboardSize];
+    public int LeaderNameUid;
     public int PostRaceServerTime;
     public int RaceEndServerTime;
     public int RaceLeaderLapNumber;
 
-    public int RaceState;
+    public RaceState RaceState = RaceState.Invalid;
     public int TotalLapNumber;
-
+    
+    public void Read(NetworkReader reader)
+    {
+        RaceState = (RaceState)reader.ReadInt32();
+        LeaderNameUid = reader.ReadInt32();
+        RaceLeaderLapNumber = reader.ReadInt32();
+        TotalLapNumber = reader.ReadInt32();
+        RaceEndServerTime = reader.ReadInt32();
+        PostRaceServerTime = reader.ReadInt32();
+    }
+    
     public void Write(NetworkWriter writer)
     {
-        // writer.Write(RaceState);
-        // foreach (var uid in LeaderboardNameUids)
-        //     writer.Write(uid);
-        // writer.Write(RaceLeaderLapNumber);
-        // writer.Write(TotalLapNumber);
-        // writer.Write(RaceEndServerTime);
-        // writer.Write(PostRaceServerTime);
-
-        writer.Clear(24);
+        writer.Write((int)RaceState);
+        writer.Write(LeaderNameUid);
+        writer.Write(RaceLeaderLapNumber);
+        writer.Write(TotalLapNumber);
+        writer.Write(RaceEndServerTime);
+        writer.Write(PostRaceServerTime);
     }
 }
