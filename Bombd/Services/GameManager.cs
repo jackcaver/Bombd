@@ -25,12 +25,31 @@ public class GameManager : BombdService
     [Transaction("joinGame")]
     public void JoinGame(TransactionContext context)
     {
+        // Check if the user reserved a slot in this game
+        int reservationKey = 0;
+        if (context.Request.TryGet("reservationKey", out string param))
+        {
+            if (!int.TryParse(param, out reservationKey))
+            {
+                context.Response.Error = "ParseFail";
+                return;
+            }
+        }
+        context.Request.TryGet("guest", out string guest);
+        
         context.Response["listenIP"] = BombdConfig.Instance.ExternalIP;
         context.Response["listenPort"] = Bombd.GameServer.Port.ToString();
         context.Response["hashSalt"] = CryptoHelper.Salt.ToString();
         context.Response["sessionId"] = context.Connection.SessionId.ToString();
 
-        Bombd.GameServer.AddPlayerToJoinQueue(context.Connection.UserId, context.Request["gamename"]);
+        Bombd.GameServer.AddPlayerToJoinQueue(new PlayerJoinRequest
+        {
+            Timestamp = TimeHelper.LocalTime,
+            UserId = context.Connection.UserId,
+            GameName = context.Request["gamename"],
+            ReservationKey = reservationKey,
+            Guest = guest
+        });
     }
 
     [Transaction("hostGame")]
@@ -42,14 +61,38 @@ public class GameManager : BombdService
             Attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]),
             OwnerUserId = context.Connection.UserId
         });
-
+        
         context.Response["gamename"] = room.Game.GameName;
         context.Response["listenIP"] = BombdConfig.Instance.ExternalIP;
         context.Response["listenPort"] = Bombd.GameServer.Port.ToString();
         context.Response["hashSalt"] = CryptoHelper.Salt.ToString();
         context.Response["sessionId"] = context.Connection.SessionId.ToString();
+        
+        context.Request.TryGet("guest", out string guest);
+        Bombd.GameServer.AddPlayerToJoinQueue(new PlayerJoinRequest
+        {
+            Timestamp = TimeHelper.LocalTime,
+            UserId = context.Connection.UserId,
+            GameName = room.Game.GameName,
+            Guest = guest
+        });
+    }
 
-        Bombd.GameServer.AddPlayerToJoinQueue(context.Connection.UserId, room.Game.GameName);
+    [Transaction("reserveSlotsInGameForGroup")]
+    public void ReserveSlotsInGameForGroup(TransactionContext context)
+    {
+        string gameName = context.Request["gamename"];
+        if (!int.TryParse(context.Request["numSlots"], out int numGuests))
+        {
+            context.Response.Error = "ParseFail";
+            return;
+        }
+        
+        if (Bombd.GameServer.ReserveSlotInGame(gameName, out int reservationKey))
+        {
+            context.Response["reservationKey"] = reservationKey.ToString();
+        }
+        else context.Response.Error = "RoomFull";
     }
 
     [Transaction("logClientMessage")]

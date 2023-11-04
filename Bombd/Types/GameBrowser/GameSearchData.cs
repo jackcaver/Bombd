@@ -17,8 +17,8 @@ public class GameSearchData : INetworkReadable
         int attributeCount = reader.ReadInt32();
         for (int i = 0; i < attributeCount; ++i)
         {
-            string key = reader.ReadString(0x20);
-            string value = reader.ReadString(0x20);
+            string key = reader.ReadString();
+            string value = reader.ReadString();
             if (!string.IsNullOrEmpty(key)) Attributes[key] = value;
         }
 

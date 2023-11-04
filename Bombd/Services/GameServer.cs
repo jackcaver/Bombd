@@ -18,12 +18,37 @@ public class GameServer : BombdService
 {
     private const int MigrationTimeout = 10000;
 
+    private readonly Dictionary<int, ReservationGroup> _reservationGroups = new();
     private readonly List<PlayerJoinRequest> _playerJoinQueue = new();
     private readonly List<PlayerLeaveRequest> _playerLeaveQueue = new();
     private readonly SemaphoreSlim _playerLock = new(1);
     private readonly List<MigrationGroup> _playerMigrationGroups = new();
     public event EventHandler<PlayerJoinEventArgs>? OnPlayerJoined;
     public event EventHandler<PlayerLeaveEventArgs>? OnPlayerLeft;
+
+    public bool ReserveSlotInGame(string gameName, out int reservationKey)
+    {
+        reservationKey = -1;
+        _playerLock.Wait();
+        try
+        {
+            GameRoom? room = Bombd.RoomManager.GetRoomByName(gameName);
+            if (room == null) return false;
+            if (!room.RequestSlot(out int slot)) return false;
+            _reservationGroups[reservationKey] = new ReservationGroup
+            {
+                Timestamp = TimeHelper.LocalTime,
+                Slot = slot,
+                Room = room
+            };
+
+            return true;
+        }
+        finally
+        {
+            _playerLock.Release();
+        }
+    }
 
     public void AddMigrationGroup(GameMigrationRequest request)
     {
@@ -107,17 +132,12 @@ public class GameServer : BombdService
         }
     }
 
-    public void AddPlayerToJoinQueue(int userId, string gameName)
+    public void AddPlayerToJoinQueue(PlayerJoinRequest request)
     {
         _playerLock.Wait();
         try
         {
-            _playerJoinQueue.Add(new PlayerJoinRequest
-            {
-                UserId = userId,
-                GameName = gameName,
-                Timestamp = TimeHelper.LocalTime
-            });
+            _playerJoinQueue.Add(request);
         }
         finally
         {
@@ -187,7 +207,17 @@ public class GameServer : BombdService
             if (UserInfo.TryGetValue(request.UserId, out ConnectionBase? connection))
             {
                 if (!connection.IsConnected) continue;
-                GamePlayer? player = Bombd.RoomManager.TryJoinRoom(connection.Username, connection.UserId, gameRoom);
+
+                GamePlayer? player;
+                if (request.ReservationKey != 0)
+                {
+                    if (!_reservationGroups.TryGetValue(request.ReservationKey, out ReservationGroup group)) continue;
+                    if (group.Room != gameRoom) continue;
+                    player = Bombd.RoomManager.JoinRoom(connection.Username, connection.UserId, group.Slot,
+                        group.Room);
+                } 
+                else player = Bombd.RoomManager.TryJoinRoom(connection.Username, connection.UserId, gameRoom);
+                
                 if (player != null)
                 {
                     // For convenience, we attach the send method directly to the game player object,
@@ -360,6 +390,13 @@ public class GameServer : BombdService
         public List<MigratingPlayer> Players;
     }
 
+    private struct ReservationGroup
+    {
+        public int Timestamp;
+        public GameRoom Room;
+        public int Slot;
+    }
+    
     private class MigratingPlayer
     {
         public int OldPlayerId;
@@ -367,14 +404,7 @@ public class GameServer : BombdService
         public MigrationStatus Status;
         public int UserId;
     }
-
-    private struct PlayerJoinRequest
-    {
-        public int UserId;
-        public string GameName;
-        public int Timestamp;
-    }
-
+    
     private struct PlayerLeaveRequest
     {
         public int UserId;

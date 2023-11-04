@@ -251,11 +251,11 @@ public abstract class BombdService
         NetcodeTransaction response = request.MakeResponse();
         object? value = null;
 
-        // Karting has gamebrowser redirect to the gamemanager for whatever reason, so...
+        // Karting has weird behaviors
         bool isGameBrowserRedirect = request.ServiceName == "gamebrowser" && Name == "gamemanager";
-
-        // Connect is a shared set of methods provided by all services.
-        if (request.ServiceName == Name || isGameBrowserRedirect)
+        bool isTemporaryGameManager = request.ServiceName == "temp_gamemanager" && Name == "gamemanager";
+        
+        if (request.ServiceName == Name || isGameBrowserRedirect || isTemporaryGameManager)
         {
             BombdService? redirect = isGameBrowserRedirect ? Bombd.GetService<GameBrowser>() : null;
             value = HandleServiceTransaction(connection, request, response, redirect);

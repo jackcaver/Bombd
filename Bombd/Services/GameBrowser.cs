@@ -72,6 +72,17 @@ public class GameBrowser : BombdService
         var creations = Bombd.RoomManager.GetBusiestCreations();
         context.Response["BusiestGames"] = Convert.ToBase64String(NetworkWriter.Serialize(creations));
     }
+
+    [Transaction("listGamesMatchmaking")]
+    public ServerGameList ListGamesMatchmaking(TransactionContext context)
+    {
+        // TODO: Search based on all parameters, not just the game attributes.
+        var searchData = NetworkReader.Deserialize<GameSearchData>(context.Request["searchData"]);
+        searchData.Attributes.TryAdd("COMM_CHECKSUM", ((int)context.Connection.Platform).ToString());
+        
+        List<GameBrowserGame> games = Bombd.RoomManager.SearchRooms(searchData.Attributes, context.Connection.Platform);
+        return CreateServerGameList(games);
+    }
     
     private ServerGameList CreateServerGameList(List<GameBrowserGame> games)
     {
