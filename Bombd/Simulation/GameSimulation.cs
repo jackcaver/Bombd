@@ -40,7 +40,7 @@ public class GameSimulation
         _players = players;
         _owner = owner;
 
-        Logger.LogInfo<GameSimulation>($"Starting SimServer with Type = {{Type}}, Platform = {platform}");
+        Logger.LogInfo<GameSimulation>($"Starting SimServer with Type = {Type}, Platform = {platform}");
 
 
         // COMPETITIVE RACE FLOW - SENDER UID = DCE7631C, USER ID = 0xAE967D6D - 4 PLAYER RACE WITH AI, 2 HUMANS, 2 AI
@@ -164,7 +164,7 @@ public class GameSimulation
     {
         // Don't actually know if this is random per room or random per player,
         // I assume it's used for determinism, but I don't know?
-        player.SendReliableMessage(new NetMessageRandomSeed { Seed = CryptoHelper.GetRandomSecret() });
+        player.SendReliableMessage(new NetMessageRandomSeed { Seed = _seed });
 
         // Tell everybody else about yourself
         foreach (GamePlayer peer in _players)
