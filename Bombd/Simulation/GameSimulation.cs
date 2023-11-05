@@ -54,8 +54,8 @@ public class GameSimulation
         {
             SpectatorInfo = CreateSystemSyncObject(new SpectatorInfo(), NetObjectType.SpectatorInfo);
             AiInfo = CreateSystemSyncObject(new AiInfo(string.Empty, 0), NetObjectType.AiInfo);
-            GameroomState = CreateSystemSyncObject(new GameroomState(), NetObjectType.ModnationGameroomState);
-            StartingGrid = CreateSystemSyncObject(new StartingGrid(), NetObjectType.ModnationStartingGrid);
+            GameroomState = CreateSystemSyncObject(new GameroomState(), NetObjectType.GameroomState);
+            StartingGrid = CreateSystemSyncObject(new StartingGrid(), NetObjectType.StartingGrid);
         }
     }
 
