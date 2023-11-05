@@ -13,4 +13,10 @@ public class PlayerState
     [XmlAttribute("pcId")] public uint PlayerConnectId;
     [XmlIgnore] public bool ReadyForEvent;
     [XmlIgnore] public bool ReadyForNis;
+
+    public override string ToString()
+    {
+        return
+            $"PlayerConnect = {PlayerConnectId}, NameUID = {NameUid}, CharacterID = {CharacterId}, KartID = {KartId}";
+    }
 }

@@ -1,11 +1,47 @@
-﻿namespace Bombd.Simulation;
+﻿using Bombd.Helpers;
+using Bombd.Types.Network;
+using Bombd.Types.Network.Messages;
+
+namespace Bombd.Simulation;
 
 public class SyncObject
 {
-    public string OwnerName { get; set; } = string.Empty;
-    public string DebugTag { get; set; } = string.Empty;
-    public int OwnerUserId { get; set; }
-    public int Guid { get; set; }
-    public int Type { get; set; }
-    public ArraySegment<byte> Data { get; set; } = ArraySegment<byte>.Empty;
+    public readonly string OwnerName;
+    public readonly string DebugTag;
+    public readonly int OwnerUserId;
+    public readonly int Guid;
+    public readonly int Type;
+    public ArraySegment<byte> Data = ArraySegment<byte>.Empty;
+
+    public SyncObject(string tag, int type)
+    {
+        OwnerUserId = -1;
+        DebugTag = tag;
+        Type = type;
+        OwnerName = NetworkMessages.SimServerName;
+        Guid = CryptoHelper.GetRandomSecret();
+    }
+    
+    public SyncObject(NetMessageSyncObject message, int owner)
+    {
+        OwnerUserId = owner;
+        OwnerName = message.OwnerName;
+        DebugTag = message.DebugTag;
+        Guid = message.Guid;
+        Type = message.ObjectType;
+    }
+
+    public SyncObject(NetMessageSyncObjectCreate message, int owner)
+    {
+        OwnerUserId = owner;
+        OwnerName = message.OwnerName;
+        DebugTag = message.DebugTag;
+        Guid = message.Guid;
+        Type = message.ObjectType;
+    }
+    
+    public override string ToString()
+    {
+        return $"SyncObject({Guid}:{DebugTag})";
+    }
 }
