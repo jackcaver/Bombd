@@ -1,6 +1,5 @@
 ﻿using System.Xml.Serialization;
-using Bombd.Helpers;
-using Bombd.Serialization;
+using Bombd.Types.Network;
 
 namespace Bombd.Simulation;
 
@@ -19,9 +18,8 @@ public class PlayerState
     [XmlAttribute("mic")] public uint Mic;
     [XmlAttribute("nameUID")] public uint NameUid;
     [XmlAttribute("pcId")] public uint PlayerConnectId;
-    
-    [XmlIgnore] public bool ReadyForEvent;
-    [XmlIgnore] public bool ReadyForNis;
+
+    [XmlIgnore] public int Flags = PlayerStateFlags.None;
 
     public override string ToString()
     {

@@ -34,7 +34,7 @@ public class GameSimulation
     private GenericSyncObject<StartingGrid> _startingGrid;
     private GenericSyncObject<EventSettings>? _raceSettings;
     private List<EventResult> _eventResults = new();
-    
+
     private bool _waitingForPlayerNisEvents;
     private bool _waitingForPlayerStartEvents;
     private bool _hasSentEventResults;
@@ -300,30 +300,48 @@ public class GameSimulation
         Logger.LogInfo<GameSimulation>($"Setting GameRoomState to {state}");
         
         room.State = state;
-        if (state == RoomState.CountingDown)
+        room.LoadEventTime = 0;
+        room.LockedTimerValue = 0.0f;
+        room.LockedForRacerJoinsValue = 0.0f;
+        
+        switch (state)
         {
-            UpdateAi();
-            UpdateStartingGrid();
-            
-            // If the gameroom isn't loaded before it receives the player create info,
-            // it won't ever update the racer state
-            if (Platform == Platform.Karting)
+            case RoomState.RaceInProgress:
             {
-                // Send all player infos
-                BroadcastMessage(new NetMessagePlayerCreateInfo {
-                    Data = new List<PlayerInfo>(_playerInfos.Values)
-                }, PacketType.ReliableGameData);   
-            }
+                // Reset state variables for every player, should probably have
+                // a better way of handling this, but it's fine for now.
+                foreach (var playerState in _playerStates.Values)
+                {
+                    playerState.Flags = PlayerStateFlags.None;
+                }
             
-            room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.GameroomCountdownTime;
-            room.LockedForRacerJoinsValue = BombdConfig.Instance.GameroomRacerLockTime;
-            room.LockedTimerValue = BombdConfig.Instance.GameroomTimerLockTime; 
-        }
-        else
-        {
-            room.LoadEventTime = 0;
-            room.LockedTimerValue = 0.0f;
-            room.LockedForRacerJoinsValue = 0.0f;
+                _waitingForPlayerNisEvents = true;
+                break;
+            }
+            case RoomState.Ready:
+            {
+                // If the gameroom isn't loaded before it receives the player create info,
+                // it won't ever update the racer state
+                if (Platform == Platform.Karting)
+                {
+                    // Send all player infos
+                    BroadcastMessage(new NetMessagePlayerCreateInfo {
+                        Data = new List<PlayerInfo>(_playerInfos.Values)
+                    }, PacketType.ReliableGameData);   
+                }
+                break;
+            }
+            case RoomState.CountingDown:
+            {
+                UpdateAi();
+                UpdateStartingGrid();
+            
+                room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.GameroomCountdownTime;
+                room.LockedForRacerJoinsValue = BombdConfig.Instance.GameroomRacerLockTime;
+                room.LockedTimerValue = BombdConfig.Instance.GameroomTimerLockTime;
+                
+                break;
+            }
         }
         
         _gameroomState.Sync();
@@ -498,7 +516,7 @@ public class GameSimulation
                 SetCurrentGameroomState(RoomState.Ready);
                 if (Platform == Platform.Karting)
                 {
-                    SetCurrentGameroomState(RoomState.CountingDown);   
+                    SetCurrentGameroomState(RoomState.DownloadingTracks);   
                 }
                 break;
             }
@@ -515,18 +533,17 @@ public class GameSimulation
             }
             case NetMessageType.GameroomDownloadTracksComplete:
             {
-                if (player.UserId != _owner) break;
-                SetCurrentGameroomState(RoomState.CountingDown);
+                _playerStates[player.UserId].Flags |= PlayerStateFlags.DownloadedTracks;
                 break;
             }
             case NetMessageType.ReadyForEventStart:
             {
-                _playerStates[player.UserId].ReadyForEvent = true;
+                _playerStates[player.UserId].Flags |= PlayerStateFlags.ReadyForEvent;
                 break;
             }
             case NetMessageType.ReadyForNisStart:
             {
-                _playerStates[player.UserId].ReadyForNis = true;
+                _playerStates[player.UserId].Flags |= PlayerStateFlags.ReadyForNis;
                 break;
             }
             case NetMessageType.GameroomRequestStartEvent:
@@ -712,7 +729,7 @@ public class GameSimulation
 
         if (_raceSettings != null)
         {
-            if (_raceSettings.Value.MinHumans >= _players.Count)
+            if (_raceSettings.Value.MinHumans < _players.Count)
                 SetCurrentGameroomState(RoomState.WaitingMinPlayers);
         }
         
@@ -724,25 +741,29 @@ public class GameSimulation
                 // Wait until the timer has finished counting down, then broadcast to everyone that the race is in progress
                 if (TimeHelper.LocalTime >= room.LoadEventTime)
                 {
-                    _raceSettings!.Value.UpdateReason = 6;
-                    _raceSettings!.Sync();
-                    
                     SetCurrentGameroomState(RoomState.RaceInProgress);
-                    _waitingForPlayerNisEvents = true;
                 }
 
                 break;
             }
+            case RoomState.DownloadingTracks:
+            {
+                if (_playerStates.Values.All(x => (x.Flags & PlayerStateFlags.DownloadedTracks) != 0))
+                    SetCurrentGameroomState(RoomState.CountingDown);
+                break;
+            }
             case RoomState.RaceInProgress:
             {
-                if (_waitingForPlayerNisEvents && _playerStates.Values.All(x => x.ReadyForNis))
+                if (_waitingForPlayerNisEvents && 
+                    _playerStates.Values.All(x => (x.Flags & PlayerStateFlags.ReadyForNis) != 0))
                 {
                     _waitingForPlayerNisEvents = false;
                     BroadcastGenericIntMessage(TimeHelper.LocalTime, NetMessageType.NisStart, PacketType.ReliableGameData);
                     _waitingForPlayerStartEvents = true;
                 }
                 
-                if (_waitingForPlayerStartEvents && _playerStates.Values.All(x => x.ReadyForEvent))
+                if (_waitingForPlayerStartEvents && 
+                    _playerStates.Values.All(x => (x.Flags & PlayerStateFlags.ReadyForEvent) != 0))
                 {
                     int countdown = TimeHelper.LocalTime + BombdConfig.Instance.EventCountdownTime;
                     BroadcastGenericIntMessage(countdown, NetMessageType.EventStart, PacketType.ReliableGameData);
