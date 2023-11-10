@@ -127,7 +127,7 @@ public class RoomManager
             busiest.Add(creation.Key);
         }
         
-        _playerCountLock.Wait();
+        _playerCountLock.Release();
         return busiest;
     }
 
