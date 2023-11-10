@@ -294,9 +294,10 @@ public class GameSimulation
     
     private void SetCurrentGameroomState(RoomState state)
     {
-        Logger.LogInfo<GameSimulation>($"Setting GameRoomState to {state}");
-
         var room = _gameroomState.Value;
+        if (state == room.State) return;
+        
+        Logger.LogInfo<GameSimulation>($"Setting GameRoomState to {state}");
         
         room.State = state;
         if (state == RoomState.CountingDown)
@@ -570,9 +571,6 @@ public class GameSimulation
                 if (player.UserId != _owner) break;
                 
                 var settings = EventSettings.ReadVersioned(data, Platform);
-                settings.MinHumans = 1;
-                settings.NumHoard = 7;
-                
                 if (_raceSettings != null) _raceSettings.Value = settings;
                 else _raceSettings = CreateSystemSyncObject(settings, NetObjectType.RaceSettings);
                 
