@@ -25,7 +25,13 @@ public class GameBrowser : BombdService
     public ServerGameList ListGames(TransactionContext context)
     {
         var attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]);
-        List<GameBrowserGame> games = Bombd.RoomManager.SearchRooms(attributes, context.Connection.Platform);
+        
+        // If no modspot lobbies exist, we need to make sure one is created
+        bool createIfNoneExists = false;
+        if (attributes.TryGetValue("SERVER_TYPE", out string? type))
+            createIfNoneExists = type == "kartPark";
+        
+        List<GameBrowserGame> games = Bombd.RoomManager.SearchRooms(attributes, context.Connection.Platform, createIfNoneExists);
         return CreateServerGameList(games);
     }
 
