@@ -40,6 +40,11 @@ public class BombdConfig
     public float GameroomTimerLockTime { get; set; } = 5000.0f;
 
     /// <summary>
+    ///     Whether or not to force the minimum racer requirement of 2 in online races.
+    /// </summary>
+    public bool EnforceMinimumRacerRequirement { get; set; } = true;
+
+    /// <summary>
     ///     How many times each service performs an update in a second.
     /// </summary>
     public int TickRate { get; set; } = 15;
