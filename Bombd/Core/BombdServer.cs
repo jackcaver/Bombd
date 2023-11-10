@@ -27,7 +27,10 @@ public class BombdServer
         }
         
         _instance = this;
-
+        
+        // Used for COI updates in Modnation
+        WebApiManager.Initialize();
+        
         // I don't believe the gameserver ever actually gets directly sent
         // via directory, plus GameManager and GameBrowser are going to need
         // access to it anyway.

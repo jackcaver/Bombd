@@ -50,7 +50,7 @@ public class GameSimulation
         
         if (Type == ServerType.KartPark)
         {
-            _coiInfo = CreateSystemSyncObject(new CoiInfo(), NetObjectType.NetCoiInfoPackage);
+            _coiInfo = CreateSystemSyncObject(WebApiManager.GetCircleOfInfluence(), NetObjectType.NetCoiInfoPackage);
         }
         
         if (Type == ServerType.Competitive)
