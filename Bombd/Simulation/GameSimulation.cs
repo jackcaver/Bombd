@@ -571,6 +571,11 @@ public class GameSimulation
                 if (player.UserId != _owner) break;
                 
                 var settings = EventSettings.ReadVersioned(data, Platform);
+                
+                // This is mostly only used for debugging purposes.
+                if (!BombdConfig.Instance.EnforceMinimumRacerRequirement)
+                    settings.MinHumans = 1;
+                
                 if (_raceSettings != null) _raceSettings.Value = settings;
                 else _raceSettings = CreateSystemSyncObject(settings, NetObjectType.RaceSettings);
                 
@@ -707,7 +712,7 @@ public class GameSimulation
 
         if (_raceSettings != null)
         {
-            if (_raceSettings.Value.MinHumans > _players.Count)
+            if (_raceSettings.Value.MinHumans >= _players.Count)
                 SetCurrentGameroomState(RoomState.WaitingMinPlayers);
         }
         
