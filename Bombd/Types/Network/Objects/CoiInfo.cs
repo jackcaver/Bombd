@@ -1,4 +1,5 @@
-﻿using Bombd.Serialization;
+﻿using Bombd.Helpers;
+using Bombd.Serialization;
 
 namespace Bombd.Types.Network.Objects;
 
@@ -57,7 +58,7 @@ public class CoiSingleEvent : INetworkWritable
     public string Name;
     public string Url = "http://www.modnation.com";
     public int Index;
-    public EventSettings Event = new();
+    public EventSettings Event = new(Platform.ModNation);
     
     public void Write(NetworkWriter writer)
     {

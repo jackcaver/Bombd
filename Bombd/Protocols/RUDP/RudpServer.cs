@@ -12,17 +12,13 @@ public class RudpServer : IServer
     private readonly byte[] _recv = new byte[1040];
 
     private readonly BombdService _service;
-
-    private readonly Stopwatch _watch = new();
     public readonly Dictionary<EndPoint, RudpConnection> Connections = new();
 
     internal readonly HashSet<EndPoint> connectionsToRemove = new();
 
-
     private long _accumulatedTime;
     private EndPoint _clientEndpoint = new IPEndPoint(IPAddress.Any, 0);
     private EndPoint _endpoint;
-    private long _lastTime;
     private Socket? _socket;
 
     public RudpServer(
@@ -52,9 +48,6 @@ public class RudpServer : IServer
         _socket.Blocking = false;
         _socket.ReceiveBufferSize = 1024 * 1024 * 7;
         _socket.SendBufferSize = 1024 * 1024 * 7;
-
-        _watch.Start();
-        _lastTime = _watch.ElapsedMilliseconds;
     }
 
     public void Stop()
@@ -111,7 +104,7 @@ public class RudpServer : IServer
         connection.OnData(segment);
     }
 
-    private void Tick()
+    public void Tick()
     {
         while (ReceiveFrom(out ArraySegment<byte> segment)) HandleData(segment);
 
@@ -122,18 +115,5 @@ public class RudpServer : IServer
         foreach (EndPoint client in connectionsToRemove) Connections.Remove(client);
 
         connectionsToRemove.Clear();
-    }
-
-    public void Update()
-    {
-        long time = _watch.ElapsedMilliseconds;
-        _accumulatedTime += time - _lastTime;
-        while (_accumulatedTime > Timestep)
-        {
-            Tick();
-            _accumulatedTime -= Timestep;
-        }
-
-        _lastTime = time;
     }
 }

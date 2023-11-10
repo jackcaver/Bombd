@@ -163,7 +163,7 @@ public class GameServer : BombdService
             if (Bombd.RoomManager.TryLeaveCurrentRoom(request.UserId))
             {
                 Logger.LogInfo<GameServer>($"{request.Username} left {room.Game.GameName}.");
-                player.Room.GameSimulation.OnPlayerLeft(player);
+                player.Room.Simulation.OnPlayerLeft(player);
                 OnPlayerLeft?.Invoke(this, new PlayerLeaveEventArgs
                 {
                     Room = room,
@@ -223,12 +223,13 @@ public class GameServer : BombdService
                     // For convenience, we attach the send method directly to the game player object,
                     // so that no lookups have to be performed within the simulation server environment.
                     player.Send = (bytes, type) => SendToUser(player.UserId, bytes, type);
-
+                    player.Disconnect = () => DisconnectUser(player.UserId);
+                    
                     Logger.LogInfo<GameServer>($"{player.Username} joined {gameRoom.Game.GameName}.");
 
                     // Make sure to tell both the simulation instance and anything subscribed to game events
                     // about the new player that joined.
-                    gameRoom.GameSimulation.OnPlayerJoin(player);
+                    gameRoom.Simulation.OnPlayerJoin(player);
                     OnPlayerJoined?.Invoke(this, new PlayerJoinEventArgs
                     {
                         Room = gameRoom,
@@ -295,8 +296,9 @@ public class GameServer : BombdService
                     player.PlayerId, group.Room);
 
                 gamePlayer.Send = (bytes, type) => SendToUser(gamePlayer.UserId, bytes, type);
+                gamePlayer.Disconnect = () => DisconnectUser(player.UserId);
                 Logger.LogInfo<GameServer>($"{gamePlayer.Username} migrated to {room.Game.GameName}.");
-                room.GameSimulation.OnPlayerJoin(gamePlayer);
+                room.Simulation.OnPlayerJoin(gamePlayer);
                 OnPlayerJoined?.Invoke(this, new PlayerJoinEventArgs
                 {
                     Room = room,
@@ -336,13 +338,17 @@ public class GameServer : BombdService
         // But I'm still not entirely sure how to handle it. Seek feedback from others.
         GamePlayer? player = Bombd.RoomManager.GetPlayerInRoom(connection.UserId);
         if (player == null) return;
+        
+        // Network messages have a minimum of 8 bytes in their header.
+        // Not going to disconnect, but we definitely shouldn't process it.
+        if (data.Count < 8) return;
 
         // Not sure if there's any actual need for the sender, we already know who this is from the
         // connection id? Do more research, I suppose.
         using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
         ArraySegment<byte> message = NetworkMessages.Unpack(reader, out NetMessageType type, out int sender);
 
-        player.OnNetworkMessage(type, message);
+        player.OnNetworkMessage(type, sender, message);
     }
 
     public override void OnTick()
@@ -352,7 +358,7 @@ public class GameServer : BombdService
         {
             // Don't bother updating game sessions that are empty
             if (room.Game.Players.Count == 0) continue;
-            room.GameSimulation.Tick();
+            room.Simulation.Tick();
         }
 
         // Handling player join/leave requests after the main server operations so there's

@@ -30,7 +30,7 @@ public class RudpMessage
         Sequence = sequence;
 
         _offset += _data.WriteUint8(_offset, (byte)PacketType.ReliableNetcodeData);
-        _offset += _data.WriteBoolean(_offset, complete);
+        _offset += _data.WriteUint8(_offset, (byte)(complete ? 0x80 : 0x0));
         _offset += _data.WriteUint16BE(_offset, groupId);
         _offset += _data.WriteUint32BE(_offset, sequence);
 
@@ -52,7 +52,7 @@ public class RudpMessage
         _offset += _data.WriteUint8(_offset, (byte)PacketType.ReliableGameData);
         _offset += _data.WriteUint8(_offset, 0xFE);
         _offset += _data.WriteUint8(_offset, 0x2);
-        _offset += _data.WriteBoolean(_offset, complete);
+        _offset += _data.WriteUint8(_offset, (byte)(complete ? 0x80 : 0x0));
         _offset += _data.WriteUint32BE(_offset, sequence);
         _offset += _data.WriteUint16BE(_offset, groupId);
         _offset += _data.WriteUint16BE(_offset, groupSize);

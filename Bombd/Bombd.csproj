@@ -13,8 +13,23 @@
         <None Update="Data\Certificate.pfx">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <None Update="Data\Blobs\Karting\CharDataBlob">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="Data\Blobs\Karting\FrownyDataBlob">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="Data\Blobs\Karting\KartDataBlob">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="Data\Blobs\Karting\SmileyDataBlob">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="JetBrains.Annotations" Version="2023.3.0-eap3"/>
+    </ItemGroup>
+    <ItemGroup>
+      <Folder Include="Data\Blobs\Karting\" />
     </ItemGroup>
 </Project>

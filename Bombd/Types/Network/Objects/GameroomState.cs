@@ -1,17 +1,22 @@
-﻿using Bombd.Serialization;
+﻿using Bombd.Helpers;
+using Bombd.Serialization;
 
 namespace Bombd.Types.Network.Objects;
 
 public class GameroomState : INetworkWritable
 {
+    public Platform Platform;
+    
+    public RoomState State = RoomState.None;
     public bool HasEventVetoOccured;
     public bool IsLeaderVetoAvailable;
     public int LoadEventTime;
     public float LockedForRacerJoinsValue;
     public float LockedTimerValue;
-
-    public RoomState State = RoomState.None;
-
+    public int GameSessionUid = CryptoHelper.GetRandomSecret();
+    
+    public GameroomState(Platform platform) => Platform = platform;
+    
     public void Write(NetworkWriter writer)
     {
         writer.Write((int)State);
@@ -20,6 +25,7 @@ public class GameroomState : INetworkWritable
         writer.Write(LockedTimerValue);
         writer.Write(IsLeaderVetoAvailable);
         writer.Write(HasEventVetoOccured);
-        writer.Clear(0x2);
+        if (Platform == Platform.Karting) writer.Write(GameSessionUid);
+        else writer.Clear(0x2);
     }
 }

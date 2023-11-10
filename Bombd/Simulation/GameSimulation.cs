@@ -18,7 +18,8 @@ public class GameSimulation
     private readonly int _owner;
     private readonly List<GamePlayer> _players;
     private readonly Dictionary<int, PlayerState> _playerStates = new();
-
+    private readonly Dictionary<int, PlayerInfo> _playerInfos = new();
+    
     private readonly int _seed = CryptoHelper.GetRandomSecret();
     private readonly XmlSerializer _stateSerializer = new(typeof(PlayerState));
     private readonly Dictionary<int, SyncObject> _syncObjects = new();
@@ -26,13 +27,13 @@ public class GameSimulation
     public readonly Platform Platform;
     public readonly ServerType Type;
     
-    private GenericSyncObject<CoiInfo> CoiInfo;
-    private GenericSyncObject<GameroomState> GameroomState;
-    private GenericSyncObject<AiInfo> AiInfo;
-    private GenericSyncObject<SpectatorInfo> SpectatorInfo;
-    private GenericSyncObject<StartingGrid> StartingGrid;
-    private GenericSyncObject<EventSettings>? RaceSettings;
-    private List<EventResult> EventResults = new();
+    private GenericSyncObject<CoiInfo> _coiInfo;
+    private GenericSyncObject<GameroomState> _gameroomState;
+    private GenericSyncObject<AiInfo> _aiInfo;
+    private GenericSyncObject<SpectatorInfo> _raceInfo;
+    private GenericSyncObject<StartingGrid> _startingGrid;
+    private GenericSyncObject<EventSettings>? _raceSettings;
+    private List<EventResult> _eventResults = new();
     
     private bool _waitingForPlayerNisEvents;
     private bool _waitingForPlayerStartEvents;
@@ -45,52 +46,130 @@ public class GameSimulation
         _players = players;
         _owner = owner;
         
-        Logger.LogInfo<GameSimulation>($"Starting SimServer with Type = {Type}, Platform = {platform}");
+        Logger.LogInfo<GameSimulation>($"Starting Game Simulation ({type}:{platform})");
+        
         if (Type == ServerType.KartPark)
         {
-            CoiInfo = CreateSystemSyncObject(new CoiInfo(), NetObjectType.NetCoiInfoPackage);
+            _coiInfo = CreateSystemSyncObject(new CoiInfo(), NetObjectType.NetCoiInfoPackage);
         }
-        else if (Type == ServerType.Competitive)
+        
+        if (Type == ServerType.Competitive)
         {
-            SpectatorInfo = CreateSystemSyncObject(new SpectatorInfo(), NetObjectType.SpectatorInfo);
-            AiInfo = CreateSystemSyncObject(new AiInfo(string.Empty, 0), NetObjectType.AiInfo);
-            GameroomState = CreateSystemSyncObject(new GameroomState(), NetObjectType.GameroomState);
-            StartingGrid = CreateSystemSyncObject(new StartingGrid(), NetObjectType.StartingGrid);
+            _gameroomState = CreateSystemSyncObject(new GameroomState(Platform), NetObjectType.GameroomState);
+            _raceInfo = CreateSystemSyncObject(new SpectatorInfo(Platform), NetObjectType.SpectatorInfo);
+            _aiInfo = CreateSystemSyncObject(new AiInfo(Platform), NetObjectType.AiInfo);
+            _startingGrid = CreateSystemSyncObject(new StartingGrid(), NetObjectType.StartingGrid);
         }
+    }
+
+    private void AddFakePlayer(string username)
+    {
+        string openuid = CryptoHelper.GetRandomSecret().ToString("x") + username;
+        int nameUid = CryptoHelper.StringHash32(openuid);
+        
+        int userId = CryptoHelper.GetRandomSecret();
+        int playerId = CryptoHelper.GetRandomSecret();
+        
+        var player = new GamePlayer
+        {
+            IsFakePlayer = true,
+            Platform = Platform,
+            PlayerId = playerId,
+            Send = (data, type) => { },
+            Disconnect = { },
+            UserId = userId,
+            Username = username
+        };
+        
+        _players.Add(player);
+
+        _playerStates[userId] = new PlayerState
+        {
+            PlayerConnectId = (uint)userId,
+            NameUid = (uint)nameUid,
+            KartId = 0x1324,
+            CharacterId = 0x132c,
+            KartSpeedAccel = 0x30
+        };
+
+        _playerInfos[userId] = new PlayerInfo
+        {
+            Operation = 3,
+            NetcodeUserId = userId,
+            NetcodeGamePlayerId = playerId,
+            PlayerConnectId = userId,
+            GuestOfPlayerNameUid = CryptoHelper.GetRandomSecret(),
+            IsGroupLeader = true,
+            PlayerGroupId = CryptoHelper.GetRandomSecret(),
+            NameUid = openuid,
+            PlayerName = username,
+            PodLocation = string.Empty
+        };
+        
+        CreateGenericSyncObject(new PlayerConfig
+        {
+            Type = 0,
+            NetcodeUserId = userId,
+            CharCreationId = 0x132c,
+            KartCreationId = 0x1324,
+            UidName = openuid,
+            Username = username,
+            CharDataBlob = File.ReadAllBytes("Data/Blobs/Karting/CharDataBlob"),
+            KartDataBlob = File.ReadAllBytes("Data/Blobs/Karting/KartDataBlob")
+        }, NetObjectType.PlayerConfig, username, userId);
+        
+        CreateGenericSyncObject(new PlayerAvatar
+        {
+            OwnerName = username,
+            SmileyDataBlob = File.ReadAllBytes("Data/Blobs/Karting/SmileyDataBlob"),
+            FrownyDataBlob = File.ReadAllBytes("Data/Blobs/Karting/FrownyDataBlob")
+        }, NetObjectType.PlayerAvatar, username, userId);
     }
 
     public bool IsKarting => Platform == Platform.Karting;
     public bool IsModnation => Platform == Platform.ModNation;
-    public bool HasRaceSettings => RaceSettings != null;
+    public bool HasRaceSettings => _raceSettings != null;
     
     public void OnPlayerJoin(GamePlayer player)
     {
         // Don't actually know if this is random per room or random per player,
         // I assume it's used for determinism, but I don't know?
         player.SendReliableMessage(new NetMessageRandomSeed { Seed = _seed });
-
-        // Tell everybody else about yourself
-        foreach (GamePlayer peer in _players)
+        
+        if (IsKarting)
         {
-            peer.SendReliableMessage(new NetMessagePlayerSessionInfo
+            // Send all player infos
+            player.SendReliableMessage(new NetMessagePlayerCreateInfo
             {
-                JoinStatus = 1,
-                PlayerId = player.PlayerId,
-                UserId = player.UserId
+                Data = new List<PlayerInfo>(_playerInfos.Values)
             });
         }
-
-        // Tell the player about everyone who is in the game.
-        foreach (GamePlayer peer in _players)
+        else
         {
-            if (player == peer) continue;
-            player.SendReliableMessage(new NetMessagePlayerSessionInfo
+            // Tell everybody else about yourself
+            foreach (GamePlayer peer in _players)
             {
-                JoinStatus = 1,
-                PlayerId = peer.PlayerId,
-                UserId = peer.UserId
-            });
+                peer.SendReliableMessage(new NetMessagePlayerSessionInfo
+                {
+                    JoinStatus = 1,
+                    PlayerId = player.PlayerId,
+                    UserId = player.UserId
+                });
+            }
+
+            // Tell the player about everyone who is in the game.
+            foreach (GamePlayer peer in _players)
+            {
+                if (player == peer) continue;
+                player.SendReliableMessage(new NetMessagePlayerSessionInfo
+                {
+                    JoinStatus = 1,
+                    PlayerId = peer.PlayerId,
+                    UserId = peer.UserId
+                });
+            }   
         }
+        
 
         // Initialize any sync objects that exist
         foreach (SyncObject syncObject in _syncObjects.Values)
@@ -203,19 +282,64 @@ public class GameSimulation
             if (hasState) Logger.LogDebug<GameSimulation>($" -> {player.Username} : {state}");
             else Logger.LogDebug<GameSimulation>($" -> {player.Username} : NO STATE");
         }
-        BroadcastMessage(new NetMessageBulkPlayerStateUpdate { StateUpdates = _playerStates.Values }, PacketType.ReliableGameData);
+        
+        if (IsKarting)
+        {
+            BroadcastMessage(new NetMessageKartingPlayerUpdate { StateUpdates = _playerStates.Values }, PacketType.ReliableGameData);
+            return;
+        }
+        
+        BroadcastMessage(new NetMessageModnationPlayerUpdate { StateUpdates = _playerStates.Values }, PacketType.ReliableGameData);
     }
     
     private void SetCurrentGameroomState(RoomState state)
     {
         Logger.LogInfo<GameSimulation>($"Setting GameRoomState to {state}");
-        GameroomState.Value.State = state;
-        GameroomState.Sync();
-    }
 
-    private GenericSyncObject<T> CreateSystemSyncObject<T>(T instance, int type) where T : INetworkWritable
+        var room = _gameroomState.Value;
+        
+        room.State = state;
+        if (state == RoomState.CountingDown)
+        {
+            UpdateAi();
+            UpdateStartingGrid();
+            
+            // If the gameroom isn't loaded before it receives the player create info,
+            // it won't ever update the racer state
+            if (Platform == Platform.Karting)
+            {
+                // Send all player infos
+                BroadcastMessage(new NetMessagePlayerCreateInfo {
+                    Data = new List<PlayerInfo>(_playerInfos.Values)
+                }, PacketType.ReliableGameData);   
+            }
+            
+            room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.GameroomCountdownTime;
+            room.LockedForRacerJoinsValue = BombdConfig.Instance.GameroomRacerLockTime;
+            room.LockedTimerValue = BombdConfig.Instance.GameroomTimerLockTime; 
+        }
+        else
+        {
+            room.LoadEventTime = 0;
+            room.LockedTimerValue = 0.0f;
+            room.LockedForRacerJoinsValue = 0.0f;
+        }
+        
+        _gameroomState.Sync();
+    }
+    
+    private GenericSyncObject<T> CreateSystemSyncObject<T>(T instance, NetObjectTypeInfo typeInfo) where T : INetworkWritable
     {
-        var syncObject = new GenericSyncObject<T>(instance, type);
+        return CreateGenericSyncObject(instance, typeInfo, NetworkMessages.SimServerName, -1);
+    }
+    
+    private GenericSyncObject<T> CreateGenericSyncObject<T>(T instance, NetObjectTypeInfo typeInfo, string owner, int userId) where T : INetworkWritable
+    {
+        int type = typeInfo.ModnationTypeId;
+        if (Platform == Platform.Karting)
+            type = typeInfo.KartingTypeId;
+        
+        var syncObject = new GenericSyncObject<T>(instance, type, owner, userId);
         _syncObjects[syncObject.Guid] = syncObject;
         syncObject.OnUpdate = () =>
         {
@@ -236,29 +360,30 @@ public class GameSimulation
     
     private void UpdateAi()
     {
-        if (RaceSettings == null) return;
+        if (_raceSettings == null) return;
         
         var owner = _players.Find(x => x.UserId == _owner);
         string username = owner?.Username ?? string.Empty;
 
-        int maxAi = AiInfo.Value.DataSet.Length;
-        int maxPlayers = RaceSettings.Value.MaxPlayers;
+        int maxAi = _aiInfo.Value.DataSet.Length;
+        int maxHumans = _raceSettings.Value.MaxHumans;
+        int numAi = Math.Min(maxAi, maxHumans - _players.Count);
         
-        int numAi = Math.Min(maxAi, maxPlayers - _players.Count);
-        AiInfo.Value = RaceSettings.Value.AiEnabled ? new AiInfo(username, numAi) : new AiInfo(username, 0);
+        _aiInfo.Value = _raceSettings.Value.AiEnabled ? 
+            new AiInfo(Platform, username, numAi) : new AiInfo(Platform);
     }
 
     private void UpdateStartingGrid()
     {
-        StartingGrid.Value.Clear();
-        foreach (PlayerState state in _playerStates.Values) StartingGrid.Value.Add((int)state.NameUid);
-        for (int i = 0; i < AiInfo.Value.Count; ++i)
+        _startingGrid.Value.Clear();
+        foreach (PlayerState state in _playerStates.Values) _startingGrid.Value.Add((int)state.NameUid);
+        for (int i = 0; i < _aiInfo.Value.Count; ++i)
         {
-            int nameUid = CryptoHelper.StringHash32(AiInfo.Value.DataSet[i].UidName);
-            StartingGrid.Value.Add(nameUid);
+            int nameUid = CryptoHelper.StringHash32(_aiInfo.Value.DataSet[i].UidName);
+            _startingGrid.Value.Add(nameUid);
         }
         
-        StartingGrid.Sync();
+        _startingGrid.Sync();
     }
 
     private SyncObject? GetOwnedSyncObject(int guid, GamePlayer player)
@@ -311,7 +436,7 @@ public class GameSimulation
         }
         
         Logger.LogInfo<GameSimulation>(
-            $"Creating SyncObject({syncObject}) with owner {syncObject.OwnerName}");
+            $"Creating SyncObject({syncObject}) with type {syncObject.Type} and owner {syncObject.OwnerName}");
         _syncObjects[syncObject.Guid] = syncObject;
         return true;
     }
@@ -340,15 +465,25 @@ public class GameSimulation
         return true;
     }
     
-    public void OnNetworkMessage(GamePlayer player, NetMessageType type, ArraySegment<byte> data)
+    public void OnNetworkMessage(GamePlayer player, int senderNameUid, NetMessageType type, ArraySegment<byte> data)
     {
         if (type != NetMessageType.VoipPacket && type != NetMessageType.MessageUnreliableBlock)
         {
             Logger.LogDebug<GameSimulation>($"Received NetMessage {type} from {player.Username} ({(uint)player.UserId}:{(uint)player.PlayerId})");   
         }
-
+        
         switch (type)
         {
+            case NetMessageType.PlayerCreateInfo:
+            {
+                var message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);
+                message.Data[0].Operation = 3;
+                _playerInfos[player.UserId] = message.Data[0];
+                var msg = NetworkWriter.Serialize(message);
+                BroadcastGenericMessage(msg, NetMessageType.PlayerCreateInfo, PacketType.ReliableGameData);
+                
+                break;
+            }
             case NetMessageType.PlayerLeave:
             {
                 var message = NetworkReader.Deserialize<NetMessagePlayerLeave>(data);
@@ -360,6 +495,10 @@ public class GameSimulation
             {
                 if (player.UserId != _owner) break;
                 SetCurrentGameroomState(RoomState.Ready);
+                if (Platform == Platform.Karting)
+                {
+                    SetCurrentGameroomState(RoomState.CountingDown);   
+                }
                 break;
             }
             case NetMessageType.GameroomStopTimer:
@@ -370,20 +509,13 @@ public class GameSimulation
             }
             case NetMessageType.SpectatorInfo:
             {
-                SpectatorInfo.Value = NetworkReader.Deserialize<SpectatorInfo>(data);
+                _raceInfo.Value = SpectatorInfo.ReadVersioned(data, Platform);
                 break;
             }
             case NetMessageType.GameroomDownloadTracksComplete:
             {
                 if (player.UserId != _owner) break;
-                
-                GameroomState.Value.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.GameroomCountdownTime;
-                GameroomState.Value.LockedForRacerJoinsValue = BombdConfig.Instance.GameroomRacerLockTime;
-                GameroomState.Value.LockedTimerValue = BombdConfig.Instance.GameroomTimerLockTime;
-                
                 SetCurrentGameroomState(RoomState.CountingDown);
-                UpdateAi();
-                UpdateStartingGrid();
                 break;
             }
             case NetMessageType.ReadyForEventStart:
@@ -417,11 +549,12 @@ public class GameSimulation
                     break;
                 }
                 
-                EventResults.AddRange(results);
+                _eventResults.AddRange(results);
                 break;
             }
+            case NetMessageType.GenericGameplay:
             case NetMessageType.PlayerFinishedEvent:
-            case NetMessageType.GenericMessage0Xe:
+            case NetMessageType.Gameplay:
             case NetMessageType.WandererUpdate:
             case NetMessageType.TextChatMsg:
             case NetMessageType.InviteChallengeMessageModnation:
@@ -436,15 +569,23 @@ public class GameSimulation
                 // Only the host should be allowed to update event settings I'm fairly sure
                 if (player.UserId != _owner) break;
                 
-                var settings = NetworkReader.Deserialize<EventSettings>(data);
-                if (RaceSettings != null) RaceSettings.Value = settings;
-                else RaceSettings = CreateSystemSyncObject(settings, NetObjectType.RaceSettings);
+                var settings = EventSettings.ReadVersioned(data, Platform);
+                settings.MinHumans = 1;
+                settings.NumHoard = 7;
+                
+                if (_raceSettings != null) _raceSettings.Value = settings;
+                else _raceSettings = CreateSystemSyncObject(settings, NetObjectType.RaceSettings);
                 
                 break;
             }
             case NetMessageType.VoipPacket:
             {
                 BroadcastVoipData(player, data);
+                break;
+            }
+            case NetMessageType.MessageReliableBlock:
+            {
+                BroadcastGenericMessage(player, data, NetMessageType.MessageReliableBlock, PacketType.ReliableGameData);
                 break;
             }
             case NetMessageType.MessageUnreliableBlock:
@@ -458,9 +599,14 @@ public class GameSimulation
             
             case NetMessageType.PlayerStateUpdate:
             {
-                if (IsModnation)
+                PlayerState state;
+                if (IsKarting)
                 {
-                    PlayerState state;
+                    var message = NetworkReader.Deserialize<NetMessageKartingPlayerUpdate>(data);
+                    state = message.StateUpdates.ElementAt(0);
+                }
+                else
+                {
                     try
                     {
                         using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
@@ -469,22 +615,32 @@ public class GameSimulation
                     }
                     catch (Exception)
                     {
-                        // TODO: Disconnect the user since this shouldn't ever happen
-                        // with normal gamedata.
-                        Logger.LogWarning<GameSimulation>($"Failed to parse playerStateUpdate for {player.Username}");
+                        Logger.LogWarning<GameSimulation>($"Failed to parse playerStateUpdate for {player.Username}, disconnecting them from the session.");
+                        player.Disconnect();
                         break;
                     }
-
-                    _playerStates[player.UserId] = state;
-                    BroadcastPlayerStates();
                 }
+                
+                _playerStates[player.UserId] = state;
+                BroadcastPlayerStates();
+            
+                break;
+            }
 
+            case NetMessageType.SyncObjectRemove:
+            {
+                var message = NetworkReader.Deserialize<NetMessageSyncObjectRemove>(data);
+                if (RemoveUserSyncObject(message.Guid, player))
+                {
+                    BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
+                }
                 break;
             }
             
             case NetMessageType.SyncObjectUpdate:
             {
                 var message = NetworkReader.Deserialize<NetMessageSyncObjectUpdate>(data);
+                
                 if (UpdateUserSyncObject(message.Guid, message.Data, player))
                 {
                     BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
@@ -545,11 +701,17 @@ public class GameSimulation
             }
         }
     }
-
-    private void TickGameRoom()
+    
+    private void SimUpdate()
     {
-        var room = GameroomState.Value;
-        var raceInfo = SpectatorInfo.Value;
+        var room = _gameroomState.Value;
+        var raceInfo = _raceInfo.Value;
+
+        if (_raceSettings != null)
+        {
+            if (_raceSettings.Value.MinHumans > _players.Count)
+                SetCurrentGameroomState(RoomState.WaitingMinPlayers);
+        }
         
         // TODO: Exclude players who joined after the countdown
         switch (room.State)
@@ -559,9 +721,9 @@ public class GameSimulation
                 // Wait until the timer has finished counting down, then broadcast to everyone that the race is in progress
                 if (TimeHelper.LocalTime >= room.LoadEventTime)
                 {
-                    room.LoadEventTime = 0;
-                    room.LockedTimerValue = 0.0f;
-                    room.LockedForRacerJoinsValue = 0.0f;
+                    _raceSettings!.Value.UpdateReason = 6;
+                    _raceSettings!.Sync();
+                    
                     SetCurrentGameroomState(RoomState.RaceInProgress);
                     _waitingForPlayerNisEvents = true;
                 }
@@ -588,7 +750,7 @@ public class GameSimulation
                     TimeHelper.LocalTime >= raceInfo.RaceEndServerTime && !_hasSentEventResults)
                 {
                     _hasSentEventResults = true;
-                    var xml = Encoding.ASCII.GetBytes(EventResult.Serialize(EventResults));
+                    var xml = Encoding.ASCII.GetBytes(EventResult.Serialize(_eventResults));
                     BroadcastGenericMessage(xml, NetMessageType.EventResultsFinal, PacketType.ReliableGameData);
                 }
                 
@@ -606,6 +768,7 @@ public class GameSimulation
 
     public void Tick()
     {
-        if (Type == ServerType.Competitive) TickGameRoom();
+        if (Type != ServerType.Competitive) return;
+        SimUpdate();
     }
 }

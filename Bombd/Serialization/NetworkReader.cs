@@ -85,7 +85,8 @@ public class NetworkReader
     }
 
     public byte ReadInt8() => _buffer[Offset++];
-
+    public bool ReadBool() => _buffer[Offset++] == 1;
+    
     public short ReadInt16()
     {
         short value = 0;
@@ -118,7 +119,7 @@ public class NetworkReader
         {
             string value = Encoding.ASCII.GetString(_buffer.Array!, _buffer.Offset + Offset, len);
             Offset += len;
-            return value;
+            return value.TrimEnd('\0');
         }
 
         return string.Empty;

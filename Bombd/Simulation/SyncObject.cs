@@ -21,6 +21,15 @@ public class SyncObject
         OwnerName = NetworkMessages.SimServerName;
         Guid = CryptoHelper.GetRandomSecret();
     }
+
+    public SyncObject(string tag, int type, string owner, int ownerUserId)
+    {
+        OwnerUserId = ownerUserId;
+        DebugTag = tag;
+        Type = type;
+        OwnerName = owner;
+        Guid = CryptoHelper.GetRandomSecret();
+    }
     
     public SyncObject(NetMessageSyncObject message, int owner)
     {

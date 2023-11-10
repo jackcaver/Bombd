@@ -1,4 +1,4 @@
-﻿using Bombd.Serialization;
+using Bombd.Serialization;
 
 namespace Bombd.Types.GameBrowser;
 

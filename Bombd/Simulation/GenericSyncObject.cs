@@ -20,7 +20,7 @@ public class GenericSyncObject<T> : SyncObject where T : INetworkWritable
 
     public Action OnUpdate;
     
-    public GenericSyncObject(T instance, int type) : base(typeof(T).Name, type)
+    public GenericSyncObject(T instance, int type, string owner, int userId) : base(typeof(T).Name, type, owner, userId)
     {
         Data = NetworkWriter.Serialize(instance);
         _value = instance;

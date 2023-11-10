@@ -8,7 +8,7 @@ public enum NetMessageType : byte
     TeamMessage = 0xb,
     SecondaryCollision = 0xc, // Generic
     WandererUpdate = 0xd, // Generic
-    GenericMessage0Xe = 0xe,
+    Gameplay = 0xe,
 
     // 0x10 Generic
     ItemDestroy = 0x11, // Generic
@@ -18,12 +18,40 @@ public enum NetMessageType : byte
     EventStart = 0x15,
     EventResultsPreliminary = 0x16,
     EventResultsFinal = 0x17,
+    
+    
+    // Type, Data
     GenericGameplay = 0x18,
+    
     PlayerStateUpdate = 0x19,
+    
+    
+    // mItemType
+    // mItemId
+    // mPlayerNameUID
+    // mTimeout
+    // mParam
+    // mFlags
     ArbitratedItemCreate = 0x1a,
+    
     ArbitratedItemDestroy = 0x1b,
+    
+    // mItemType
+    // mItemId
+    // mPlayerNameUID
+    // mTimeout
+    // mParam
+    // mFlags
     ArbitratedItemAcquire = 0x1c,
+    
+    // mItemType
+    // mItemId
+    // mPlayerNameUID
+    // mTimeout
+    // mParam
+    // mFlags
     ArbitratedItemRelease = 0x1d,
+    
     ArbitratedItemDestroyBlock = 0x1e,
     EventSettingsUpdate = 0x1f,
     TextChatMsg = 0x20,
@@ -105,7 +133,20 @@ public enum NetMessageType : byte
     MessageReliableBlock = 0x4a,
     TeamSettingsUpdate = 0x4b,
     ArbitratedItemAcquireBlock = 0x4c,
+    
+    // int
     PostRaceVoteForTrack = 0x4d,
+    
+    
+    // mUidCount
+    // mMsgType
+    // mEmitterUid
+        // mUids
+        //
     WorldobjectCreate = 0x4e,
+    
+    
+    // mPlaygroupId
+    // mOption
     CoopPostraceLeaderAction = 0x4f
 }

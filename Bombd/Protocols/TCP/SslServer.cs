@@ -63,6 +63,11 @@ public class SslServer : IServer
         Connections.Clear();
     }
 
+    public void Tick()
+    {
+        _service.OnTick();
+    }
+
     public void Send(int id, ArraySegment<byte> data, PacketType type)
     {
         if (Connections.TryGetValue(id, out SslConnection? connection)) connection.Send(data, type);

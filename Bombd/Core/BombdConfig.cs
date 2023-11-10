@@ -27,15 +27,20 @@ public class BombdConfig
     /// <summary>
     ///     How long the countdown timer in gamerooms last
     /// </summary>
-    public int GameroomCountdownTime { get; set; } = 30000;
+    public int GameroomCountdownTime { get; set; } = 5000;
 
     /// <summary>
     ///     The countdown time where players can no longer join the gameroom.
     /// </summary>
-    public float GameroomRacerLockTime { get; set; } = 25000.0f;
+    public float GameroomRacerLockTime { get; set; } = 5000.0f;
 
     /// <summary>
     ///     The countdown time where the timer can no longer be paused.
     /// </summary>
-    public float GameroomTimerLockTime { get; set; } = 20000.0f;
+    public float GameroomTimerLockTime { get; set; } = 5000.0f;
+
+    /// <summary>
+    ///     How many times each service performs an update in a second.
+    /// </summary>
+    public int TickRate { get; set; } = 15;
 }

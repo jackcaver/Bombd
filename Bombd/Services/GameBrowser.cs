@@ -7,6 +7,7 @@ using Bombd.Simulation;
 using Bombd.Types.Events;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
+using Bombd.Types.Requests;
 using Bombd.Types.Services;
 
 namespace Bombd.Services;
@@ -39,7 +40,7 @@ public class GameBrowser : BombdService
         }
         
         player.ListeningForGameEvents = true;
-        return CreateServerGameList(new List<GameBrowserGame> { player.Room.ToGameBrowser() });
+        return CreateServerGameList(new List<GameBrowserGame> { player.Room.GetGameBrowserInfo() });
     }
     
     [Transaction("unSubscribeGameEvents")]
@@ -76,8 +77,7 @@ public class GameBrowser : BombdService
     {
         // TODO: Search based on all parameters, not just the game attributes.
         var searchData = NetworkReader.Deserialize<GameSearchData>(context.Request["searchData"]);
-        // NOTE: It's currently automatically creating games if it finds none.
-        List<GameBrowserGame> games = Bombd.RoomManager.SearchRooms(searchData.Attributes, context.Connection.Platform);
+        List<GameBrowserGame> games = Bombd.RoomManager.SearchRooms(searchData.Attributes, context.Connection.Platform, false);
         return CreateServerGameList(games);
     }
     
@@ -106,7 +106,7 @@ public class GameBrowser : BombdService
     {
         var request = NetcodeTransaction.MakeRequest(Name, "gameEvent");
         request["eventType"] = "playerJoined";
-        request["gameinfo"] = Convert.ToBase64String(NetworkWriter.Serialize(args.Room.ToGameBrowser()));
+        request["gameinfo"] = Convert.ToBase64String(NetworkWriter.Serialize(args.Room.GetGameBrowserInfo()));
         foreach (GamePlayer player in args.Room.Game.Players)
         {
             if (!player.ListeningForGameEvents) continue;
@@ -118,7 +118,7 @@ public class GameBrowser : BombdService
     {
         var request = NetcodeTransaction.MakeRequest(Name, "gameEvent");
         request["eventType"] = "playerLeft";
-        request["gameinfo"] = Convert.ToBase64String(NetworkWriter.Serialize(args.Room.ToGameBrowser()));
+        request["gameinfo"] = Convert.ToBase64String(NetworkWriter.Serialize(args.Room.GetGameBrowserInfo()));
         foreach (GamePlayer player in args.Room.Game.Players)
         {
             if (!player.ListeningForGameEvents) continue;

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -25,9 +26,15 @@ public abstract class BombdService
     private readonly Type _type;
     protected readonly ConcurrentDictionary<int, ConnectionBase> UserInfo = new();
 
+    private readonly long _timestep;
+    private long _accumulatedTime;
+    private long _lastTime;
+    private readonly Stopwatch _watch = new();
+    
     protected BombdService()
     {
         // Used for convenience
+        _timestep = 1000 / BombdConfig.Instance.TickRate;
         Bombd = BombdServer.Instance;
         _type = GetType();
 
@@ -60,6 +67,9 @@ public abstract class BombdService
         else
             _server = new RudpServer(address, Port, this);
 
+        _watch.Start();
+        _lastTime = _watch.ElapsedMilliseconds;
+        
         Logger.LogInfo(_type, $"Finished initializing service {Name}:{protocolName}:{Port}");
     }
 
@@ -75,10 +85,19 @@ public abstract class BombdService
         var thread = new Thread(() =>
         {
             _server.Start();
-            if (Protocol != ProtocolType.RUDP) return;
-            while (_server.IsActive) ((RudpServer)_server).Update();
+            while (_server.IsActive)
+            {
+                long time = _watch.ElapsedMilliseconds;
+                _accumulatedTime += time - _lastTime;
+                while (_accumulatedTime > _timestep)
+                {
+                    _server.Tick();
+                    _accumulatedTime -= _timestep;
+                }
+                _lastTime = time;   
+            }
         });
-
+        
         thread.Start();
     }
 
@@ -288,6 +307,11 @@ public abstract class BombdService
     public void SendToUser(int userId, ArraySegment<byte> data, PacketType type)
     {
         if (UserInfo.TryGetValue(userId, out ConnectionBase? connection)) connection.Send(data, type);
+    }
+    
+    public void DisconnectUser(int userId)
+    {
+        if (UserInfo.TryGetValue(userId, out ConnectionBase? connection)) connection.Disconnect();
     }
 
     public void OnData(ConnectionBase connection, ArraySegment<byte> data, PacketType type)

@@ -14,7 +14,8 @@ public class RudpConnection : ConnectionBase
 
     private readonly List<RudpAckRecord> _ackList = new(16);
 
-    private readonly byte[] _groupBuffer = new byte[1000000];
+    // The max size of a message is actually 0x800000, or something like 8mbs, but 1mb should probably be fine.
+    private readonly byte[] _groupBuffer = new byte[1000000]; 
     private readonly RudpMessagePool _messagePool = new(32);
     private readonly List<RudpMessage> _sendBuffer = new(16);
 

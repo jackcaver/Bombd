@@ -3,7 +3,7 @@ using Bombd.Simulation;
 
 namespace Bombd.Types.Network.Messages;
 
-public struct NetMessageBulkPlayerStateUpdate : INetworkMessage
+public struct NetMessageModnationPlayerUpdate : INetworkMessage
 {
     public NetMessageType Type => NetMessageType.BulkPlayerStateUpdate;
 

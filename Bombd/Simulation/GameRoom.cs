@@ -1,6 +1,7 @@
 ﻿using Bombd.Helpers;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
+using Bombd.Types.Requests;
 
 namespace Bombd.Simulation;
 
@@ -11,27 +12,27 @@ public class GameRoom
     private readonly Dictionary<int, GamePlayer> _userIdLookup = new();
 
     public readonly GameManagerGame Game;
-
-    public readonly GameSimulation GameSimulation;
+    public readonly GameSimulation Simulation;
 
     private int _gameCreationTime = TimeHelper.LocalTime;
     private int _lastPlayerJoinTime = TimeHelper.LocalTime;
     
-    public GameRoom(GameManagerGame game, ServerType type, Platform platform, int maxSlots, int ownerId)
+    public GameRoom(RoomCreationInfo request)
     {
-        Game = game;
-        Platform = platform;
-        GameSimulation = new GameSimulation(type, platform, ownerId, Game.Players);
-        _slots = Enumerable.Repeat(false, maxSlots).ToList();
-        MaxSlots = maxSlots;
-        NumFreeSlots = maxSlots;
+        Game = request.Game;
+        Platform = request.Platform;
+        Simulation = new GameSimulation(
+            request.Type, request.Platform, request.OwnerUserId, Game.Players);
+        _slots = Enumerable.Repeat(false, request.MaxSlots).ToList();
+        MaxSlots = request.MaxSlots;
+        NumFreeSlots = request.MaxSlots;
     }
 
-    public Platform Platform { get; }
-    public int MaxSlots { get; }
+    public readonly Platform Platform;
+    public readonly int MaxSlots;
     public int NumFreeSlots { get; private set; }
     public int UsedSlots => MaxSlots - NumFreeSlots;
-
+    
     public GamePlayer? TryJoin(string username, int userId)
     {
         if (NumFreeSlots == 0) return null;
@@ -43,6 +44,7 @@ public class GameRoom
     {
         var player = new GamePlayer
         {
+            Platform = Platform,
             PlayerId = playerId,
             UserId = userId,
             Username = username,
@@ -106,7 +108,7 @@ public class GameRoom
     public GamePlayer GetPlayerByUserId(int userId) => _userIdLookup[userId];
     public GamePlayer GetPlayerByPlayerId(int playerId) => _playerIdLookup[playerId];
 
-    public GameBrowserGame ToGameBrowser() =>
+    public GameBrowserGame GetGameBrowserInfo() =>
         new()
         {
             Platform = Platform,

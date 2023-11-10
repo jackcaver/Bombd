@@ -7,6 +7,7 @@ public interface IServer
     bool IsActive { get; }
     EndPoint Endpoint { get; }
     string Name { get; }
+    void Tick();
     void Start();
     void Stop();
 }

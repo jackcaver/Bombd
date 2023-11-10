@@ -1,18 +1,31 @@
-﻿using Bombd.Serialization;
+﻿using Bombd.Helpers;
+using Bombd.Serialization;
 
 namespace Bombd.Types.Network.Objects;
 
 public class AiInfo : INetworkWritable
 {
     public const int MaxDataSize = 10;
+    
+    public readonly Platform Platform;
     public readonly int Count;
-
+    
     public readonly NetAiData[] DataSet = new NetAiData[MaxDataSize];
-
-    public AiInfo(string owner, int startingAiCount = MaxDataSize)
+    
+    public AiInfo(Platform platform)
     {
-        List<AiDefinition> definitions = AiDefinition.GetRandomDefinitions(startingAiCount);
+        Platform = platform;
+        Count = 0;
+        for (int i = 0; i < DataSet.Length; ++i)
+            DataSet[i] = new NetAiData();
+    }
+    
+    public AiInfo(Platform platform, string owner, int startingAiCount = MaxDataSize)
+    {
+        Platform = platform;
         Count = startingAiCount;
+        
+        List<AiDefinition> definitions = AiDefinition.GetRandomDefinitions(platform, startingAiCount);
         for (int i = 0; i < DataSet.Length; ++i)
         {
             var ai = new NetAiData();
@@ -27,18 +40,31 @@ public class AiInfo : INetworkWritable
             DataSet[i] = ai;
         }
     }
-
+    
     public void Write(NetworkWriter writer)
     {
-        foreach (NetAiData ai in DataSet)
+        if (Platform == Platform.Karting)
         {
-            writer.Write(ai.OwnerName, 32);
-            writer.Write(ai.UidName, 128);
-            writer.Write(ai.AiName, 32);
-            writer.Write(ai.AiProfile, 32);
+            foreach (NetAiData ai in DataSet)
+            {
+                writer.Write(ai.OwnerName);
+                writer.Write(ai.UidName);
+                writer.Write(ai.AiName);
+                writer.Write(ai.AiProfile);
+            }
+        }
+        else
+        {
+            foreach (NetAiData ai in DataSet)
+            {
+                writer.Write(ai.OwnerName, 32);
+                writer.Write(ai.UidName, 128);
+                writer.Write(ai.AiName, 32);
+                writer.Write(ai.AiProfile, 32);
+            }   
         }
     }
-
+    
     public class NetAiData
     {
         public string AiName = string.Empty;

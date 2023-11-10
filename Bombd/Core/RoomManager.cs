@@ -89,15 +89,22 @@ public class RoomManager
         
         int id = ++_nextGameId;
         string name = $"gm_{request.Attributes["SERVER_TYPE"].ToLower()}_{id}";
-        var game = new GameManagerGame
+
+        var room = new GameRoom(new RoomCreationInfo
         {
-            GameName = name,
-            GameBrowserName = name,
-            GameId = id,
-            Players = new GameManagerPlayerList(),
-            Attributes = request.Attributes
-        };
-        var room = new GameRoom(game, type, request.Platform, maxSlots, request.OwnerUserId);
+            Game = new GameManagerGame
+            {
+                GameName = name,
+                GameBrowserName = name,
+                GameId = id,
+                Players = new GameManagerPlayerList(),
+                Attributes = request.Attributes
+            },
+            Type = type,
+            Platform = request.Platform,
+            MaxSlots = maxSlots,
+            OwnerUserId = request.OwnerUserId
+        });
         
         _rooms[name] = room;
         _roomIds[id] = room;
@@ -178,6 +185,6 @@ public class RoomManager
         if (rooms.Count == 0 && createIfNoneExist)
             rooms.Add(CreateRoom(new CreateGameRequest { Attributes = attributes, Platform = id }));
 
-        return rooms.Select(room => room.ToGameBrowser()).ToList();
+        return rooms.Select(room => room.GetGameBrowserInfo()).ToList();
     }
 }
