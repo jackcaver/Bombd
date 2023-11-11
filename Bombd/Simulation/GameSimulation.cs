@@ -790,11 +790,16 @@ public class GameSimulation
                     TimeHelper.LocalTime >= raceInfo.RaceEndServerTime && !_hasSentEventResults)
                 {
                     _hasSentEventResults = true;
+
+                    string destination = Platform == Platform.ModNation ? "destKartPark" : "destPod";
+                    if (_raceSettings!.Value.AutoReset)
+                        destination = "destGameroom";
+                    
                     BroadcastMessage(new NetMessageEventResults
                     {
                         Platform = Platform,
                         ResultsXml = EventResult.Serialize(_eventResults),
-                        Destination = "destGameroom",
+                        Destination = destination,
                         PostEventDelayTime = TimeHelper.LocalTime + 15000,
                         PostEventScreenTime = 15.0f
                     }, PacketType.ReliableGameData);

@@ -31,12 +31,18 @@ public class EventSettings : INetworkReadable, INetworkWritable
     public int StoryDifficulty;
     
     // Modnation
+    public bool AutoReset = false;
+    public bool IsRanked;
     public string StartNis = string.Empty;
     public SpeedClass KartSpeed = SpeedClass.Fastest;
     public int NumLaps = 3;
     public string TrackName = "Mod Circuit";
 
-    public EventSettings(Platform platform) => Platform = platform;
+    public EventSettings(Platform platform)
+    {
+        Platform = platform;
+        AutoReset = platform == Platform.ModNation;
+    }
     
     public static EventSettings ReadVersioned(ArraySegment<byte> data, Platform platform)
     {
@@ -61,7 +67,7 @@ public class EventSettings : INetworkReadable, INetworkWritable
             AiEnabled = reader.ReadInt32() == 1;
             reader.Offset += 4;
             OwnerNetcodeUserId = reader.ReadInt32();
-            reader.Offset += 4;
+            IsRanked = reader.ReadInt32() == 1;
             Private = reader.ReadInt32() == 1;
             SeriesEventIndex = reader.ReadInt32();
             CareerEventIndex = reader.ReadInt32();
@@ -108,11 +114,11 @@ public class EventSettings : INetworkReadable, INetworkWritable
             writer.Write(1); // - Unknown
             writer.Write(OwnerNetcodeUserId);
 
-            writer.Write(0); // 0x68
+            writer.Write(IsRanked ? 1 : 0); // 0x68
             writer.Write(Private ? 1 : 0); // 0x6c
             writer.Write(SeriesEventIndex);
             writer.Write(CareerEventIndex);
-            writer.Write(0); // 0x78
+            writer.Write(0); // 0x78 // Top tracks
             writer.Write(MinHumans); // 0x7c 
             writer.Write(MaxHumans); // 0x80
             writer.Write(0); // 0x84 - Padding?
