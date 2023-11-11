@@ -20,7 +20,7 @@ public class GameSimulation
     private readonly Dictionary<int, PlayerState> _playerStates = new();
     private readonly Dictionary<int, PlayerInfo> _playerInfos = new();
     
-    private readonly int _seed = CryptoHelper.GetRandomSecret();
+    private int _seed = CryptoHelper.GetRandomSecret();
     private readonly XmlSerializer _stateSerializer = new(typeof(PlayerState));
     private readonly Dictionary<int, SyncObject> _syncObjects = new();
     
@@ -308,13 +308,20 @@ public class GameSimulation
         {
             // Reset the race loading flags for each player
             foreach (var playerState in _playerStates.Values)
-            {
                 playerState.Flags &= ~PlayerStateFlags.RaceLoadFlags;
-            }
         }
         
         switch (state)
         {
+            case RoomState.None:
+            { 
+                _waitingForPlayerNisEvents = false; 
+                _waitingForPlayerStartEvents = false; 
+                _hasSentEventResults = false;
+                foreach (var playerState in _playerStates.Values)
+                    playerState.Flags = PlayerStateFlags.None;
+                break;
+            }
             case RoomState.RaceInProgress:
             {
                 _waitingForPlayerNisEvents = true;
@@ -783,15 +790,20 @@ public class GameSimulation
                     TimeHelper.LocalTime >= raceInfo.RaceEndServerTime && !_hasSentEventResults)
                 {
                     _hasSentEventResults = true;
-                    var xml = Encoding.ASCII.GetBytes(EventResult.Serialize(_eventResults));
-                    BroadcastGenericMessage(xml, NetMessageType.EventResultsFinal, PacketType.ReliableGameData);
-                }
-                
-                if (raceInfo.RaceState == RaceState.PostRace &&
-                    TimeHelper.LocalTime >= raceInfo.PostRaceServerTime)
-                {
-                    _hasSentEventResults = false;
-                    SetCurrentGameroomState(RoomState.Ready);
+                    BroadcastMessage(new NetMessageEventResults
+                    {
+                        Platform = Platform,
+                        ResultsXml = EventResult.Serialize(_eventResults),
+                        Destination = "destGameroom",
+                        PostEventDelayTime = TimeHelper.LocalTime + 15000,
+                        PostEventScreenTime = 15.0f
+                    }, PacketType.ReliableGameData);
+
+                    // Broadcast new seed for the next race
+                    _seed = CryptoHelper.GetRandomSecret();
+                    BroadcastMessage(new NetMessageRandomSeed { Seed = _seed }, PacketType.ReliableGameData);
+                    
+                    SetCurrentGameroomState(RoomState.None);
                 }
                 
                 break;
