@@ -58,7 +58,7 @@ public class GameSimulation
             _gameroomState = CreateSystemSyncObject(new GameroomState(Platform), NetObjectType.GameroomState);
             _raceInfo = CreateSystemSyncObject(new SpectatorInfo(Platform), NetObjectType.SpectatorInfo);
             _aiInfo = CreateSystemSyncObject(new AiInfo(Platform), NetObjectType.AiInfo);
-            _startingGrid = CreateSystemSyncObject(new StartingGrid(), NetObjectType.StartingGrid);
+            _startingGrid = CreateSystemSyncObject(new StartingGrid(Platform), NetObjectType.StartingGrid);
         }
     }
 
@@ -304,17 +304,19 @@ public class GameSimulation
         room.LockedTimerValue = 0.0f;
         room.LockedForRacerJoinsValue = 0.0f;
         
+        if (state <= RoomState.Ready || state == RoomState.RaceInProgress)
+        {
+            // Reset the race loading flags for each player
+            foreach (var playerState in _playerStates.Values)
+            {
+                playerState.Flags &= ~PlayerStateFlags.RaceLoadFlags;
+            }
+        }
+        
         switch (state)
         {
             case RoomState.RaceInProgress:
             {
-                // Reset state variables for every player, should probably have
-                // a better way of handling this, but it's fine for now.
-                foreach (var playerState in _playerStates.Values)
-                {
-                    playerState.Flags = PlayerStateFlags.None;
-                }
-            
                 _waitingForPlayerNisEvents = true;
                 break;
             }
@@ -324,6 +326,11 @@ public class GameSimulation
                 // it won't ever update the racer state
                 if (Platform == Platform.Karting)
                 {
+                    foreach (var info in _playerInfos.Values)
+                    {
+                        info.Operation = 3;
+                    }
+                    
                     // Send all player infos
                     BroadcastMessage(new NetMessagePlayerCreateInfo {
                         Data = new List<PlayerInfo>(_playerInfos.Values)
@@ -400,8 +407,7 @@ public class GameSimulation
         {
             int nameUid = CryptoHelper.StringHash32(_aiInfo.Value.DataSet[i].UidName);
             _startingGrid.Value.Add(nameUid);
-        }
-        
+        }   
         _startingGrid.Sync();
     }
 
@@ -496,7 +502,7 @@ public class GameSimulation
             case NetMessageType.PlayerCreateInfo:
             {
                 var message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);
-                message.Data[0].Operation = 3;
+                message.Data[0].Operation = 0;
                 _playerInfos[player.UserId] = message.Data[0];
                 var msg = NetworkWriter.Serialize(message);
                 BroadcastGenericMessage(msg, NetMessageType.PlayerCreateInfo, PacketType.ReliableGameData);
@@ -512,12 +518,7 @@ public class GameSimulation
             }
             case NetMessageType.GameroomReady:
             {
-                if (player.UserId != _owner) break;
-                SetCurrentGameroomState(RoomState.Ready);
-                if (Platform == Platform.Karting)
-                {
-                    SetCurrentGameroomState(RoomState.DownloadingTracks);   
-                }
+                _playerStates[player.UserId].Flags |= PlayerStateFlags.GameRoomReady;
                 break;
             }
             case NetMessageType.GameroomStopTimer:
@@ -727,9 +728,17 @@ public class GameSimulation
         var room = _gameroomState.Value;
         var raceInfo = _raceInfo.Value;
 
-        if (_raceSettings != null)
+        // If the race hasn't started update the gameroom's state based on 
+        // the current players in the lobby.
+        if (_raceSettings != null && room.State < RoomState.RaceInProgress)
         {
-            if (_raceSettings.Value.MinHumans < _players.Count)
+            int numReadyPlayers =
+                _playerStates.Values.Count(x => (x.Flags & PlayerStateFlags.GameRoomReady) != 0);
+            bool hasMinPlayers = numReadyPlayers >= _raceSettings.Value.MinHumans;
+            
+            if (hasMinPlayers && room.State == RoomState.WaitingMinPlayers)
+                SetCurrentGameroomState(RoomState.Ready);
+            else if (!hasMinPlayers)
                 SetCurrentGameroomState(RoomState.WaitingMinPlayers);
         }
         
@@ -766,7 +775,7 @@ public class GameSimulation
                     _playerStates.Values.All(x => (x.Flags & PlayerStateFlags.ReadyForEvent) != 0))
                 {
                     int countdown = TimeHelper.LocalTime + BombdConfig.Instance.EventCountdownTime;
-                    BroadcastGenericIntMessage(countdown, NetMessageType.EventStart, PacketType.ReliableGameData);
+                    BroadcastGenericIntMessage(countdown, NetMessageType.EventStart, PacketType.ReliableGameData);f
                     _waitingForPlayerStartEvents = false;
                 }
 
