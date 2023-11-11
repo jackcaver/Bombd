@@ -775,7 +775,7 @@ public class GameSimulation
                     _playerStates.Values.All(x => (x.Flags & PlayerStateFlags.ReadyForEvent) != 0))
                 {
                     int countdown = TimeHelper.LocalTime + BombdConfig.Instance.EventCountdownTime;
-                    BroadcastGenericIntMessage(countdown, NetMessageType.EventStart, PacketType.ReliableGameData);f
+                    BroadcastGenericIntMessage(countdown, NetMessageType.EventStart, PacketType.ReliableGameData);
                     _waitingForPlayerStartEvents = false;
                 }
 
