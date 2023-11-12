@@ -25,16 +25,9 @@ public abstract class BombdService
     private readonly IServer _server;
     private readonly Type _type;
     protected readonly ConcurrentDictionary<int, ConnectionBase> UserInfo = new();
-
-    private readonly long _timestep;
-    private long _accumulatedTime;
-    private long _lastTime;
-    private readonly Stopwatch _watch = new();
     
     protected BombdService()
     {
-        // Used for convenience
-        _timestep = 1000 / BombdConfig.Instance.TickRate;
         Bombd = BombdServer.Instance;
         _type = GetType();
 
@@ -66,9 +59,6 @@ public abstract class BombdService
         }
         else
             _server = new RudpServer(address, Port, this);
-
-        _watch.Start();
-        _lastTime = _watch.ElapsedMilliseconds;
         
         Logger.LogInfo(_type, $"Finished initializing service {Name}:{protocolName}:{Port}");
     }
@@ -85,17 +75,18 @@ public abstract class BombdService
         var thread = new Thread(() =>
         {
             _server.Start();
-            while (_server.IsActive)
+            Task.Run(async () =>
             {
-                long time = _watch.ElapsedMilliseconds;
-                _accumulatedTime += time - _lastTime;
-                while (_accumulatedTime > _timestep)
+                long step = 1000 / BombdConfig.Instance.TickRate;
+                using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(step));
+                while (_server.IsActive)
                 {
-                    _server.Tick();
-                    _accumulatedTime -= _timestep;
+                    while (await timer.WaitForNextTickAsync())
+                    {
+                        _server.Tick();
+                    }
                 }
-                _lastTime = time;   
-            }
+            });
         });
         
         thread.Start();
