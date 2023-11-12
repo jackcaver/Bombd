@@ -1,10 +1,11 @@
 ﻿using Bombd.Serialization;
+using Bombd.Types.Network;
 
 namespace Bombd.Simulation;
 
 public class PlayerInfo : INetworkWritable, INetworkReadable
 {
-    public int Operation;
+    public GameJoinStatus Operation;
     public int NetcodeUserId;
     public int NetcodeGamePlayerId;
     public int PlayerConnectId;
@@ -17,7 +18,7 @@ public class PlayerInfo : INetworkWritable, INetworkReadable
     
     public void Read(NetworkReader reader)
     {
-        Operation = reader.ReadInt32();
+        Operation = (GameJoinStatus)reader.ReadInt32();
         NetcodeUserId = reader.ReadInt32();
         NetcodeGamePlayerId = reader.ReadInt32();
         PlayerConnectId = reader.ReadInt32();
@@ -31,7 +32,7 @@ public class PlayerInfo : INetworkWritable, INetworkReadable
     
     public void Write(NetworkWriter writer)
     {
-        writer.Write(Operation);
+        writer.Write((int)Operation);
         writer.Write(NetcodeUserId);
         writer.Write(NetcodeGamePlayerId);
         writer.Write(PlayerConnectId);

@@ -132,6 +132,7 @@ public class EventSettings : INetworkReadable, INetworkWritable
         
         writer.Write(Version);
         writer.Write(CreationId);
+        writer.Write(MaxPlayers);
         writer.Write((int)RaceType);
         writer.Write(OwnerNetcodeUserId);
         writer.Write(Private ? 1 : 0);

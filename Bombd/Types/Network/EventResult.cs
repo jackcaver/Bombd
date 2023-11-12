@@ -17,10 +17,16 @@ public class EventResult
         Indent = false,
         NamespaceHandling = NamespaceHandling.OmitDuplicates
     };
-    private static XmlSerializerNamespaces _xmlNamespaces = new(new[] { XmlQualifiedName.Empty }); 
-    
+    private static XmlSerializerNamespaces _xmlNamespaces = new(new[] { XmlQualifiedName.Empty });
+
+    [XmlAttribute("playerGroupID")] public int PlayerGroupId;
+    [XmlAttribute("battleKills")] public int BattleKills;
+    [XmlAttribute("pointsScored")] public int PointsScored;
     [XmlAttribute("bestDrift")] public float BestDrift;
+    [XmlAttribute("individualRaceTime")] public float IndividualRaceTime;
+    [XmlAttribute("playgroupRaceTime")] public float PlaygroupRaceTime;
     [XmlAttribute("scoreSortOrder")] public string ScoreSortOrder = "ascending";
+    [XmlAttribute("scoreSortField")] public string ScoreSortField = "raceTimeScore";
     [XmlAttribute("bestEventSubScore")] public float BestEventSubScore;
     [XmlAttribute("bestHangTime")] public float BestHangTime;
     [XmlAttribute("eventScore")] public float EventScore;

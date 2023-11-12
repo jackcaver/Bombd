@@ -6,14 +6,14 @@ public struct NetMessagePlayerSessionInfo : INetworkMessage
 {
     public NetMessageType Type => NetMessageType.PlayerSessionInfo;
 
-    public int JoinStatus;
+    public GameSessionStatus JoinStatus;
     public int UserId;
     public int PlayerId;
     public int NameUid;
 
     public void Write(NetworkWriter writer)
     {
-        writer.Write(JoinStatus);
+        writer.Write((int)JoinStatus);
         writer.Write(UserId);
 
         // These don't even get used in Modnation

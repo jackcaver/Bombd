@@ -94,7 +94,7 @@ public class GameSimulation
 
         _playerInfos[userId] = new PlayerInfo
         {
-            Operation = 3,
+            Operation = GameJoinStatus.RacerPending,
             NetcodeUserId = userId,
             NetcodeGamePlayerId = playerId,
             PlayerConnectId = userId,
@@ -151,7 +151,7 @@ public class GameSimulation
             {
                 peer.SendReliableMessage(new NetMessagePlayerSessionInfo
                 {
-                    JoinStatus = 1,
+                    JoinStatus = GameSessionStatus.JoinAsRacer,
                     PlayerId = player.PlayerId,
                     UserId = player.UserId
                 });
@@ -163,7 +163,7 @@ public class GameSimulation
                 if (player == peer) continue;
                 player.SendReliableMessage(new NetMessagePlayerSessionInfo
                 {
-                    JoinStatus = 1,
+                    JoinStatus = GameSessionStatus.JoinAsRacer,
                     PlayerId = peer.PlayerId,
                     UserId = peer.UserId
                 });
@@ -308,7 +308,9 @@ public class GameSimulation
         {
             // Reset the race loading flags for each player
             foreach (var playerState in _playerStates.Values)
+            {
                 playerState.Flags &= ~PlayerStateFlags.RaceLoadFlags;
+            }
         }
         
         switch (state)
@@ -335,7 +337,7 @@ public class GameSimulation
                 {
                     foreach (var info in _playerInfos.Values)
                     {
-                        info.Operation = 3;
+                        info.Operation = GameJoinStatus.RacerPending;
                     }
                     
                     // Send all player infos
@@ -349,8 +351,12 @@ public class GameSimulation
             {
                 UpdateAi();
                 UpdateStartingGrid();
-            
-                room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.GameroomCountdownTime;
+
+                if (IsKarting)
+                    room.LoadEventTime = TimeHelper.LocalTime;
+                else
+                    room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.GameroomCountdownTime;
+                
                 room.LockedForRacerJoinsValue = BombdConfig.Instance.GameroomRacerLockTime;
                 room.LockedTimerValue = BombdConfig.Instance.GameroomTimerLockTime;
                 
@@ -404,6 +410,12 @@ public class GameSimulation
         
         _aiInfo.Value = _raceSettings.Value.AiEnabled ? 
             new AiInfo(Platform, username, numAi) : new AiInfo(Platform);
+
+        if (Platform == Platform.Karting)
+        {
+            _raceSettings.Value.NumHoard = numAi;
+            _raceSettings.Sync();   
+        }
     }
 
     private void UpdateStartingGrid()
@@ -499,7 +511,11 @@ public class GameSimulation
     
     public void OnNetworkMessage(GamePlayer player, int senderNameUid, NetMessageType type, ArraySegment<byte> data)
     {
-        if (type != NetMessageType.VoipPacket && type != NetMessageType.MessageUnreliableBlock)
+        if (
+            type != NetMessageType.VoipPacket && 
+            type != NetMessageType.MessageUnreliableBlock && 
+            type != NetMessageType.GenericGameplay &&
+            type != NetMessageType.Gameplay)
         {
             Logger.LogDebug<GameSimulation>($"Received NetMessage {type} from {player.Username} ({(uint)player.UserId}:{(uint)player.PlayerId})");   
         }
@@ -509,7 +525,7 @@ public class GameSimulation
             case NetMessageType.PlayerCreateInfo:
             {
                 var message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);
-                message.Data[0].Operation = 0;
+                message.Data[0].Operation = GameJoinStatus.Spectator;
                 _playerInfos[player.UserId] = message.Data[0];
                 var msg = NetworkWriter.Serialize(message);
                 BroadcastGenericMessage(msg, NetMessageType.PlayerCreateInfo, PacketType.ReliableGameData);
@@ -536,6 +552,7 @@ public class GameSimulation
             }
             case NetMessageType.SpectatorInfo:
             {
+                if (player.UserId != _owner) break;
                 _raceInfo.Value = SpectatorInfo.ReadVersioned(data, Platform);
                 break;
             }
@@ -567,7 +584,16 @@ public class GameSimulation
                 try
                 {
                     using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
-                    results = EventResult.Deserialize(reader.ReadString(reader.Capacity));
+
+                    int len = reader.Capacity;
+                    if (Platform == Platform.Karting)
+                    {
+                        // Don't really care about this data
+                        reader.Offset += 0xc;
+                        len = reader.ReadInt32();
+                    }
+                    
+                    results = EventResult.Deserialize(reader.ReadString(len));
                 }
                 catch (Exception)
                 {
@@ -603,6 +629,10 @@ public class GameSimulation
                 
                 if (_raceSettings != null) _raceSettings.Value = settings;
                 else _raceSettings = CreateSystemSyncObject(settings, NetObjectType.RaceSettings);
+
+                // byte[] eventSettingsBinary = new byte[data.Count];
+                // data.CopyTo(eventSettingsBinary);
+                // File.WriteAllBytes(_raceSettings.Value.CreationId + ".evt", eventSettingsBinary);
                 
                 break;
             }
@@ -735,6 +765,12 @@ public class GameSimulation
         var room = _gameroomState.Value;
         var raceInfo = _raceInfo.Value;
 
+        foreach (var player in _players)
+        {
+            if (player.IsFakePlayer)
+                _playerStates[player.UserId].Flags = PlayerStateFlags.AllFlags;
+        }
+
         // If the race hasn't started update the gameroom's state based on 
         // the current players in the lobby.
         if (_raceSettings != null && room.State < RoomState.RaceInProgress)
@@ -742,9 +778,15 @@ public class GameSimulation
             int numReadyPlayers =
                 _playerStates.Values.Count(x => (x.Flags & PlayerStateFlags.GameRoomReady) != 0);
             bool hasMinPlayers = numReadyPlayers >= _raceSettings.Value.MinHumans;
-            
+
             if (hasMinPlayers && room.State == RoomState.WaitingMinPlayers)
+            {
                 SetCurrentGameroomState(RoomState.Ready);
+                if (Platform == Platform.Karting)
+                {
+                    SetCurrentGameroomState(RoomState.DownloadingTracks);
+                }
+            }
             else if (!hasMinPlayers)
                 SetCurrentGameroomState(RoomState.WaitingMinPlayers);
         }
@@ -797,6 +839,7 @@ public class GameSimulation
                     
                     BroadcastMessage(new NetMessageEventResults
                     {
+                        SenderNameUid = NetworkMessages.SimServerUID,
                         Platform = Platform,
                         ResultsXml = EventResult.Serialize(_eventResults),
                         Destination = destination,
