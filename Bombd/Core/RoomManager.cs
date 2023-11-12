@@ -36,6 +36,12 @@ public class RoomManager
         GameRoom? room = GetRoomByUser(userId);
         return room?.GetPlayerByUserId(userId);
     }
+
+    public void DestroyRoom(GameRoom room)
+    {
+        _rooms.TryRemove(room.Game.GameName, out _);
+        _roomIds.TryRemove(room.Game.GameId, out _);
+    }
     
     public GamePlayer? TryJoinRoom(string username, int userId, GameRoom room)
     {

@@ -30,6 +30,7 @@ public class GameRoom
 
     public readonly Platform Platform;
     public readonly int MaxSlots;
+    public bool IsEmpty => Game.Players.Count == 0;
     public int NumFreeSlots { get; private set; }
     public int UsedSlots => MaxSlots - NumFreeSlots;
     

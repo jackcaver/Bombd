@@ -170,6 +170,12 @@ public class GameServer : BombdService
                     PlayerName = request.Username,
                     Reason = request.Reason
                 });
+                
+                if (room.IsEmpty)
+                {
+                    Logger.LogInfo<GameServer>($"Destroying {room.Game.GameName} since all players have left!");
+                    Bombd.RoomManager.DestroyRoom(room);
+                }
             }
             else
             {

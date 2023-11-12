@@ -15,7 +15,8 @@ namespace Bombd.Simulation;
 
 public class GameSimulation
 {
-    private readonly int _owner;
+    public int Owner;
+    
     private readonly List<GamePlayer> _players;
     private readonly Dictionary<int, PlayerState> _playerStates = new();
     private readonly Dictionary<int, PlayerInfo> _playerInfos = new();
@@ -45,7 +46,7 @@ public class GameSimulation
         Type = type;
         Platform = platform;
         _players = players;
-        _owner = owner;
+        Owner = owner;
         
         Logger.LogInfo<GameSimulation>($"Starting Game Simulation ({type}:{platform})");
         
@@ -208,12 +209,30 @@ public class GameSimulation
             _syncObjects.Remove(pair.Key);
         }
         
+        if (_players.Count == 0) return;
+        
         // Tell everybody else in the lobby why we left...
-        BroadcastMessage(player, new NetMessagePlayerLeave
+        BroadcastMessage(new NetMessagePlayerLeave
         {
             PlayerName = player.Username,
             Reason = 0
         }, PacketType.ReliableGameData);
+        
+        // If we're the owner, change the host to someone random
+        if (player.UserId == Owner)
+        {
+            var random = new Random();
+            int index = random.Next(0, _players.Count);
+            var randomPlayer = _players[index];
+
+            Owner = randomPlayer.UserId;
+            if (_raceSettings != null)
+            {
+                _raceSettings.Value.OwnerNetcodeUserId = Owner;
+                _raceSettings.Sync();
+            }
+            BroadcastGenericIntMessage(randomPlayer.UserId, NetMessageType.LeaderChangeRequest, PacketType.ReliableGameData);
+        }
     }
 
     private void BroadcastVoipData(GamePlayer sender, ArraySegment<byte> data)
@@ -399,7 +418,7 @@ public class GameSimulation
     {
         if (_raceSettings == null) return;
         
-        var owner = _players.Find(x => x.UserId == _owner);
+        var owner = _players.Find(x => x.UserId == Owner);
         string username = owner?.Username ?? string.Empty;
 
         int maxAi = _aiInfo.Value.DataSet.Length;
@@ -549,13 +568,13 @@ public class GameSimulation
             }
             case NetMessageType.GameroomStopTimer:
             {
-                if (player.UserId != _owner) break;
+                if (player.UserId != Owner) break;
                 SetCurrentGameroomState(RoomState.CountingDownPaused);
                 break;
             }
             case NetMessageType.SpectatorInfo:
             {
-                if (player.UserId != _owner) break;
+                if (player.UserId != Owner) break;
                 _raceInfo.Value = SpectatorInfo.ReadVersioned(data, Platform);
                 break;
             }
@@ -577,7 +596,7 @@ public class GameSimulation
             case NetMessageType.GameroomRequestStartEvent:
             {
                 // Only the host should be allowed to start the event I'm fairly sure
-                if (player.UserId != _owner) break;
+                if (player.UserId != Owner) break;
                 SetCurrentGameroomState(RoomState.DownloadingTracks);
                 break;
             }
@@ -622,7 +641,7 @@ public class GameSimulation
             case NetMessageType.EventSettingsUpdate:
             {
                 // Only the host should be allowed to update event settings I'm fairly sure
-                if (player.UserId != _owner) break;
+                if (player.UserId != Owner) break;
                 
                 var settings = EventSettings.ReadVersioned(data, Platform);
                 
