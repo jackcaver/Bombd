@@ -523,11 +523,16 @@ public class GameSimulation
             case NetMessageType.PlayerCreateInfo:
             {
                 var message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);
-                message.Data[0].Operation = GameJoinStatus.Spectator;
+                message.Data[0].Operation = GameJoinStatus.RacerPending;
                 _playerInfos[player.UserId] = message.Data[0];
                 var msg = NetworkWriter.Serialize(message);
                 BroadcastGenericMessage(msg, NetMessageType.PlayerCreateInfo, PacketType.ReliableGameData);
                 
+                break;
+            }
+            case NetMessageType.WorldobjectCreate:
+            {
+                BroadcastGenericMessage(data, NetMessageType.WorldobjectCreate, PacketType.ReliableGameData);
                 break;
             }
             case NetMessageType.PlayerLeave:
