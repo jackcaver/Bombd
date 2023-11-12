@@ -21,6 +21,7 @@ public class GameSimulation
     private readonly Dictionary<int, PlayerInfo> _playerInfos = new();
     
     private int _seed = CryptoHelper.GetRandomSecret();
+    private int _lastStateTime = TimeHelper.LocalTime;
     private readonly XmlSerializer _stateSerializer = new(typeof(PlayerState));
     private readonly Dictionary<int, SyncObject> _syncObjects = new();
     
@@ -333,7 +334,7 @@ public class GameSimulation
             {
                 // If the gameroom isn't loaded before it receives the player create info,
                 // it won't ever update the racer state
-                if (Platform == Platform.Karting)
+                if (IsKarting)
                 {
                     foreach (var info in _playerInfos.Values)
                     {
@@ -351,19 +352,16 @@ public class GameSimulation
             {
                 UpdateAi();
                 UpdateStartingGrid();
-
-                if (IsKarting)
-                    room.LoadEventTime = TimeHelper.LocalTime;
-                else
-                    room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.GameroomCountdownTime;
                 
+                room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.GameroomCountdownTime;
                 room.LockedForRacerJoinsValue = BombdConfig.Instance.GameroomRacerLockTime;
                 room.LockedTimerValue = BombdConfig.Instance.GameroomTimerLockTime;
                 
                 break;
             }
         }
-        
+
+        _lastStateTime = TimeHelper.LocalTime;
         _gameroomState.Sync();
     }
     
@@ -375,7 +373,7 @@ public class GameSimulation
     private GenericSyncObject<T> CreateGenericSyncObject<T>(T instance, NetObjectTypeInfo typeInfo, string owner, int userId) where T : INetworkWritable
     {
         int type = typeInfo.ModnationTypeId;
-        if (Platform == Platform.Karting)
+        if (IsKarting)
             type = typeInfo.KartingTypeId;
         
         var syncObject = new GenericSyncObject<T>(instance, type, owner, userId);
@@ -411,7 +409,7 @@ public class GameSimulation
         _aiInfo.Value = _raceSettings.Value.AiEnabled ? 
             new AiInfo(Platform, username, numAi) : new AiInfo(Platform);
 
-        if (Platform == Platform.Karting)
+        if (IsKarting)
         {
             _raceSettings.Value.NumHoard = numAi;
             _raceSettings.Sync();   
@@ -449,7 +447,7 @@ public class GameSimulation
     
     private INetworkMessage MakeCreateSyncObjectMessage(SyncObject syncObject)
     {
-        if (Platform == Platform.Karting) 
+        if (IsKarting) 
             return new NetMessageSyncObjectCreate(syncObject);
         
         return new NetMessageSyncObject(syncObject, NetObjectMessageType.Create);
@@ -457,7 +455,7 @@ public class GameSimulation
 
     private INetworkMessage MakeUpdateSyncObjectMessage(SyncObject syncObject)
     {
-        if (Platform == Platform.Karting) 
+        if (IsKarting) 
             return new NetMessageSyncObjectUpdate(syncObject);
         
         return new NetMessageSyncObject(syncObject, NetObjectMessageType.Update);
@@ -465,7 +463,7 @@ public class GameSimulation
 
     private INetworkMessage MakeRemoveSyncObjectMessage(SyncObject syncObject)
     {
-        if (Platform == Platform.Karting) 
+        if (IsKarting) 
             return new NetMessageSyncObjectRemove(syncObject);
         
         return new NetMessageSyncObject(syncObject, NetObjectMessageType.Remove);
@@ -586,7 +584,7 @@ public class GameSimulation
                     using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
 
                     int len = reader.Capacity;
-                    if (Platform == Platform.Karting)
+                    if (IsKarting)
                     {
                         // Don't really care about this data
                         reader.Offset += 0xc;
@@ -778,15 +776,13 @@ public class GameSimulation
             int numReadyPlayers =
                 _playerStates.Values.Count(x => (x.Flags & PlayerStateFlags.GameRoomReady) != 0);
             bool hasMinPlayers = numReadyPlayers >= _raceSettings.Value.MinHumans;
-
+            
             if (hasMinPlayers && room.State == RoomState.WaitingMinPlayers)
-            {
                 SetCurrentGameroomState(RoomState.Ready);
-                if (Platform == Platform.Karting)
-                {
-                    SetCurrentGameroomState(RoomState.DownloadingTracks);
-                }
-            }
+            // Karting doesn't seem to allow the owner to manually start the event.
+            // 5 seconds seems like a reasonable amount of time for a "last call"
+            else if (room.State == RoomState.Ready && IsKarting && _lastStateTime + 5000 < TimeHelper.LocalTime)
+                SetCurrentGameroomState(RoomState.DownloadingTracks);
             else if (!hasMinPlayers)
                 SetCurrentGameroomState(RoomState.WaitingMinPlayers);
         }
@@ -833,7 +829,7 @@ public class GameSimulation
                 {
                     _hasSentEventResults = true;
 
-                    string destination = Platform == Platform.ModNation ? "destKartPark" : "destPod";
+                    string destination = IsModnation ? "destKartPark" : "destPod";
                     if (_raceSettings!.Value.AutoReset)
                         destination = "destGameroom";
                     
