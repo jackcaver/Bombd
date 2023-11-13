@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using Bombd.Core;
 using Bombd.Extensions;
 using Bombd.Helpers;
@@ -121,10 +121,12 @@ public class RudpConnection : ConnectionBase
                 return;
             }
 
-            _ackList.Add(new RudpAckRecord { Protocol = protocol, SequenceNumber = sequence });
-
             // We only need to acknowledge KeepAlive packets, so just stop here.
-            if (protocol == PacketType.KeepAlive) return;
+            if (protocol == PacketType.KeepAlive)
+            {
+                _ackList.Add(new RudpAckRecord { Protocol = protocol, SequenceNumber = sequence });
+                return;
+            }
 
             // Make sure Gamedata/Netcode messages are in-order, if they aren't, drop them so we don't end up
             // handling packets twice or in the wrong order.
@@ -133,18 +135,20 @@ public class RudpConnection : ConnectionBase
             {
                 if (protocol == PacketType.ReliableGameData)
                 {
-                    if (sequence != _remoteGamedataSequence)
+                    if (sequence < _remoteGamedataSequence)
                     {
+                        _ackList.Add(new RudpAckRecord { Protocol = protocol, SequenceNumber = sequence });
                         // Logger.LogInfo<RudpConnection>($"Received gamedata packet out of order (Got {(uint)sequence}, Expected {(uint)_remoteSequenceNumber}). Dropping packet.");
                         return;
                     }
-
+                    
                     _remoteGamedataSequence++;
                 }
                 else
                 {
-                    if (sequence != _remoteSequence)
+                    if (sequence < _remoteSequence)
                     {
+                        _ackList.Add(new RudpAckRecord { Protocol = protocol, SequenceNumber = sequence });
                         // Logger.LogInfo<RudpConnection>("Received network message out of order. Dropping packet.");
                         return;
                     }
