@@ -62,11 +62,21 @@ public class Matchmaking : BombdService
         {
             // If the player is already matchmaking, just ignore the request, this shouldn't normally happen.
             int index = _matchmakingPlayers.FindIndex(player => player.UserId == joiningPlayer.UserId);
-            if (index != -1) return;
+            if (index != -1) continue;
+
+            NetcodeTransaction transaction;
+            // XP races aren't implemented in Modnation, so send back an error for now.
+            if (joiningPlayer.Platform == Platform.ModNation)
+            {
+                transaction = NetcodeTransaction.MakeRequest(Name, "matchmakingError");
+                transaction.Error = "noGamesAvailable";
+                SendTransactionToUser(joiningPlayer.UserId, transaction);
+                continue;
+            }
             
             // Tell the game that we've started matchmaking
             joiningPlayer.StartTime = TimeHelper.LocalTime;
-            var transaction = NetcodeTransaction.MakeRequest(Name, "matchmakingBegin");
+            transaction = NetcodeTransaction.MakeRequest(Name, "matchmakingBegin");
             transaction["matchmakingBeginTime"] = joiningPlayer.StartTime.ToString();
             SendTransactionToUser(joiningPlayer.UserId, transaction);
             _matchmakingPlayers.Add(joiningPlayer);
@@ -76,7 +86,7 @@ public class Matchmaking : BombdService
         while (_pendingCancelRequests.TryDequeue(out MatchmakingCancelRequest leaveRequest))
         {
             int index = _matchmakingPlayers.FindIndex(player => player.UserId == leaveRequest.UserId);
-            if (index == -1) return;
+            if (index == -1) continue;
             
             // If this cancel was requested rather than triggered by a disconnect.
             if (leaveRequest.WasRequested)
