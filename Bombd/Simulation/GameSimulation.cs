@@ -701,7 +701,11 @@ public class GameSimulation
                     }
                 }
                 
+                // Backup user flags
+                if (_playerStates.TryGetValue(player.UserId, out PlayerState? existingPlayerState))
+                    state.Flags = existingPlayerState.Flags;
                 _playerStates[player.UserId] = state;
+                
                 BroadcastPlayerStates();
             
                 break;
@@ -798,7 +802,7 @@ public class GameSimulation
         if (_raceSettings != null && room.State < RoomState.RaceInProgress)
         {
             int numReadyPlayers =
-                _playerStates.Values.Count(x => (x.Flags & PlayerStateFlags.GameRoomReady) != 0);
+                _playerStates.Values.Count(x => (x.Flags & PlayerStateFlags.GameRoomReady) != 0 && x.Away == 0);
             bool hasMinPlayers = numReadyPlayers >= _raceSettings.Value.MinHumans;
             
             if (hasMinPlayers && room.State == RoomState.WaitingMinPlayers)

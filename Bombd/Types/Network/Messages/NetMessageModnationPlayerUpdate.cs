@@ -16,10 +16,14 @@ public struct NetMessageModnationPlayerUpdate : INetworkMessage
         {
             writer.Write(state.NameUid);
             writer.Write(state.PlayerConnectId);
-            writer.Write(state.KartId);
-            writer.Write(state.CharacterId);
-            writer.Write(state.Away);
-            writer.Write(state.Mic);
+            writer.Write(state.Away == 1);
+            writer.Write(state.Mic == 1);
+            writer.Write(state.HasEventVetoed);
+            writer.Write(state.HasLeaderVetoed);
+            writer.Write(state.IsConnecting);
+            writer.Clear(0x3);
+            writer.Write(state.KartHandlingDrift);
+            writer.Write(state.KartSpeedAccel);
         }
     }
 }
