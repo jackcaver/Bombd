@@ -136,7 +136,7 @@ public class RudpMessage
         Protocol = PacketType.Reset;
         Sequence = sequence;
 
-        _offset += _data.WriteUint8(_offset, (byte)PacketType.KeepAlive);
+        _offset += _data.WriteUint8(_offset, (byte)PacketType.Reset);
         _offset += _data.WriteUint8(_offset, 0);
         _offset += _data.WriteUint16BE(_offset, 0);
         _offset += _data.WriteUint32BE(_offset, sequence);
