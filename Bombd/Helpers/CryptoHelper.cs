@@ -68,7 +68,6 @@ public static class CryptoHelper
     {
         int crc = -1;
         for (int i = 0; i < str.Length; ++i) crc = (crc << 8) ^ (int)CrcTable32[((crc >> 0x18) ^ str[i]) & 0xff];
-
         return crc;
     }
 
@@ -118,7 +117,15 @@ public static class CryptoHelper
 
     public static int GetRandomSecret()
     {
-        RandomNumberGenerator.Fill(RandomBytes);
-        return BitConverter.ToInt32(RandomBytes);
+        Span<byte> bytes = stackalloc byte[4];
+        RandomNumberGenerator.Fill(bytes);
+        return BitConverter.ToInt32(bytes);
+    }
+
+    public static string GetReservationKey()
+    {
+        Span<byte> bytes = stackalloc byte[20];
+        RandomNumberGenerator.Fill(bytes);
+        return Convert.ToBase64String(bytes);
     }
 }

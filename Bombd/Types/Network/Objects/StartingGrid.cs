@@ -3,30 +3,44 @@ using Bombd.Serialization;
 
 namespace Bombd.Types.Network.Objects;
 
-public class StartingGrid : List<int>, INetworkWritable
+public class StartingGrid : List<GridPositionData>, INetworkWritable
 {
     public readonly Platform Platform;
     public StartingGrid(Platform platform) => Platform = platform;
     
     public void Write(NetworkWriter writer)
     {
+        int len = Math.Min(Count, 12);
         if (Platform == Platform.ModNation)
         {
-            foreach (int nameUid in this)
+            for (int i = 0; i < len; ++i)
             {
-                writer.Write(nameUid);
-                writer.Write(0);
+                GridPositionData position = this.ElementAt(i);
+                writer.Write(position.NameUid);
+                writer.Write(position.IsGuestPosition ? 1 : 0);
             }
-            writer.Clear(8 * (12 - Count));
+            writer.Clear(8 * (12 - len));
             return;
         }
-
-        foreach (int nameUid in this)
-        {
-            writer.Write(nameUid);
-            writer.Write(false);
-        }
         
+        for (int i = 0; i < len; ++i)
+        {
+            GridPositionData position = this.ElementAt(i);
+            writer.Write(position.NameUid);
+            writer.Write(position.IsGuestPosition);
+        }
         writer.Clear(5 * (12 - Count));
     }
+}
+
+public struct GridPositionData
+{
+    public GridPositionData(int uid, bool isGuest)
+    {
+        NameUid = uid;
+        IsGuestPosition = isGuest;
+    }
+    
+    public int NameUid;
+    public bool IsGuestPosition;
 }

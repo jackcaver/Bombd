@@ -5,13 +5,13 @@ namespace Bombd.Types.GameBrowser;
 
 public class GameBrowserGame : INetworkWritable
 {
-    public Platform Platform { get; set; }
-    public int TimeSinceLastPlayerJoined { get; set; }
-    public GameBrowserPlayerList Players { get; set; }
-    public string GameName { get; set; }
-    public string DisplayName { get; set; }
-    public GameAttributes Attributes { get; init; }
-    public int NumFreeSlots { get; set; }
+    public Platform Platform;
+    public int TimeSinceLastPlayerJoined;
+    public GameBrowserPlayerList Players = new();
+    public string GameName = string.Empty;
+    public string DisplayName = string.Empty;
+    public GameAttributes Attributes = new();
+    public int NumFreeSlots = 8;
     
     public void Write(NetworkWriter writer)
     {

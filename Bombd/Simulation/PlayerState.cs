@@ -20,7 +20,7 @@ public class PlayerState
     [XmlAttribute("styleAccel")] public float KartSpeedAccel;
 
     [XmlIgnore] public int Flags = PlayerStateFlags.None;
-
+    
     public override string ToString()
     {
         return

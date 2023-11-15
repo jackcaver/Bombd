@@ -6,7 +6,7 @@ namespace Bombd.Types.GameManager;
 
 public class GameManagerPlayerList : List<GamePlayer>, INetworkWritable
 {
-    public static readonly int MaxPlayers = 64;
+    private const int MaxPlayers = 64;
 
     public GameManagerPlayerList() : base(MaxPlayers)
     {

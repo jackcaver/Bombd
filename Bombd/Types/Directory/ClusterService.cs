@@ -4,8 +4,8 @@ namespace Bombd.Types.Directory;
 
 public class ClusterService : INetworkWritable
 {
-    public string ServiceName { get; set; }
-    public List<ServiceInstance> Services { get; set; } = new();
+    public string ServiceName = string.Empty;
+    public readonly List<ServiceInstance> Services = new();
 
     public void Write(NetworkWriter writer)
     {

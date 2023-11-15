@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Bombd.Helpers;
 
 namespace Bombd.Serialization;
 
@@ -46,7 +47,7 @@ public class NetworkReader
         serializable.Read(reader);
         return serializable;
     }
-
+    
     public static List<T> Deserialize<T>(string encoded, int count) where T : INetworkReadable, new()
     {
         using NetworkReaderPooled reader = NetworkReaderPool.Get(encoded);

@@ -5,10 +5,10 @@ namespace Bombd.Types.GameManager;
 
 public class GameManagerGame
 {
-    [XmlElement("gamename")] public string GameName { get; set; }
-    [XmlElement("gamebrowsername")] public string GameBrowserName { get; set; }
+    [XmlElement("gamename")] public string GameName { get; set; } = string.Empty;
+    [XmlElement("gamebrowsername")] public string GameBrowserName { get; set; } = string.Empty;
     [XmlElement("gameid")] public int GameId { get; set; }
     [XmlElement("numplayerslist")] public int PlayerCount => Players.Count;
-    [XmlElement("playerlist")] public GameManagerPlayerList Players { get; set; }
-    [XmlElement("attributes")] public GameAttributes Attributes { get; set; }
+    [XmlElement("playerlist")] public GameManagerPlayerList Players { get; set; } = new();
+    [XmlElement("attributes")] public GameAttributes Attributes { get; set; } = new();
 }

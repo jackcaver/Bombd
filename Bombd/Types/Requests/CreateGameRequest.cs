@@ -8,4 +8,5 @@ public struct CreateGameRequest
     public GameAttributes Attributes;
     public Platform Platform;
     public int OwnerUserId;
+    public bool IsRanked;
 }

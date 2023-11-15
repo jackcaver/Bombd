@@ -44,7 +44,7 @@ public enum NetMessageType : byte
     // mFlags
     ArbitratedItemAcquire = 0x1c,
     
-    // mItemType
+    // mItemTypeFplayer
     // mItemId
     // mPlayerNameUID
     // mTimeout

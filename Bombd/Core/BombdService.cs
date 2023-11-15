@@ -126,6 +126,9 @@ public abstract class BombdService
 
         if (request.TryGet("SessionKey", out string? encodedSessionKey))
         {
+            // The login requests add the SessionKey param twice, so just take the first one.
+            encodedSessionKey = encodedSessionKey.Split(",")[0];
+            
             byte[] sessionKeyBytes;
             try
             {
@@ -206,8 +209,6 @@ public abstract class BombdService
 
         if (service._methods.TryGetValue(request.MethodName, out MethodInfo? method))
         {
-            // Logger.LogInfo(_type, $"HandleServiceTransaction: Got transaction ({request.MethodName})");
-
             try
             {
                 Session session = Bombd.SessionManager.GetSession(connection);
@@ -281,13 +282,13 @@ public abstract class BombdService
         connection.Send(response.ToArraySegment(), PacketType.ReliableNetcodeData);
     }
 
-    public void SendTransactionToUser(int userId, NetcodeTransaction transaction)
+    public void SendTransaction(int userId, NetcodeTransaction transaction)
     {
         if (UserInfo.TryGetValue(userId, out ConnectionBase? connection))
             connection.Send(transaction.ToArraySegment(), PacketType.ReliableNetcodeData);
     }
 
-    public void SendTransactionToUser(int userId, string method, object value)
+    public void SendTransaction(int userId, string method, object value)
     {
         if (!UserInfo.TryGetValue(userId, out ConnectionBase? connection)) return;
 
@@ -295,20 +296,18 @@ public abstract class BombdService
         connection.Send(transaction.ToArraySegment(), PacketType.ReliableNetcodeData);
     }
 
-    public void SendToUser(int userId, ArraySegment<byte> data, PacketType type)
+    public void SendMessage(int userId, ArraySegment<byte> data, PacketType type)
     {
         if (UserInfo.TryGetValue(userId, out ConnectionBase? connection)) connection.Send(data, type);
     }
     
-    public void DisconnectUser(int userId)
+    public void Disconnect(int userId)
     {
         if (UserInfo.TryGetValue(userId, out ConnectionBase? connection)) connection.Disconnect();
     }
 
     public void OnData(ConnectionBase connection, ArraySegment<byte> data, PacketType type)
     {
-        // Logger.LogInfo(_type, $"OnData: Received packet data of type {type} with length of {data.Count}.");
-
         switch (type)
         {
             case PacketType.ReliableNetcodeData:

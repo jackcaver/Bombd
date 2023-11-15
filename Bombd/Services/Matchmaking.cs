@@ -70,7 +70,7 @@ public class Matchmaking : BombdService
             {
                 transaction = NetcodeTransaction.MakeRequest(Name, "matchmakingError");
                 transaction.Error = "noGamesAvailable";
-                SendTransactionToUser(joiningPlayer.UserId, transaction);
+                SendTransaction(joiningPlayer.UserId, transaction);
                 continue;
             }
             
@@ -78,7 +78,7 @@ public class Matchmaking : BombdService
             joiningPlayer.StartTime = TimeHelper.LocalTime;
             transaction = NetcodeTransaction.MakeRequest(Name, "matchmakingBegin");
             transaction["matchmakingBeginTime"] = joiningPlayer.StartTime.ToString();
-            SendTransactionToUser(joiningPlayer.UserId, transaction);
+            SendTransaction(joiningPlayer.UserId, transaction);
             _matchmakingPlayers.Add(joiningPlayer);
         }
         
@@ -92,7 +92,7 @@ public class Matchmaking : BombdService
             if (leaveRequest.WasRequested)
             {
                 var transaction = NetcodeTransaction.MakeRequest(Name, "matchmakingCanceled");
-                SendTransactionToUser(leaveRequest.UserId, transaction);   
+                SendTransaction(leaveRequest.UserId, transaction);   
             }
             
             _matchmakingPlayers.RemoveAt(index);
@@ -122,7 +122,7 @@ public class Matchmaking : BombdService
             request["host_ip"] = BombdConfig.Instance.ExternalIP;
             request["host_port"] = Bombd.GameServer.Port.ToString();
             request["host_cluster_uuid"] = Bombd.ClusterUuid;
-            SendTransactionToUser(player.UserId, request);
+            SendTransaction(player.UserId, request);
         }
         
         _matchmakingPlayers.Clear();

@@ -1,6 +1,7 @@
 ﻿using Bombd.Attributes;
 using Bombd.Core;
 using Bombd.Helpers;
+using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
 using Bombd.Serialization.Wrappers;
@@ -25,42 +26,46 @@ public class GameManager : BombdService
     [Transaction("joinGame")]
     public void JoinGame(TransactionContext context)
     {
-        // Check if the user reserved a slot in this game
-        int reservationKey = 0;
-        if (context.Request.TryGet("reservationKey", out string param))
-        {
-            if (!int.TryParse(param, out reservationKey))
-            {
-                context.Response.Error = "ParseFail";
-                return;
-            }
-        }
-        context.Request.TryGet("guest", out string guest);
-        
         context.Response["listenIP"] = BombdConfig.Instance.ExternalIP;
         context.Response["listenPort"] = Bombd.GameServer.Port.ToString();
         context.Response["hashSalt"] = CryptoHelper.Salt.ToString();
         context.Response["sessionId"] = context.Connection.SessionId.ToString();
+        
+        List<string> guests = new();
+        if (context.Request.TryGet("guest", out string guest))
+            guests.AddRange(guest.Split(","));
 
+        context.Request.TryGet("reservationKey", out string? reservationKey);
+        
         Bombd.GameServer.AddPlayerToJoinQueue(new PlayerJoinRequest
         {
             Timestamp = TimeHelper.LocalTime,
             UserId = context.Connection.UserId,
             GameName = context.Request["gamename"],
             ReservationKey = reservationKey,
-            Guest = guest
+            Guests = guests
         });
     }
 
     [Transaction("hostGame")]
     public void HostGame(TransactionContext context)
     {
-        GameRoom room = Bombd.RoomManager.CreateRoom(new CreateGameRequest
+        GameRoom room;
+        
+        // DEBUG: Find existing room
+        var attributes = new GameAttributes();
+        attributes["SERVER_TYPE"] = "kartPark";
+        var rooms = Bombd.RoomManager.SearchRooms(attributes, context.Connection.Platform, false);
+        if (rooms.Count != 0) room = Bombd.RoomManager.GetRoomByName(rooms[0].GameName)!;
+        else
         {
-            Platform = context.Connection.Platform,
-            Attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]),
-            OwnerUserId = context.Connection.UserId
-        });
+            room = Bombd.RoomManager.CreateRoom(new CreateGameRequest
+            {
+                Platform = context.Connection.Platform,
+                Attributes = attributes,
+                OwnerUserId = context.Connection.UserId
+            });    
+        }
         
         context.Response["gamename"] = room.Game.GameName;
         context.Response["listenIP"] = BombdConfig.Instance.ExternalIP;
@@ -68,13 +73,16 @@ public class GameManager : BombdService
         context.Response["hashSalt"] = CryptoHelper.Salt.ToString();
         context.Response["sessionId"] = context.Connection.SessionId.ToString();
         
-        context.Request.TryGet("guest", out string guest);
+        List<string> guests = new();
+        if (context.Request.TryGet("guest", out string guest))
+            guests.AddRange(guest.Split(","));
+        
         Bombd.GameServer.AddPlayerToJoinQueue(new PlayerJoinRequest
         {
             Timestamp = TimeHelper.LocalTime,
             UserId = context.Connection.UserId,
             GameName = room.Game.GameName,
-            Guest = guest
+            Guests = guests
         });
     }
 
@@ -82,15 +90,21 @@ public class GameManager : BombdService
     public void ReserveSlotsInGameForGroup(TransactionContext context)
     {
         string gameName = context.Request["gamename"];
-        if (!int.TryParse(context.Request["numSlots"], out int numGuests))
+        if (!int.TryParse(context.Request["numSlots"], out int numSlots))
         {
             context.Response.Error = "ParseFail";
             return;
         }
         
-        if (Bombd.GameServer.ReserveSlotInGame(gameName, out int reservationKey))
+        // numSlots, I'm fairly sure accounts only for other people in your party?
+        // So include ourselves in the list
+        numSlots += 1;
+        
+        
+        
+        if (Bombd.GameServer.ReserveSlotsInGame(gameName, numSlots, out string? reservationKey))
         {
-            context.Response["reservationKey"] = reservationKey.ToString();
+            context.Response["reservationKey"] = reservationKey;
         }
         else context.Response.Error = "RoomFull";
     }
@@ -118,12 +132,17 @@ public class GameManager : BombdService
         GameAttributes? attributes = null;
         if (context.Request.Has("attributes"))
             attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]);
-
+        
+        List<string> guests = new();
+        if (context.Request.TryGet("guest", out string guest))
+            guests.AddRange(guest.Split(","));
+        
         Bombd.GameServer.AddMigrationGroup(new GameMigrationRequest
         {
             HostUserId = context.Connection.UserId,
             Platform = context.Connection.Platform,
             GameName = gameName,
+            Guests = guests,
             Attributes = attributes,
             PlayerIdList = players
         });
@@ -135,10 +154,11 @@ public class GameManager : BombdService
         GameManagerGame game = args.Room.Game;
 
         string requestName = args.WasMigration ? "gameMigrationSuccess" : "joinGameCompleted";
-        SendTransactionToUser(newPlayer.UserId, requestName, game);
+        SendTransaction(newPlayer.UserId, requestName, game);
 
         var request = NetcodeTransaction.MakeRequest(Name, "playerJoined", new PlayerJoinInfo
         {
+            GameName = game.GameName,
             PlayerName = newPlayer.Username,
             PlayerId = newPlayer.PlayerId,
             UserId = newPlayer.UserId,
@@ -148,7 +168,7 @@ public class GameManager : BombdService
         foreach (GamePlayer player in args.Room.Game.Players)
         {
             if (player.UserId == newPlayer.UserId) continue;
-            SendTransactionToUser(player.UserId, request);
+            SendTransaction(player.UserId, request);
         }
     }
 
@@ -156,10 +176,11 @@ public class GameManager : BombdService
     {
         var request = NetcodeTransaction.MakeRequest(Name, "playerLeft", new PlayerLeaveInfo
         {
+            GameName = args.Room.Game.GameName,
             PlayerName = args.PlayerName,
             Reason = args.Reason
         });
 
-        foreach (GamePlayer player in args.Room.Game.Players) SendTransactionToUser(player.UserId, request);
+        foreach (GamePlayer player in args.Room.Game.Players) SendTransaction(player.UserId, request);
     }
 }

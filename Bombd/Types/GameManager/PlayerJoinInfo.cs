@@ -4,6 +4,7 @@ namespace Bombd.Types.GameManager;
 
 public class PlayerJoinInfo
 {
+    [XmlElement("gamename")] public string GameName { get; set; } = string.Empty;
     [XmlElement("playername")] public string PlayerName { get; set; } = string.Empty;
     [XmlElement("playerid")] public int PlayerId { get; set; }
     [XmlElement("userid")] public int UserId { get; set; }

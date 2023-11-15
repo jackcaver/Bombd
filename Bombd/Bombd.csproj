@@ -25,6 +25,12 @@
         <None Update="Data\Blobs\Karting\SmileyDataBlob">
           <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <None Update="Data\Blobs\ModNation\KartDataBlob">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="Data\Blobs\ModNation\CharDataBlob">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="JetBrains.Annotations" Version="2023.3.0-eap3"/>

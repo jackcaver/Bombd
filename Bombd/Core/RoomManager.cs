@@ -9,15 +9,22 @@ namespace Bombd.Core;
 
 public class RoomManager
 {
-    private readonly ConcurrentDictionary<int, GameRoom> _roomIds = new();
     private readonly ConcurrentDictionary<string, GameRoom> _rooms = new();
-    private readonly ConcurrentDictionary<int, GameRoom> _userRooms = new();
-    private readonly ConcurrentDictionary<int, int> _creationPlayerCounts = new();
-    private readonly SemaphoreSlim _playerCountLock = new(1);
     
+    private readonly Dictionary<int, GameRoom> _userRooms = new();
+    private readonly Dictionary<int, int> _creationPlayerCounts = new();
+    
+    private readonly object _roomLock = new();
+    private readonly object _playerCountLock = new();
     private int _nextGameId;
-
-    public List<GameRoom> GetRooms() => new(_rooms.Values);
+    
+    public List<GameRoom> GetRooms()
+    {
+        lock (_roomLock)
+        {
+            return new List<GameRoom>(_rooms.Values);
+        }
+    }
 
     public GameRoom? GetRoomByUser(int userId)
     {
@@ -34,28 +41,34 @@ public class RoomManager
     public GamePlayer? GetPlayerInRoom(int userId)
     {
         GameRoom? room = GetRoomByUser(userId);
-        return room?.GetPlayerByUserId(userId);
+        return room?.GetUser(userId);
     }
 
     public void DestroyRoom(GameRoom room)
     {
-        _rooms.TryRemove(room.Game.GameName, out _);
-        _roomIds.TryRemove(room.Game.GameId, out _);
+        lock (_roomLock)
+        {
+            _rooms.TryRemove(room.Game.GameName, out _);
+        }
     }
     
-    public GamePlayer? TryJoinRoom(string username, int userId, GameRoom room)
+    public GamePlayer? TryJoinRoom(string username, int userId, GameRoom room, List<string>? guests = null)
     {
-        GamePlayer? player = room.TryJoin(username, userId);
+        GamePlayer? player = room.TryJoin(username, userId, guests);
         if (player == null) return null;
-        IncrementPlayerCount(room);
+        
+        if (room.Platform == Platform.Karting)
+            IncrementPlayerCount(room);
+        
         _userRooms[player.UserId] = room;
         return player;
     }
 
-    public GamePlayer JoinRoom(string username, int userId, int playerId, GameRoom room)
+    public GamePlayer JoinRoom(string username, int userId, int playerId, GameRoom room, List<string>? guests = null)
     {
-        GamePlayer player = room.Join(username, userId, playerId);
-        IncrementPlayerCount(room);
+        GamePlayer player = room.Join(username, userId, playerId, guests);
+        if (room.Platform == Platform.Karting)
+            IncrementPlayerCount(room);
         _userRooms[player.UserId] = room;
         return player;
     }
@@ -65,118 +78,142 @@ public class RoomManager
         GameRoom? room = GetRoomByUser(userId);
         if (room == null) return false;
         
-        DecrementPlayerCount(room);
-        _userRooms.Remove(userId, out _);
+        if (room.Platform == Platform.Karting)
+            DecrementPlayerCount(room);
+        
+        _userRooms.Remove(userId);
 
-        GamePlayer player = room.GetPlayerByUserId(userId);
+        GamePlayer player = room.GetUser(userId);
         return room.TryLeave(player.PlayerId);
     }
 
     public GameRoom CreateRoom(CreateGameRequest request)
     {
+        request.Attributes["__IS_RANKED"] = request.IsRanked ? "1" : "0";
+        request.Attributes["COMM_CHECKSUM"] = ((int)request.Platform).ToString();
+        
         // Add default attributes to games if they weren't
         // sent by the game for whatever reason.
-        request.Attributes.TryAdd("__IS_RANKED", "0");
         request.Attributes.TryAdd("__JOIN_MODE", "OPEN");
         request.Attributes.TryAdd("__MM_MODE_G", "OPEN");
         request.Attributes.TryAdd("__MAX_PLAYERS", "8");
         request.Attributes.TryAdd("SERVER_TYPE", "kartPark");
-        request.Attributes.TryAdd("COMM_CHECKSUM", ((int)request.Platform).ToString());
 
         // If we can't parse the number of players, just default to an existing number.
+        // Alternatively, should we just deny the room creation request? Because how did this even happen
         if (!int.TryParse(request.Attributes["__MAX_PLAYERS"], out int maxSlots))
+        {
             maxSlots = 8;
+            request.Attributes["__MAX_PLAYERS"] = maxSlots.ToString();
+        }
         
         var type = ServerType.KartPark;
         if (request.Attributes["SERVER_TYPE"] == "competitive")
             type = ServerType.Competitive;
         else if (request.Platform == Platform.Karting)
             type = ServerType.Pod;
-        
-        int id = ++_nextGameId;
-        string name = $"gm_{request.Attributes["SERVER_TYPE"].ToLower()}_{id}";
 
-        var room = new GameRoom(new RoomCreationInfo
+        bool isUserOwnedGame = (type == ServerType.Competitive && !request.IsRanked) || (type == ServerType.Pod);
+        lock (_roomLock)
         {
-            Game = new GameManagerGame
+            int id = ++_nextGameId;
+            
+            string name = $"gm_{request.Attributes["SERVER_TYPE"].ToLower()}_{id}";
+            if (type == ServerType.KartPark)
+                request.Attributes["KART_PARK_HOME"] = name;
+            
+            var room = new GameRoom(new RoomCreationInfo
             {
-                GameName = name,
-                GameBrowserName = name,
-                GameId = id,
-                Players = new GameManagerPlayerList(),
-                Attributes = request.Attributes
-            },
-            Type = type,
-            Platform = request.Platform,
-            MaxSlots = maxSlots,
-            OwnerUserId = request.OwnerUserId
-        });
+                Game = new GameManagerGame
+                {
+                    GameName = name,
+                    GameBrowserName = name,
+                    GameId = id,
+                    Players = new GameManagerPlayerList(),
+                    Attributes = request.Attributes
+                },
+                Type = type,
+                Platform = request.Platform,
+                MaxSlots = maxSlots,
+                OwnerUserId = isUserOwnedGame ? request.OwnerUserId : -1
+            });
         
-        _rooms[name] = room;
-        _roomIds[id] = room;
-
-        return room;
+            _rooms[name] = room;
+            
+            return room;
+        }
     }
     
     public GameBrowserBusiestList GetBusiestCreations()
     {
         var busiest = new GameBrowserBusiestList();
         
-        _playerCountLock.Wait();
+        List<KeyValuePair<int, int>> creations;
+        lock (_playerCountLock)
+        {
+            creations = _creationPlayerCounts.ToList();
+        }
         
-        var creations = _creationPlayerCounts.ToList();
         creations.Sort((z, a) => a.Value.CompareTo(z.Value));
         foreach (var creation in creations)
         {
             if (busiest.Count == GameBrowserBusiestList.MaxSize) break;
             if (creation.Value == 0) continue;
             busiest.Add(creation.Key);
-        }
+        }   
         
-        _playerCountLock.Release();
         return busiest;
     }
 
     public void FillCreationPlayerCounts(GamePlayerCounts counts)
     {
-        _playerCountLock.Wait();
-        foreach (int key in counts.Data.Keys.Where(key => _creationPlayerCounts.ContainsKey(key)))
+        lock (_playerCountLock)
         {
-            counts.Data[key] = _creationPlayerCounts[key];
+            foreach (int key in counts.Data.Keys.Where(key => _creationPlayerCounts.ContainsKey(key)))
+            {
+                counts.Data[key] = _creationPlayerCounts[key];
+            }   
         }
-        _playerCountLock.Release();
     }
 
     private void IncrementPlayerCount(GameRoom room)
     {
-        _playerCountLock.Wait();
-        if (room.Game.Attributes.TryGetValue("TRACK_CREATIONID", out string? attribute))
+        if (!room.Game.Attributes.TryGetValue("TRACK_CREATIONID", out string? attribute)) return;
+        if (!int.TryParse(attribute, out int creationId)) return;
+        lock (_playerCountLock)
         {
-            if (!int.TryParse(attribute, out int creationId)) return;
-            if (!_creationPlayerCounts.TryAdd(creationId, 1)) 
+            if (!_creationPlayerCounts.TryAdd(creationId, 1))
                 _creationPlayerCounts[creationId] += 1;
         }
-        _playerCountLock.Release();
     }
     
     private void DecrementPlayerCount(GameRoom room)
     {
-        _playerCountLock.Wait();
-        if (room.Game.Attributes.TryGetValue("TRACK_CREATIONID", out string? attribute))
+        if (!room.Game.Attributes.TryGetValue("TRACK_CREATIONID", out string? attribute)) return;
+        if (!int.TryParse(attribute, out int creationId)) return;
+        lock (_playerCountLock)
         {
-            if (!int.TryParse(attribute, out int creationId)) return;
             if (_creationPlayerCounts.TryGetValue(creationId, out int playerCount))
-                _creationPlayerCounts[creationId] = playerCount - 1;
+                _creationPlayerCounts[creationId] = playerCount - 1;   
         }
-        _playerCountLock.Release();
     }
     
     public List<GameBrowserGame> SearchRooms(GameAttributes attributes, Platform id, bool createIfNoneExist = true)
     {
-        List<GameRoom> rooms = new List<GameRoom>(_rooms.Values).Where(room =>
+        List<GameRoom> rooms = GetRooms().Where(room =>
         {
             if (room.Platform != id) return false;
             if (room.NumFreeSlots == 0) return false;
+            
+            // If the owner isn't in the game, the race either ended and the gameroom is shutting down
+            // or they just haven't connected yet, so wait for that.
+            if (!room.IsOwnerInGame()) return false;
+
+            // If it's a user hosted race, wait until the host has uploaded their race settings
+            // before letting people into the session.
+            if (room.Simulation is { Type: ServerType.Competitive, HasRaceSettings: false })
+                return false;
+            
             foreach (KeyValuePair<string, string> attribute in attributes)
             {
                 if (attribute.Value == "_ANY") continue;

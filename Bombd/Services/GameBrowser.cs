@@ -116,7 +116,7 @@ public class GameBrowser : BombdService
         foreach (GamePlayer player in args.Room.Game.Players)
         {
             if (!player.ListeningForGameEvents) continue;
-            SendTransactionToUser(player.UserId, request);
+            SendTransaction(player.UserId, request);
         }
     }
 
@@ -128,7 +128,7 @@ public class GameBrowser : BombdService
         foreach (GamePlayer player in args.Room.Game.Players)
         {
             if (!player.ListeningForGameEvents) continue;
-            SendTransactionToUser(player.UserId, request);
+            SendTransaction(player.UserId, request);
         }
     }
 }

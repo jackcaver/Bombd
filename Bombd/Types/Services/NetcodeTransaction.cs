@@ -31,7 +31,13 @@ public class NetcodeTransaction
         {
             string name = ((XmlElement)element).GetElementsByTagName("name")[0].InnerText.Trim();
             string value = ((XmlElement)element).GetElementsByTagName("value")[0].InnerText.Trim();
-            _params[name] = value;
+            
+            // Just concatenate the results together if there's multiple
+            // This really only happens with the guest param in Karting.
+            if (_params.TryGetValue(name, out string? existingValue))
+                _params[name] = existingValue + "," + value;
+            else
+                _params[name] = value;
         }
     }
 

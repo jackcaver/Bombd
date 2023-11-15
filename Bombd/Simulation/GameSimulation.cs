@@ -1,12 +1,9 @@
-﻿using System.Text;
-using System.Xml.Serialization;
+﻿using System.Xml.Serialization;
 using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
-using Bombd.Serialization.Wrappers;
-using Bombd.Types.GameBrowser;
 using Bombd.Types.Network;
 using Bombd.Types.Network.Messages;
 using Bombd.Types.Network.Objects;
@@ -54,7 +51,13 @@ public class GameSimulation
         {
             _coiInfo = CreateSystemSyncObject(WebApiManager.GetCircleOfInfluence(), NetObjectType.NetCoiInfoPackage);
         }
-        
+
+        // if (Type == ServerType.Pod)
+        // {
+        //     for (int i = 0; i < 3; ++i)
+        //         AddFakePlayer($"Sackboy[{i}]");
+        // }
+
         if (Type == ServerType.Competitive)
         {
             _gameroomState = CreateSystemSyncObject(new GameroomState(Platform), NetObjectType.GameroomState);
@@ -91,7 +94,7 @@ public class GameSimulation
             NameUid = (uint)nameUid,
             KartId = 0x1324,
             CharacterId = 0x132c,
-            KartSpeedAccel = 0x30
+            KartSpeedAccel = 0x0
         };
 
         _playerInfos[userId] = new PlayerInfo
@@ -101,14 +104,27 @@ public class GameSimulation
             NetcodeGamePlayerId = playerId,
             PlayerConnectId = userId,
             GuestOfPlayerNameUid = CryptoHelper.GetRandomSecret(),
-            IsGroupLeader = true,
+            IsGroupLeader = false,
             PlayerGroupId = CryptoHelper.GetRandomSecret(),
             NameUid = openuid,
             PlayerName = username,
             PodLocation = string.Empty
         };
+
+        byte[] charDataBlob;
+        byte[] kartDataBlob;
+        if (Platform == Platform.Karting)
+        {
+            charDataBlob = File.ReadAllBytes("Data/Blobs/Karting/CharDataBlob");
+            kartDataBlob = File.ReadAllBytes("Data/Blobs/Karting/KartDataBlob");
+        }
+        else
+        {
+            charDataBlob = File.ReadAllBytes("Data/Blobs/ModNation/CharDataBlob");
+            kartDataBlob = File.ReadAllBytes("Data/Blobs/ModNation/KartDataBlob");
+        }
         
-        CreateGenericSyncObject(new PlayerConfig
+        CreateGenericSyncObject(new PlayerConfig(Platform)
         {
             Type = 0,
             NetcodeUserId = userId,
@@ -116,16 +132,19 @@ public class GameSimulation
             KartCreationId = 0x1324,
             UidName = openuid,
             Username = username,
-            CharDataBlob = File.ReadAllBytes("Data/Blobs/Karting/CharDataBlob"),
-            KartDataBlob = File.ReadAllBytes("Data/Blobs/Karting/KartDataBlob")
+            CharDataBlob = charDataBlob,
+            KartDataBlob = kartDataBlob
         }, NetObjectType.PlayerConfig, username, userId);
-        
-        CreateGenericSyncObject(new PlayerAvatar
+
+        if (Platform == Platform.Karting)
         {
-            OwnerName = username,
-            SmileyDataBlob = File.ReadAllBytes("Data/Blobs/Karting/SmileyDataBlob"),
-            FrownyDataBlob = File.ReadAllBytes("Data/Blobs/Karting/FrownyDataBlob")
-        }, NetObjectType.PlayerAvatar, username, userId);
+            CreateGenericSyncObject(new PlayerAvatar
+            {
+                OwnerName = username,
+                SmileyDataBlob = File.ReadAllBytes("Data/Blobs/Karting/SmileyDataBlob"),
+                FrownyDataBlob = File.ReadAllBytes("Data/Blobs/Karting/FrownyDataBlob")
+            }, NetObjectType.PlayerAvatar, username, userId);   
+        }
     }
 
     public bool IsKarting => Platform == Platform.Karting;
@@ -212,7 +231,7 @@ public class GameSimulation
         if (_players.Count == 0) return;
         
         // Tell everybody else in the lobby why we left...
-        BroadcastMessage(new NetMessagePlayerLeave
+        BroadcastMessage(new NetMessagePlayerLeave(Platform)
         {
             PlayerName = player.Username,
             Reason = 0
@@ -365,12 +384,20 @@ public class GameSimulation
                         Data = new List<PlayerInfo>(_playerInfos.Values)
                     }, PacketType.ReliableGameData);   
                 }
+                
+                Logger.LogDebug<GameSimulation>("Room has readied up, current state is as follows:");
+                foreach (var player in _players)
+                {
+                    Logger.LogDebug<GameSimulation>($"{player.Username}: UserId={player.UserId},PlayerId={player.PlayerId}");
+                    if (player.Guest != null)
+                        Logger.LogDebug<GameSimulation>($"  -> {player.Guest.Username}");
+                }
+                
                 break;
             }
             case RoomState.CountingDown:
             {
-                UpdateAi();
-                UpdateStartingGrid();
+                UpdateRaceSetup();
                 
                 room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.GameroomCountdownTime;
                 room.LockedForRacerJoinsValue = BombdConfig.Instance.GameroomRacerLockTime;
@@ -414,36 +441,44 @@ public class GameSimulation
         return syncObject;
     }
     
-    private void UpdateAi()
+    private void UpdateRaceSetup()
     {
         if (_raceSettings == null) return;
+        
+        _startingGrid.Value.Clear();
+        foreach (GamePlayer player in _players)
+        {
+            if (!_playerStates.TryGetValue(player.UserId, out PlayerState? state)) continue;
+            _startingGrid.Value.Add(new GridPositionData((int)state.NameUid, false));
+            if (player.Guest != null)
+                _startingGrid.Value.Add(new GridPositionData(player.Guest.NameUid, true));
+        }
         
         var owner = _players.Find(x => x.UserId == Owner);
         string username = owner?.Username ?? string.Empty;
 
         int maxAi = _aiInfo.Value.DataSet.Length;
         int maxHumans = _raceSettings.Value.MaxHumans;
-        int numAi = Math.Min(maxAi, maxHumans - _players.Count);
+        int numAi = Math.Min(maxAi, maxHumans - _startingGrid.Value.Count);
+        if (numAi <= 0) numAi = 0;
         
         _aiInfo.Value = _raceSettings.Value.AiEnabled ? 
             new AiInfo(Platform, username, numAi) : new AiInfo(Platform);
 
+        for (int i = 0; i < _aiInfo.Value.Count; ++i)
+        {
+            _startingGrid.Value.Add(new GridPositionData(
+                CryptoHelper.StringHash32(_aiInfo.Value.DataSet[i].UidName),
+                false
+            ));
+        }   
+        
         if (IsKarting)
         {
             _raceSettings.Value.NumHoard = numAi;
             _raceSettings.Sync();   
         }
-    }
 
-    private void UpdateStartingGrid()
-    {
-        _startingGrid.Value.Clear();
-        foreach (PlayerState state in _playerStates.Values) _startingGrid.Value.Add((int)state.NameUid);
-        for (int i = 0; i < _aiInfo.Value.Count; ++i)
-        {
-            int nameUid = CryptoHelper.StringHash32(_aiInfo.Value.DataSet[i].UidName);
-            _startingGrid.Value.Add(nameUid);
-        }   
         _startingGrid.Sync();
     }
 
@@ -501,6 +536,31 @@ public class GameSimulation
         _syncObjects[syncObject.Guid] = syncObject;
         return true;
     }
+
+    private void ParseGuestInfo(ArraySegment<byte> data, GamePlayer player)
+    {
+        if (player.Guest == null) return;
+        try
+        {
+            var config = PlayerConfig.ReadVersioned(data, Platform);
+            
+            // Type 1 is guest
+            if (config.Type != 1) return;
+            if ((IsKarting && config.NetcodeUserId != -1) || (IsModnation && config.NetcodeUserId != player.UserId))
+            {
+                Logger.LogWarning<GameSimulation>($"Guest doesn't belong to {player.Username}, this shouldn't happen, disconnecting!");
+                player.Disconnect();
+                return;
+            }
+            
+            player.Guest.NameUid = CryptoHelper.StringHash32(config.UidName);
+        }
+        catch (Exception)
+        {
+            Logger.LogError<GameSimulation>($"Failed to parse PlayerConfig for {player.Username}'s guest, disconnecting them from the game session.");
+            player.Disconnect();
+        }
+    }
     
     private bool UpdateUserSyncObject(int guid, ArraySegment<byte> data, GamePlayer player)
     {
@@ -512,6 +572,14 @@ public class GameSimulation
         byte[] array = new byte[data.Count];
         data.CopyTo(array);
         syncObject.Data = new ArraySegment<byte>(array);
+        
+        // If it's a player config object, pull the guest name uid from it if possible
+        var playerConfigType = NetObjectType.PlayerConfig;
+        if ((IsModnation && syncObject.Type == playerConfigType.ModnationTypeId) ||
+                                     (IsKarting && syncObject.Type == playerConfigType.KartingTypeId))
+        {
+            ParseGuestInfo(data, player);
+        }
         
         return true;
     }
@@ -532,7 +600,8 @@ public class GameSimulation
             type != NetMessageType.VoipPacket && 
             type != NetMessageType.MessageUnreliableBlock && 
             type != NetMessageType.GenericGameplay &&
-            type != NetMessageType.Gameplay)
+            type != NetMessageType.Gameplay &&
+            type != NetMessageType.SpectatorInfo)
         {
             Logger.LogDebug<GameSimulation>($"Received NetMessage {type} from {player.Username} ({(uint)player.UserId}:{(uint)player.PlayerId})");   
         }
@@ -556,7 +625,7 @@ public class GameSimulation
             }
             case NetMessageType.PlayerLeave:
             {
-                var message = NetworkReader.Deserialize<NetMessagePlayerLeave>(data);
+                var message = NetMessagePlayerLeave.ReadVersioned(data, Platform);
                 message.PlayerName = player.Username;
                 BroadcastMessage(message, PacketType.ReliableGameData);
                 break;
@@ -626,6 +695,7 @@ public class GameSimulation
                 _eventResults.AddRange(results);
                 break;
             }
+            case NetMessageType.GroupLeaderMatchmakingStatus:
             case NetMessageType.GenericGameplay:
             case NetMessageType.PlayerFinishedEvent:
             case NetMessageType.Gameplay:
@@ -651,10 +721,10 @@ public class GameSimulation
                 
                 if (_raceSettings != null) _raceSettings.Value = settings;
                 else _raceSettings = CreateSystemSyncObject(settings, NetObjectType.RaceSettings);
-
-                // byte[] eventSettingsBinary = new byte[data.Count];
-                // data.CopyTo(eventSettingsBinary);
-                // File.WriteAllBytes(_raceSettings.Value.CreationId + ".evt", eventSettingsBinary);
+                
+                Logger.LogDebug<GameSimulation>("RaceType: " + _raceSettings.Value.RaceType);
+                Logger.LogDebug<GameSimulation>("Speed: " + _raceSettings.Value.KartSpeed);
+                
                 
                 break;
             }

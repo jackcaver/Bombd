@@ -199,7 +199,14 @@ public class RudpConnection : ConnectionBase
         else if (protocol == PacketType.ReliableGameData)
         {
             offset += 1 + 1;
-            offset += buffer.ReadBoolean(offset, out bool groupCompleteFlag);
+
+            byte groupCompleteFlags = buffer[offset++];
+            bool isGroupComplete;
+            if (Platform == Platform.Karting)
+                isGroupComplete = (groupCompleteFlags & 0x80) != 0;
+            else
+                isGroupComplete = (groupCompleteFlags != 0);
+            
             offset += 4;
             offset += buffer.ReadUint16BE(offset, out ushort groupId);
             offset += buffer.ReadUint16BE(offset, out ushort groupSizeBytes);
@@ -209,7 +216,7 @@ public class RudpConnection : ConnectionBase
             Buffer.BlockCopy(buffer, offset, _groupBuffer, _groupOffset, payloadBytes);
             _groupOffset += payloadBytes;
 
-            if (groupCompleteFlag)
+            if (isGroupComplete)
             {
                 Service.OnData(this, new ArraySegment<byte>(_groupBuffer, 0, _groupOffset), protocol);
                 _groupOffset = 0;
