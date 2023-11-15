@@ -1,4 +1,4 @@
-﻿using System.Xml.Serialization;
+using System.Xml.Serialization;
 using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
@@ -399,9 +399,18 @@ public class GameSimulation
             {
                 UpdateRaceSetup();
                 
-                room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.GameroomCountdownTime;
-                room.LockedForRacerJoinsValue = BombdConfig.Instance.GameroomRacerLockTime;
-                room.LockedTimerValue = BombdConfig.Instance.GameroomTimerLockTime;
+                if (Platform == Platform.ModNation)
+                {
+                    room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.ModnationGameroomCountdownTime;
+                    room.LockedForRacerJoinsValue = BombdConfig.Instance.ModnationGameroomRacerLockTime;
+                    room.LockedTimerValue = BombdConfig.Instance.ModnationGameroomTimerLockTime;   
+                }
+                else
+                {
+                    room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.KartingGameroomCountdownTime;
+                    room.LockedForRacerJoinsValue = BombdConfig.Instance.KartingGameroomTimerLock;
+                    room.LockedTimerValue = BombdConfig.Instance.KartingGameroomTimerLock;
+                }
                 
                 break;
             }

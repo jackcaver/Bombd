@@ -1,4 +1,4 @@
-﻿namespace Bombd.Core;
+namespace Bombd.Core;
 
 public class BombdConfig
 {
@@ -25,20 +25,35 @@ public class BombdConfig
     public int EventCountdownTime { get; set; } = 5000;
 
     /// <summary>
-    ///     How long the countdown timer in gamerooms last
+    ///     How long the countdown timer in ModNation gamerooms last
     /// </summary>
-    public int GameroomCountdownTime { get; set; } = 5000;
+    public int ModnationGameroomCountdownTime { get; set; } = 30000;
 
     /// <summary>
-    ///     The countdown time where players can no longer join the gameroom.
+    ///     The countdown time where players can no longer join the gameroom in ModNation Racers.
     /// </summary>
-    public float GameroomRacerLockTime { get; set; } = 5000.0f;
+    public float ModnationGameroomRacerLockTime { get; set; } = 25000.0f;
 
     /// <summary>
-    ///     The countdown time where the timer can no longer be paused.
+    ///     The countdown time where the timer can no longer be paused in ModNation Racers.
     /// </summary>
-    public float GameroomTimerLockTime { get; set; } = 5000.0f;
+    public float ModnationGameroomTimerLockTime { get; set; } = 20000.0f;
 
+    /// <summary>
+    ///     How long the countdown timer in LittleBigPlanet Karting gamerooms last
+    /// </summary>
+    public int KartingGameroomCountdownTime { get; set; } = 60000;
+
+    /// <summary>
+    ///     The countdown time left before players can no longer join in LittleBigPlanet Karting
+    /// </summary>
+    public float KartingGameroomTimerLock { get; set; } = 5000;
+
+    /// <summary>
+    ///     How long to give the players to vote after a race is completed
+    /// </summary>
+    public int PostRaceVoteTime { get; set; } = 45000;
+    
     /// <summary>
     ///     Whether or not to force the minimum racer requirement of 2 in online races.
     /// </summary>
