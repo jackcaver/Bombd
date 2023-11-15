@@ -50,22 +50,11 @@ public class GameManager : BombdService
     [Transaction("hostGame")]
     public void HostGame(TransactionContext context)
     {
-        GameRoom room;
-        
-        // DEBUG: Find existing room
-        var attributes = new GameAttributes();
-        attributes["SERVER_TYPE"] = "kartPark";
-        var rooms = Bombd.RoomManager.SearchRooms(attributes, context.Connection.Platform, false);
-        if (rooms.Count != 0) room = Bombd.RoomManager.GetRoomByName(rooms[0].GameName)!;
-        else
-        {
-            room = Bombd.RoomManager.CreateRoom(new CreateGameRequest
-            {
-                Platform = context.Connection.Platform,
-                Attributes = attributes,
-                OwnerUserId = context.Connection.UserId
-            });    
-        }
+        GameRoom room = Bombd.RoomManager.CreateRoom(new CreateGameRequest { 
+            Platform = context.Connection.Platform, 
+            Attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]), 
+            OwnerUserId = context.Connection.UserId 
+        });
         
         context.Response["gamename"] = room.Game.GameName;
         context.Response["listenIP"] = BombdConfig.Instance.ExternalIP;
@@ -99,7 +88,6 @@ public class GameManager : BombdService
         // numSlots, I'm fairly sure accounts only for other people in your party?
         // So include ourselves in the list
         numSlots += 1;
-        
         
         
         if (Bombd.GameServer.ReserveSlotsInGame(gameName, numSlots, out string? reservationKey))
