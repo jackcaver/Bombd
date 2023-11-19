@@ -100,15 +100,7 @@ public class RudpConnection : ConnectionBase
             State = ConnectionState.WaitingForConnection;
             return;
         }
-
-        if (protocol == PacketType.Handshake)
-        {
-            Logger.LogInfo<RudpConnection>(
-                "Connection attempted handshake while already connected. Disconnecting.");
-            Disconnect();
-            return;
-        }
-
+        
         // This whole block is for handling acknowledgements and packet order.
         if (protocol != PacketType.UnreliableGameData)
         {
@@ -156,6 +148,14 @@ public class RudpConnection : ConnectionBase
                     _remoteSequence++;
                 }
             }
+        }
+        
+        if (protocol == PacketType.Handshake)
+        {
+            Logger.LogInfo<RudpConnection>(
+                "Connection attempted handshake while already connected. Disconnecting.");
+            Disconnect();
+            return;
         }
 
         if (IsAuthenticating)
