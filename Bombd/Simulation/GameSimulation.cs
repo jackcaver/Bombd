@@ -230,13 +230,6 @@ public class GameSimulation
         
         if (_players.Count == 0) return;
         
-        // Tell everybody else in the lobby why we left...
-        BroadcastMessage(new NetMessagePlayerLeave(Platform)
-        {
-            PlayerName = player.Username,
-            Reason = 0
-        }, PacketType.ReliableGameData);
-        
         // If we're the owner, change the host to someone random
         if (player.UserId == Owner)
         {
