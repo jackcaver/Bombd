@@ -1,4 +1,4 @@
-using System.Xml.Serialization;
+﻿using System.Xml.Serialization;
 using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
@@ -45,18 +45,28 @@ public class GameSimulation
         _players = players;
         Owner = owner;
         
+        // MODNATION ITEM USAGE
+            // When player first starts race, they request ArbitratedItemCreateBlock
+                // Not sure if there's an error response or if this should be sent to everybody in the server
+                // but just send it back to the player
+            // When player goes over an item, they request ArbitratedItemAcquire
+                // 
+        
+        // upon having minimum number of players
+        // it seems to wait 3 or 5 seconds until starting the timer
+        // timer lock is 55 seconds elapsed (when timer hits 5) this might also be the player lock?
+        // pregame timer in karting is 60 seconds
+        // voting time should be 45 seconds it seems
+        // after voting thrown into another pre game lobby
+        
+        
+        
         Logger.LogInfo<GameSimulation>($"Starting Game Simulation ({type}:{platform})");
         
         if (Type == ServerType.KartPark)
         {
             _coiInfo = CreateSystemSyncObject(WebApiManager.GetCircleOfInfluence(), NetObjectType.NetCoiInfoPackage);
         }
-
-        // if (Type == ServerType.Pod)
-        // {
-        //     for (int i = 0; i < 3; ++i)
-        //         AddFakePlayer($"Sackboy[{i}]");
-        // }
 
         if (Type == ServerType.Competitive)
         {
@@ -211,7 +221,7 @@ public class GameSimulation
             }
         }
     }
-
+    
     public void OnPlayerLeft(GamePlayer player)
     {
         // Make sure we're not still keeping track of the player's state even after they left.
@@ -483,12 +493,27 @@ public class GameSimulation
 
         _startingGrid.Sync();
     }
+    
+    private bool CanJoinAsRacer()
+    {
+        if (Type != ServerType.Competitive) return true;
+        var room = _gameroomState.Value;
+        
+        if (room.State == RoomState.CountingDown)
+        {
+            int pointOfNoReturn = room.LoadEventTime - (int)room.LockedForRacerJoinsValue;
+            if (TimeHelper.LocalTime >= pointOfNoReturn)
+                return false;
+        }
+        
+        return room.State != RoomState.RaceInProgress;
+    }
 
     private SyncObject? GetOwnedSyncObject(int guid, GamePlayer player)
     {
         if (!_syncObjects.TryGetValue(guid, out SyncObject? syncObject))
         {
-            Logger.LogWarning<GameSimulation>($"{player.Username} tried to perform an operation on a SyncObject that doesn't exist!");
+            Logger.LogWarning<GameSimulation>($"{player.Username} tried to perform an operation on a SyncObject that doesn't exist! ({guid})");
             return null;
         }
         
@@ -613,11 +638,10 @@ public class GameSimulation
             case NetMessageType.PlayerCreateInfo:
             {
                 var message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);
-                message.Data[0].Operation = GameJoinStatus.RacerPending;
+                // message.Data[0].Operation = GameJoinStatus.RacerPending;
                 _playerInfos[player.UserId] = message.Data[0];
                 var msg = NetworkWriter.Serialize(message);
-                BroadcastGenericMessage(msg, NetMessageType.PlayerCreateInfo, PacketType.ReliableGameData);
-                
+                BroadcastGenericMessage(player, msg, NetMessageType.PlayerCreateInfo, PacketType.ReliableGameData);
                 break;
             }
             case NetMessageType.WorldobjectCreate:
@@ -635,6 +659,19 @@ public class GameSimulation
             case NetMessageType.GameroomReady:
             {
                 _playerStates[player.UserId].Flags |= PlayerStateFlags.GameRoomReady;
+                
+                // Once the player has finished loading, we should now send them their session info
+                if (Platform == Platform.Karting)
+                {
+                    UpdateRaceSetup();
+                    var info = _playerInfos[player.UserId];
+                    info.Operation = GameJoinStatus.RacerPending;
+                    BroadcastMessage(new NetMessagePlayerCreateInfo
+                    {
+                        Data = new List<PlayerInfo> { info }
+                    }, PacketType.ReliableGameData);
+                }
+                
                 break;
             }
             case NetMessageType.GameroomStopTimer:
@@ -882,8 +919,8 @@ public class GameSimulation
                 SetCurrentGameroomState(RoomState.Ready);
             // Karting doesn't seem to allow the owner to manually start the event.
             // 5 seconds seems like a reasonable amount of time for a "last call"
-            else if (room.State == RoomState.Ready && IsKarting && _lastStateTime + 5000 < TimeHelper.LocalTime)
-                SetCurrentGameroomState(RoomState.DownloadingTracks);
+            else if (IsKarting && room.State == RoomState.Ready && _lastStateTime + 5000 < TimeHelper.LocalTime)
+                SetCurrentGameroomState(RoomState.CountingDown);
             else if (!hasMinPlayers)
                 SetCurrentGameroomState(RoomState.WaitingMinPlayers);
         }
