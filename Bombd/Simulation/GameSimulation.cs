@@ -783,6 +783,7 @@ public class GameSimulation
                 // Backup user flags
                 if (_playerStates.TryGetValue(player.UserId, out PlayerState? existingPlayerState))
                     state.Flags = existingPlayerState.Flags;
+                state.NetcodeUserId = player.UserId;
                 _playerStates[player.UserId] = state;
                 
                 BroadcastPlayerStates();

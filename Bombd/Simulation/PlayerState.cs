@@ -9,6 +9,7 @@ public class PlayerState
     [XmlIgnore] public bool HasEventVetoed;
     [XmlIgnore] public bool HasLeaderVetoed;
     [XmlIgnore] public bool IsConnecting;
+    [XmlIgnore] public int NetcodeUserId;
     
     [XmlAttribute("nameUID")] public uint NameUid;
     [XmlAttribute("pcId")] public uint PlayerConnectId;

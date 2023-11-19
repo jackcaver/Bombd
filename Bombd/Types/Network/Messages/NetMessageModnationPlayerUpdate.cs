@@ -14,7 +14,8 @@ public struct NetMessageModnationPlayerUpdate : INetworkMessage
         writer.Write(StateUpdates.Count);
         foreach (PlayerState state in StateUpdates)
         {
-            writer.Write(state.NameUid);
+            // writer.Write(state.NameUid);
+            writer.Write(state.NetcodeUserId);
             writer.Write(state.PlayerConnectId);
             writer.Write(state.Away == 1);
             writer.Write(state.Mic == 1);
