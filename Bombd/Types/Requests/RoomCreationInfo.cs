@@ -9,6 +9,6 @@ public struct RoomCreationInfo
     public GameManagerGame Game;
     public ServerType Type;
     public Platform Platform;
-    public int MaxSlots;
+    public int MaxPlayers;
     public int OwnerUserId;
 }

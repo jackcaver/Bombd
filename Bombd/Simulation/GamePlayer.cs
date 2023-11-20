@@ -18,16 +18,8 @@ public class GamePlayer
     public string Username;
     
     // Convenience accessor for the primary guest
-    public GameGuest? Guest
-    {
-        get
-        {
-            if (Guests.Count > 0)
-                return Guests[0];
-            return null;
-        }
-    }
-    
+    public GameGuest? Guest => Guests.Count > 0 ? Guests[0] : null;
+
     // Karting has multiple guests in the pod so we have to keep it in a list,
     // even though racing and ModNation only have a single guest
     public readonly List<GameGuest> Guests = new();

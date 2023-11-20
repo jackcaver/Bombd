@@ -134,7 +134,7 @@ public class RoomManager
                 },
                 Type = type,
                 Platform = request.Platform,
-                MaxSlots = maxSlots,
+                MaxPlayers = maxSlots,
                 OwnerUserId = isUserOwnedGame ? request.OwnerUserId : -1
             });
         

@@ -7,6 +7,8 @@ namespace Bombd.Simulation;
 
 public class GameRoom
 {
+    private const int MaxSlots = 12;
+    
     private readonly Dictionary<int, GamePlayer> _playerIdLookup = new();
     private readonly List<bool> _slots;
     private readonly List<int> _slotGuestCounts;
@@ -18,11 +20,12 @@ public class GameRoom
     public int Owner => Simulation.Owner;
     
     public bool IsEmpty => UsedSlots == 0;
-    public int NumFreeSlots { get; private set; }
-    public int UsedSlots => MaxSlots - NumFreeSlots;
+    public bool IsFull => UsedSlots == MaxPlayers;
+    public int NumFreeSlots => MaxPlayers - UsedSlots;
+    public int UsedSlots { get; private set; }
     
     public readonly Platform Platform;
-    public readonly int MaxSlots;
+    public int MaxPlayers;
     
     private int _gameCreationTime = TimeHelper.LocalTime;
     private int _lastPlayerJoinTime = TimeHelper.LocalTime;
@@ -33,10 +36,10 @@ public class GameRoom
         Platform = request.Platform;
         Simulation = new GameSimulation(
             request.Type, request.Platform, request.OwnerUserId, Game.Players);
-        _slots = Enumerable.Repeat(false, request.MaxSlots).ToList();
-        _slotGuestCounts = Enumerable.Repeat(0, request.MaxSlots).ToList();
-        MaxSlots = request.MaxSlots;
-        NumFreeSlots = request.MaxSlots;
+        _slots = Enumerable.Repeat(false, MaxSlots).ToList();
+        _slotGuestCounts = Enumerable.Repeat(0, MaxSlots).ToList();
+        MaxPlayers = request.MaxPlayers;
+        UsedSlots = 0;
     }
     
     public GamePlayer? TryJoin(string username, int userId, List<string>? guests = null)
@@ -92,7 +95,7 @@ public class GameRoom
         playerId = 0;
         if (NumFreeSlots <= guestCount + 1) return false;
         if (!RequestSlot(out playerId)) return false;
-        NumFreeSlots -= guestCount;
+        UsedSlots += guestCount;
         return true;
     }
 
@@ -106,8 +109,8 @@ public class GameRoom
 
         _lastPlayerJoinTime = TimeHelper.LocalTime;
         _slots[index] = true;
-        NumFreeSlots--;
-
+        UsedSlots++;
+        
         playerId = (Game.GameId << 8) | (index & 0x3f);
         return true;
     }
@@ -120,8 +123,8 @@ public class GameRoom
 
         if (_slots[slotId])
         {
-            NumFreeSlots++;
-            NumFreeSlots += _slotGuestCounts[slotId];
+            UsedSlots--;
+            UsedSlots -= _slotGuestCounts[slotId];
             
             _slots[slotId] = false;
             _slotGuestCounts[slotId] = 0;
