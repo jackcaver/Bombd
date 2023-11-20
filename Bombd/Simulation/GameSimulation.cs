@@ -635,6 +635,40 @@ public class GameSimulation
         
         switch (type)
         {
+            case NetMessageType.ItemMessage_0x10:
+            case NetMessageType.ItemDestroy:
+            case NetMessageType.ItemHitPlayer:
+            case NetMessageType.ItemHitConfirm:
+            {
+                // TODO: Item Validation 
+                //  - Verify that the player actually has the item before
+                //  - either destroying it or accepting a hit player message.
+                
+                // ItemHitConfirm gets sent by the player that's being hit, so
+                // we don't have to verify that message.
+                
+                BroadcastGenericMessage(data, type, PacketType.ReliableGameData);
+                break;
+            }
+            case NetMessageType.ArbitratedItemCreateBlock:
+            case NetMessageType.ArbitratedItemDestroyBlock:
+            {
+                // I assume this has to be sent to everyone else on the server
+                // We might also have to actually keep track of the item ids?
+                
+                BroadcastGenericMessage(data, type, PacketType.ReliableGameData);
+                break;
+            }
+            case NetMessageType.ArbitratedItemAcquire:
+            {
+                // This message can be responded to with a failure, what's the case for that?
+                // Is it just if it's currently in timeout?
+                    // E.g., you grabbed the item, but you didn't send the acquire response fast enough
+                    // so somebody else acquired it and the item is currently in a timeout phase, so you cant
+                    // acquire it?
+                BroadcastGenericMessage(data, type, PacketType.ReliableGameData);
+                break;
+            }
             case NetMessageType.PlayerCreateInfo:
             {
                 var message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);

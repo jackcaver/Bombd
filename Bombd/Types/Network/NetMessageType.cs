@@ -18,6 +18,7 @@ public enum NetMessageType : byte
     SecondaryCollision = 0xc,
     WandererUpdate = 0xd,
     Gameplay = 0xe,
+    ItemMessage_0x10 = 0x10,
     ItemDestroy = 0x11,
     ItemMoveData = 0x12,
     ItemHitPlayer = 0x13,
