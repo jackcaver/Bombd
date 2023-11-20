@@ -639,6 +639,7 @@ public class GameSimulation
             case NetMessageType.ItemDestroy:
             case NetMessageType.ItemHitPlayer:
             case NetMessageType.ItemHitConfirm:
+            case NetMessageType.SecondaryCollision:
             {
                 // TODO: Item Validation 
                 //  - Verify that the player actually has the item before
