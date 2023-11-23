@@ -127,24 +127,14 @@ public class RudpConnection : ConnectionBase
             {
                 if (protocol == PacketType.ReliableGameData)
                 {
-                    if (sequence < _remoteGamedataSequence)
-                    {
-                        _ackList.Add(new RudpAckRecord { Protocol = protocol, SequenceNumber = sequence });
-                        // Logger.LogInfo<RudpConnection>($"Received gamedata packet out of order (Got {(uint)sequence}, Expected {(uint)_remoteSequenceNumber}). Dropping packet.");
-                        return;
-                    }
-                    
+                    if (sequence <= _remoteGamedataSequence) _ackList.Add(new RudpAckRecord { Protocol = protocol, SequenceNumber = sequence });
+                    if (sequence != _remoteGamedataSequence) return;
                     _remoteGamedataSequence++;
                 }
                 else
                 {
-                    if (sequence < _remoteSequence)
-                    {
-                        _ackList.Add(new RudpAckRecord { Protocol = protocol, SequenceNumber = sequence });
-                        // Logger.LogInfo<RudpConnection>("Received network message out of order. Dropping packet.");
-                        return;
-                    }
-
+                    if (sequence <= _remoteSequence) _ackList.Add(new RudpAckRecord { Protocol = protocol, SequenceNumber = sequence });
+                    if (sequence != _remoteSequence) return;
                     _remoteSequence++;
                 }
             }
