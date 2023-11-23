@@ -316,8 +316,7 @@ public class RudpConnection : ConnectionBase
         int count;
         if (len <= MaxPayloadSize) count = 1;
         else count = (len + MaxPayloadSize - 1) / MaxPayloadSize;
-
-        ushort groupSize = (ushort)len;
+        
         ushort groupNumber = _localGroupNumber++;
 
         int offset = 0;
@@ -333,7 +332,7 @@ public class RudpConnection : ConnectionBase
             if (protocol == PacketType.ReliableNetcodeData)
                 msg.EncodeNetcode(groupNumber, _localSequence++, slice, len == 0);
             else
-                msg.EncodeGamedata(groupNumber, _localGamedataSequence++, groupSize, slice, len == 0);
+                msg.EncodeGamedata(groupNumber, _localGamedataSequence++, len, slice, len == 0);
 
             _sendBuffer.Add(msg);
         }

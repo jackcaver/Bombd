@@ -1,4 +1,4 @@
-﻿using Bombd.Extensions;
+using Bombd.Extensions;
 using Bombd.Helpers;
 
 namespace Bombd.Protocols.RUDP;
@@ -44,7 +44,7 @@ public class RudpMessage
         _data.WriteInt32BE(checksumOffset, checksum);
     }
 
-    public void EncodeGamedata(ushort groupId, uint sequence, ushort groupSize, ArraySegment<byte> data, bool complete)
+    public void EncodeGamedata(ushort groupId, uint sequence, int groupSize, ArraySegment<byte> data, bool complete)
     {
         Protocol = PacketType.ReliableGameData;
         Sequence = sequence;
@@ -52,10 +52,14 @@ public class RudpMessage
         _offset += _data.WriteUint8(_offset, (byte)PacketType.ReliableGameData);
         _offset += _data.WriteUint8(_offset, 0xFE);
         _offset += _data.WriteUint8(_offset, 0x2);
-        _offset += _data.WriteUint8(_offset, (byte)(complete ? 0x80 : 0x0));
+
+        byte completeFlags = (byte)(complete ? 0x80 : 0x0);
+        completeFlags |= (byte)((groupSize >> 0x10) & 0x7f);
+        
+        _offset += _data.WriteUint8(_offset, completeFlags);
         _offset += _data.WriteUint32BE(_offset, sequence);
         _offset += _data.WriteUint16BE(_offset, groupId);
-        _offset += _data.WriteUint16BE(_offset, groupSize);
+        _offset += _data.WriteUint16BE(_offset, (ushort)groupSize);
 
         int checksumOffset = _offset;
         _offset += _data.WriteUint16BE(_offset, 0);
