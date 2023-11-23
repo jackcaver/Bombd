@@ -22,8 +22,8 @@ public struct NetMessageKartingPlayerUpdate : INetworkMessage, INetworkReadable
                 HasEventVetoed = reader.ReadBool(),
                 HasLeaderVetoed = reader.ReadBool(),
                 IsConnecting = reader.ReadBool(),
-                KartHandlingDrift = reader.ReadInt32(),
-                KartSpeedAccel = reader.ReadInt32(),
+                KartHandlingDrift = reader.ReadSingle(),
+                KartSpeedAccel = reader.ReadSingle(),
                 KartId = reader.ReadUInt32(),
                 CharacterId = reader.ReadUInt32()
             };
