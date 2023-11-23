@@ -1,4 +1,4 @@
-﻿using System.Xml.Serialization;
+using System.Xml.Serialization;
 using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
@@ -673,7 +673,7 @@ public class GameSimulation
             case NetMessageType.PlayerCreateInfo:
             {
                 var message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);
-                // message.Data[0].Operation = GameJoinStatus.RacerPending;
+                message.Data[0].Operation = GameJoinStatus.RacerPending;
                 _playerInfos[player.UserId] = message.Data[0];
                 var msg = NetworkWriter.Serialize(message);
                 BroadcastGenericMessage(player, msg, NetMessageType.PlayerCreateInfo, PacketType.ReliableGameData);
@@ -703,8 +703,13 @@ public class GameSimulation
                     info.Operation = GameJoinStatus.RacerPending;
                     BroadcastMessage(new NetMessagePlayerCreateInfo
                     {
-                        Data = new List<PlayerInfo> { info }
+                        Data = new List<PlayerInfo>(_playerInfos.Values)
                     }, PacketType.ReliableGameData);
+                    
+                    // BroadcastMessage(new NetMessagePlayerCreateInfo
+                    // {
+                    //     Data = new List<PlayerInfo> { info }
+                    // }, PacketType.ReliableGameData);
                 }
                 
                 break;
@@ -796,10 +801,6 @@ public class GameSimulation
                 if (_raceSettings != null) _raceSettings.Value = settings;
                 else _raceSettings = CreateSystemSyncObject(settings, NetObjectType.RaceSettings);
                 
-                Logger.LogDebug<GameSimulation>("RaceType: " + _raceSettings.Value.RaceType);
-                Logger.LogDebug<GameSimulation>("Speed: " + _raceSettings.Value.KartSpeed);
-                
-                
                 break;
             }
             case NetMessageType.VoipPacket:
@@ -824,25 +825,25 @@ public class GameSimulation
             case NetMessageType.PlayerStateUpdate:
             {
                 PlayerState state;
-                if (IsKarting)
+                try
                 {
-                    var message = NetworkReader.Deserialize<NetMessageKartingPlayerUpdate>(data);
-                    state = message.StateUpdates.ElementAt(0);
-                }
-                else
-                {
-                    try
+                    if (IsKarting)
+                    {
+                        var message = NetworkReader.Deserialize<NetMessageKartingPlayerUpdate>(data);
+                        state = message.StateUpdates.ElementAt(0);
+                    }
+                    else
                     {
                         using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
                         using var stringReader = new StringReader(reader.ReadString(reader.Capacity));
                         state = (PlayerState)_stateSerializer.Deserialize(stringReader)!;
                     }
-                    catch (Exception)
-                    {
-                        Logger.LogWarning<GameSimulation>($"Failed to parse playerStateUpdate for {player.Username}, disconnecting them from the session.");
-                        player.Disconnect();
-                        break;
-                    }
+                }
+                catch (Exception)
+                {
+                    Logger.LogWarning<GameSimulation>($"Failed to parse playerStateUpdate for {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
                 }
                 
                 // Backup user flags
