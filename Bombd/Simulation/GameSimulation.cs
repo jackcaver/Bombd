@@ -1,4 +1,4 @@
-using System.Xml.Serialization;
+﻿using System.Xml.Serialization;
 using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
@@ -672,11 +672,36 @@ public class GameSimulation
             }
             case NetMessageType.PlayerCreateInfo:
             {
-                var message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);
-                message.Data[0].Operation = GameJoinStatus.RacerPending;
-                _playerInfos[player.UserId] = message.Data[0];
-                var msg = NetworkWriter.Serialize(message);
-                BroadcastGenericMessage(player, msg, NetMessageType.PlayerCreateInfo, PacketType.ReliableGameData);
+                NetMessagePlayerCreateInfo message;
+                try
+                {
+                    message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);
+                }
+                catch (Exception)
+                {
+                    Logger.LogWarning<GameSimulation>($"Failed to parse PlayerCreateInfo for {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+
+                if (message.Data.Count != 1)
+                {
+                    Logger.LogWarning<GameSimulation>($"PlayerCreateInfo from {player.Username} doesn't contain any data! Disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+
+                var info = message.Data[0];
+                
+                // The player create info gets sent to the server with an operation of type none,
+                // send it to the other players telling them we're joining.
+                // TODO: I think we have to check the current state of the gameroom and send back racer or spectator accordingly.
+                info.Operation = GameJoinStatus.RacerPending;
+                
+                // Does the player need their status back? If we changed the status maybe, but we should probably
+                // just send it back when their gameroom is ready.
+                BroadcastMessage(player, message, PacketType.ReliableGameData);
+                
                 break;
             }
             case NetMessageType.WorldobjectCreate:
@@ -686,8 +711,22 @@ public class GameSimulation
             }
             case NetMessageType.PlayerLeave:
             {
-                var message = NetMessagePlayerLeave.ReadVersioned(data, Platform);
+                NetMessagePlayerLeave message;
+                try
+                {
+                    message = NetworkReader.Deserialize<NetMessagePlayerLeave>(data);
+                }
+                catch (Exception)
+                {
+                    Logger.LogWarning<GameSimulation>(
+                        $"Failed to parse PlayerLeave message from {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+
+                // The message doesn't include the player's username for whatever reason, just their leave reason.
                 message.PlayerName = player.Username;
+                
                 BroadcastMessage(message, PacketType.ReliableGameData);
                 break;
             }
@@ -722,8 +761,19 @@ public class GameSimulation
             }
             case NetMessageType.SpectatorInfo:
             {
+                // Only the owner should be able to update the spectator info for the gameroom
                 if (player.UserId != Owner) break;
-                _raceInfo.Value = SpectatorInfo.ReadVersioned(data, Platform);
+                
+                try
+                {
+                    _raceInfo.Value = SpectatorInfo.ReadVersioned(data, Platform);
+                }
+                catch (Exception)
+                {
+                    Logger.LogWarning<GameSimulation>($"Failed to parse SpectatorInfo from {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                }
+                
                 break;
             }
             case NetMessageType.GameroomDownloadTracksComplete:
@@ -767,7 +817,8 @@ public class GameSimulation
                 }
                 catch (Exception)
                 {
-                    Logger.LogWarning<GameSimulation>($"Failed to parse EventResultsPreliminary for {player.Username}");
+                    Logger.LogWarning<GameSimulation>($"Failed to parse EventResultsPreliminary for {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
                     break;
                 }
                 
@@ -791,8 +842,18 @@ public class GameSimulation
             {
                 // Only the host should be allowed to update event settings I'm fairly sure
                 if (player.UserId != Owner) break;
-                
-                var settings = EventSettings.ReadVersioned(data, Platform);
+
+                EventSettings settings;
+                try
+                {
+                    settings = EventSettings.ReadVersioned(data, Platform);
+                }
+                catch (Exception)
+                {
+                    Logger.LogWarning<GameSimulation>($"Failed to parse EventSettingsUpdate from {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
                 
                 // This is mostly only used for debugging purposes.
                 if (!BombdConfig.Instance.EnforceMinimumRacerRequirement)
@@ -841,7 +902,7 @@ public class GameSimulation
                 }
                 catch (Exception)
                 {
-                    Logger.LogWarning<GameSimulation>($"Failed to parse playerStateUpdate for {player.Username}, disconnecting them from the session.");
+                    Logger.LogWarning<GameSimulation>($"Failed to parse PlayerStateUpdate for {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
@@ -859,7 +920,18 @@ public class GameSimulation
 
             case NetMessageType.SyncObjectRemove:
             {
-                var message = NetworkReader.Deserialize<NetMessageSyncObjectRemove>(data);
+                NetMessageSyncObjectRemove message;
+                try
+                {
+                    message = NetworkReader.Deserialize<NetMessageSyncObjectRemove>(data);
+                }
+                catch (Exception)
+                {
+                    Logger.LogWarning<GameSimulation>($"Failed to parse SyncObjectRemove message from {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+                
                 if (RemoveUserSyncObject(message.Guid, player))
                 {
                     BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
@@ -869,7 +941,17 @@ public class GameSimulation
             
             case NetMessageType.SyncObjectUpdate:
             {
-                var message = NetworkReader.Deserialize<NetMessageSyncObjectUpdate>(data);
+                NetMessageSyncObjectUpdate message;
+                try
+                {
+                    message = NetworkReader.Deserialize<NetMessageSyncObjectUpdate>(data);
+                }
+                catch (Exception)
+                {
+                    Logger.LogWarning<GameSimulation>($"Failed to parse SyncObjectUpdate message from {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
                 
                 if (UpdateUserSyncObject(message.Guid, message.Data, player))
                 {
@@ -883,7 +965,18 @@ public class GameSimulation
                 bool success = false;
                 if (IsModnation)
                 {
-                    var message = NetworkReader.Deserialize<NetMessageSyncObject>(data);
+                    NetMessageSyncObject message;
+                    try
+                    {
+                        message = NetworkReader.Deserialize<NetMessageSyncObject>(data);
+                    }
+                    catch (Exception)
+                    {
+                        Logger.LogWarning<GameSimulation>($"Failed to parse SyncObject message from {player.Username}, disconnecting them from the session.");
+                        player.Disconnect();
+                        break;
+                    }
+                    
                     switch (message.MessageType)
                     {
                         case NetObjectMessageType.Create:
@@ -906,7 +999,18 @@ public class GameSimulation
 
                 if (IsKarting)
                 {
-                    var message = NetworkReader.Deserialize<NetMessageSyncObjectCreate>(data);
+                    NetMessageSyncObjectCreate message;
+                    try
+                    {
+                        message = NetworkReader.Deserialize<NetMessageSyncObjectCreate>(data);
+                    }
+                    catch (Exception)
+                    {
+                        Logger.LogWarning<GameSimulation>($"Failed to parse SyncObjectCreate message from {player.Username}, disconnecting them from the session.");
+                        player.Disconnect();
+                        break;
+                    }
+                    
                     success = PersistUserSyncedObject(new SyncObject(message, player.UserId), player);
                 }
 

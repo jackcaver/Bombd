@@ -61,12 +61,34 @@ public class NetworkMessages
         return payload;
     }
     
-    public static ArraySegment<byte> Unpack(NetworkReader reader, out NetMessageType type, out int sender)
+    public static bool Unpack(NetworkReader reader, Platform platform, out NetMessageType type, out int sender, out ArraySegment<byte> message)
     {
+        message = default;
+        type = 0;
+        sender = 0;
+        
+        if (reader.Capacity < HeaderSize) return false;
+        
         type = (NetMessageType)reader.ReadInt8();
-        reader.Offset += 1;
+        
+        // The extra size in ModNation is just random bytes, probably unused
+        // in Karting it is actually used.
+        byte extraSize = reader.ReadInt8();
         int size = reader.ReadUInt16();
+        if (platform == Platform.Karting)
+            size |= (extraSize << 0x10);
+        
         sender = reader.ReadInt32();
-        return reader.ReadSegment(size - HeaderSize);
+
+        // Size includes the header bytes
+        size -= HeaderSize;
+        
+        // Messages should contain exactly as much data as their header dictates
+        if (size != reader.Remaining)
+            return false;
+        
+        message = reader.ReadSegment(size);
+        
+        return true;
     }
 }

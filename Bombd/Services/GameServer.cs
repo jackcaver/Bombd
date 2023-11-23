@@ -402,15 +402,14 @@ public class GameServer : BombdService
         GamePlayer? player = Bombd.RoomManager.GetPlayerInRoom(connection.UserId);
         if (player == null) return;
         
-        // Network messages have a minimum of 8 bytes in their header.
-        // Not going to disconnect, but we definitely shouldn't process it.
-        if (data.Count < 8) return;
-
-        // Not sure if there's any actual need for the sender, we already know who this is from the
-        // connection id? Do more research, I suppose.
         using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
-        ArraySegment<byte> message = NetworkMessages.Unpack(reader, out NetMessageType type, out int sender);
-
+        if (!NetworkMessages.Unpack(reader, connection.Platform, out NetMessageType type, out int sender, out ArraySegment<byte> message))
+        {
+            Logger.LogError<GameServer>($"{player.Username} sent an invalid network message, disconnecting them from their current session!");
+            player.Disconnect();
+            return;
+        }
+        
         player.OnNetworkMessage(type, sender, message);
     }
 

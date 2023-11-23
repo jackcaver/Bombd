@@ -1,4 +1,4 @@
-﻿using Bombd.Serialization;
+using Bombd.Serialization;
 using Bombd.Simulation;
 
 namespace Bombd.Types.Network.Messages;

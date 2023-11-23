@@ -19,6 +19,7 @@ public class NetworkReader
     }
 
     public int Capacity => _buffer.Count;
+    public int Remaining => _buffer.Count - Offset;
 
     public void SetBuffer(ArraySegment<byte> segment)
     {

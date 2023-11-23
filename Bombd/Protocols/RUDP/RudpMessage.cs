@@ -1,4 +1,4 @@
-using Bombd.Extensions;
+﻿using Bombd.Extensions;
 using Bombd.Helpers;
 
 namespace Bombd.Protocols.RUDP;
