@@ -239,8 +239,8 @@ public class RudpConnection : ConnectionBase
 
         foreach (RudpMessage message in _sendBuffer)
         {
-            if (message.Timestamp + ResendTime <= time) continue;
-
+            if (time - message.Timestamp < ResendTime) continue;
+            
             message.Timestamp = time;
             _server.Send(this, message.GetArraySegment());
         }
