@@ -120,8 +120,28 @@ public class GameManager : BombdService
     [Transaction("leaveCurrentGame")]
     public void LeaveCurrentGame(TransactionContext context)
     {
-        Bombd.GameServer.AddPlayerToLeaveQueue(context.Connection.UserId, context.Connection.Username,
-            "Player left game");
+        GamePlayer? player = Bombd.RoomManager.GetPlayerInRoom(context.Connection.UserId);
+        if (player == null)
+        {
+            context.Response.Error = "notInGame";
+            return;
+        }
+
+        string currentGameName = player.Room.Game.GameName;
+        if (!context.Request.TryGet("gamename", out string? gameName))
+            gameName = currentGameName;
+        
+        // For the most part, leaveCurrentGame is basically pointless since the server will 
+        // disconnect users from games if they drop the connection to the server.
+        // But Karting will send leaveCurrentGame for the old pod gameroom *after* they
+        // join another game, so just handle that case here by returning early.
+        if (gameName != currentGameName)
+        {
+            context.Response.Error = "alreadyLeftGame";
+            return;
+        }
+        
+        Bombd.GameServer.AddPlayerToLeaveQueue(context.Connection.UserId, context.Connection.Username, "leftGame");
     }
 
     [Transaction("migrateToGame")]

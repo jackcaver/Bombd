@@ -256,8 +256,7 @@ public class GameServer : BombdService
             // Karting doesn't use migrations and just switches games, so make sure we leave the old room.
             // TEMP: Wait until player has left?
             GamePlayer? existingPlayer = Bombd.RoomManager.GetPlayerInRoom(request.UserId);
-            if (existingPlayer != null)
-                LeaveGameInternal(existingPlayer, "gameMigration");
+            if (existingPlayer != null) LeaveGameInternal(existingPlayer, "gameMigration");
 
             if (UserInfo.TryGetValue(request.UserId, out ConnectionBase? connection))
             {
