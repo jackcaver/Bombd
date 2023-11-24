@@ -3,6 +3,7 @@
 public struct PlayerJoinRequest
 {
     public int Timestamp;
+    public string Username;
     public int UserId;
     public string GameName;
     public string? ReservationKey;

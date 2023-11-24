@@ -19,8 +19,6 @@ public class NetcodeTransaction
 
     public NetcodeTransaction(string xml)
     {
-        Logger.LogInfo<NetcodeTransaction>(xml);
-
         var document = new XmlDocument();
         document.LoadXml(xml);
         ServiceName = document.SelectSingleNode("service").Attributes["name"].Value;
@@ -39,6 +37,9 @@ public class NetcodeTransaction
             else
                 _params[name] = value;
         }
+        
+        if (MethodName != "logClientMessage")
+            Logger.LogTrace<NetcodeTransaction>(xml);
     }
 
     private NetcodeTransaction(string type, string service, string method)
@@ -140,7 +141,9 @@ public class NetcodeTransaction
         }
         else document.CreateXmlElement(method, "error", Error);
 
-        Logger.LogInfo<NetcodeTransaction>(document.OuterXml);
+        if (MethodName != "logClientMessage")
+            Logger.LogTrace<NetcodeTransaction>(document.OuterXml);
+        
         return Encoding.UTF8.GetBytes(document.OuterXml);
     }
 }

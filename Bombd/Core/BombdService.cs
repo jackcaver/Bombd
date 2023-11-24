@@ -203,7 +203,7 @@ public abstract class BombdService
         BombdService service = this;
         if (redirect != null)
         {
-            Logger.LogInfo(_type, $"HandleServiceTransaction: Transaction is being redirected to {redirect.Name}");
+            Logger.LogTrace(_type, $"HandleServiceTransaction: Transaction is being redirected to {redirect.Name}");
             service = redirect;
         }
 
@@ -257,7 +257,8 @@ public abstract class BombdService
             return;
         }
 
-        Logger.LogInfo(_type, $"HandleServiceTransaction: Got transaction ({request.MethodName})");
+        if (request.MethodName != "logClientMessage")
+            Logger.LogInfo(_type, $"HandleServiceTransaction: Got transaction ({request.MethodName})");
 
         NetcodeTransaction response = request.MakeResponse();
         object? value = null;

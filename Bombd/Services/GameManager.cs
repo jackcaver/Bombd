@@ -17,6 +17,8 @@ namespace Bombd.Services;
 [Service("gamemanager", 10505, ProtocolType.TCP)]
 public class GameManager : BombdService
 {
+    private string KartParkName = string.Empty;
+    
     public GameManager()
     {
         Bombd.GameServer.OnPlayerJoined += OnPlayerJoin;
@@ -39,6 +41,7 @@ public class GameManager : BombdService
         
         Bombd.GameServer.AddPlayerToJoinQueue(new PlayerJoinRequest
         {
+            Username = context.Connection.Username,
             Timestamp = TimeHelper.LocalTime,
             UserId = context.Connection.UserId,
             GameName = context.Request["gamename"],
@@ -50,6 +53,20 @@ public class GameManager : BombdService
     [Transaction("hostGame")]
     public void HostGame(TransactionContext context)
     {
+
+        // GameRoom room;
+        // if (string.IsNullOrEmpty(KartParkName) || Bombd.RoomManager.GetRoomByName(KartParkName) == null)
+        // {
+        //     room = Bombd.RoomManager.CreateRoom(new CreateGameRequest { 
+        //         Platform = context.Connection.Platform, 
+        //         Attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]), 
+        //         OwnerUserId = context.Connection.UserId 
+        //     });
+        //
+        //     KartParkName = room.Game.GameName;
+        // }
+        // else room = Bombd.RoomManager.GetRoomByName(KartParkName)!;
+        
         GameRoom room = Bombd.RoomManager.CreateRoom(new CreateGameRequest { 
             Platform = context.Connection.Platform, 
             Attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]), 
@@ -68,6 +85,7 @@ public class GameManager : BombdService
         
         Bombd.GameServer.AddPlayerToJoinQueue(new PlayerJoinRequest
         {
+            Username = context.Connection.Username,
             Timestamp = TimeHelper.LocalTime,
             UserId = context.Connection.UserId,
             GameName = room.Game.GameName,
@@ -84,11 +102,8 @@ public class GameManager : BombdService
             context.Response.Error = "ParseFail";
             return;
         }
-        
-        // numSlots, I'm fairly sure accounts only for other people in your party?
-        // So include ourselves in the list
-        numSlots += 1;
-        
+
+        numSlots++;
         
         if (Bombd.GameServer.ReserveSlotsInGame(gameName, numSlots, out string? reservationKey))
         {
