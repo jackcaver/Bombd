@@ -5,7 +5,7 @@ namespace Bombd.Types.Network.Messages;
 
 public struct NetMessageSyncObjectRemove : INetworkMessage, INetworkReadable
 {
-    public NetMessageType Type => NetMessageType.SyncObjectUpdate;
+    public NetMessageType Type => NetMessageType.SyncObjectRemove;
 
     public int Guid;
     
