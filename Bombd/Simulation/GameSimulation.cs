@@ -160,6 +160,16 @@ public class GameSimulation
     public bool IsKarting => Platform == Platform.Karting;
     public bool IsModnation => Platform == Platform.ModNation;
     public bool HasRaceSettings => _raceSettings != null;
+
+    public bool IsHostReady()
+    {
+        if (Owner == -1) return true;
+        if (_playerStates.TryGetValue(Owner, out PlayerState? state))
+        {
+            return !state.IsConnecting;
+        }
+        return false;
+    }
     
     public void OnPlayerJoin(GamePlayer player)
     {
@@ -910,6 +920,11 @@ public class GameSimulation
                 // Backup user flags
                 if (_playerStates.TryGetValue(player.UserId, out PlayerState? existingPlayerState))
                     state.Flags = existingPlayerState.Flags;
+                else
+                    // I'm fairly sure the player isn't actually "ready" and thus connecting
+                    // until the server receives the second player state update.
+                    state.IsConnecting = true;
+                
                 state.NetcodeUserId = player.UserId;
                 _playerStates[player.UserId] = state;
                 

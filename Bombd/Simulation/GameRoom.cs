@@ -141,6 +141,12 @@ public class GameRoom
     {
         return Owner == -1 || _userIdLookup.ContainsKey(Owner);
     }
+
+    public bool IsReadyToJoin(int userId)
+    {
+        if (userId == Owner || Owner == -1) return true;
+        return Simulation.IsHostReady();
+    }
     
     public GamePlayer GetUser(int userId) => _userIdLookup[userId];
     public GamePlayer GetPlayer(int playerId) => _playerIdLookup[playerId];
