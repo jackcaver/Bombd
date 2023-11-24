@@ -640,7 +640,7 @@ public class GameSimulation
             type != NetMessageType.Gameplay &&
             type != NetMessageType.SpectatorInfo)
         {
-            Logger.LogDebug<GameSimulation>($"Received NetMessage {type} from {player.Username} ({(uint)player.UserId}:{(uint)player.PlayerId})");   
+            Logger.LogTrace<GameSimulation>($"Received NetMessage {type} from {player.Username} ({(uint)player.UserId}:{(uint)player.PlayerId})");   
         }
         
         switch (type)
@@ -700,7 +700,7 @@ public class GameSimulation
                     player.Disconnect();
                     break;
                 }
-
+                
                 var info = message.Data[0];
                 
                 // The player create info gets sent to the server with an operation of type none,
@@ -710,7 +710,10 @@ public class GameSimulation
                 
                 // Does the player need their status back? If we changed the status maybe, but we should probably
                 // just send it back when their gameroom is ready.
-                BroadcastMessage(player, message, PacketType.ReliableGameData);
+                BroadcastMessage(message, PacketType.ReliableGameData);
+                
+                // Make sure to cache the player information
+                _playerInfos[player.UserId] = info;
                 
                 break;
             }
