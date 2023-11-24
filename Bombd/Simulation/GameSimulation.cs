@@ -248,6 +248,16 @@ public class GameSimulation
             BroadcastMessage(player, message, PacketType.ReliableGameData);
             _syncObjects.Remove(pair.Key);
         }
+
+        // If the player hasn't sent a leave reason, send a generic one
+        if (!player.HasSentLeaveReason)
+        {
+            BroadcastMessage(new NetMessagePlayerLeave(Platform)
+            {
+                PlayerName = player.Username,
+                Reason = 0
+            }, PacketType.ReliableGameData);
+        }
         
         if (_players.Count == 0) return;
         
@@ -753,7 +763,7 @@ public class GameSimulation
                 NetMessagePlayerLeave message;
                 try
                 {
-                    message = NetworkReader.Deserialize<NetMessagePlayerLeave>(data);
+                    message = NetMessagePlayerLeave.ReadVersioned(data, Platform);
                 }
                 catch (Exception)
                 {
@@ -762,11 +772,12 @@ public class GameSimulation
                     player.Disconnect();
                     break;
                 }
-
+                
                 // The message doesn't include the player's username for whatever reason, just their leave reason.
                 message.PlayerName = player.Username;
+                player.HasSentLeaveReason = true;
                 
-                BroadcastMessage(message, PacketType.ReliableGameData);
+                BroadcastMessage(player, message, PacketType.ReliableGameData);
                 break;
             }
             case NetMessageType.GameroomReady:

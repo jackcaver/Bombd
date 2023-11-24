@@ -25,6 +25,7 @@ public class GamePlayer
     public readonly List<GameGuest> Guests = new();
     
     public bool IsFakePlayer;
+    public bool HasSentLeaveReason;
     public bool ListeningForGameEvents;
     
     public void OnNetworkMessage(NetMessageType type, int sender, ArraySegment<byte> data)
