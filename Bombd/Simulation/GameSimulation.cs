@@ -236,7 +236,8 @@ public class GameSimulation
     {
         // Make sure we're not still keeping track of the player's state even after they left.
         _playerStates.Remove(player.UserId);
-
+        _playerInfos.Remove(player.UserId);
+        
         // Destroy all sync objects owned by the player, this will realistically only be the player info object,
         // but just to be safe search for all owned objects anyway.
         IEnumerable<KeyValuePair<int, SyncObject>>
@@ -249,6 +250,9 @@ public class GameSimulation
         }
         
         if (_players.Count == 0) return;
+        
+        // Make sure to re-order the pod if necessary
+        if (Type == ServerType.Pod) RecalculatePodPositions();
         
         // If we're the owner, change the host to someone random
         if (player.UserId == Owner)
@@ -265,6 +269,23 @@ public class GameSimulation
             }
             BroadcastGenericIntMessage(randomPlayer.UserId, NetMessageType.LeaderChangeRequest, PacketType.ReliableGameData);
         }
+    }
+
+    public void RecalculatePodPositions()
+    {
+        int position = 1;
+        foreach (GamePlayer player in _players)
+        {
+            if (!_playerInfos.TryGetValue(player.UserId, out PlayerInfo? info)) continue;
+            info.PodLocation = $"POD_Player0{position++}_Placer";
+            if (player.Guest != null) position++;
+        }
+        
+        // Send the new session info to everybody in the game
+        BroadcastMessage(new NetMessagePlayerCreateInfo
+        {
+            Data = new List<PlayerInfo>(_playerInfos.Values)
+        }, PacketType.ReliableGameData);
     }
 
     private void BroadcastVoipData(GamePlayer sender, ArraySegment<byte> data)
@@ -714,6 +735,11 @@ public class GameSimulation
                 
                 // Make sure to cache the player information
                 _playerInfos[player.UserId] = info;
+                
+                // Since we have the player info now, we can recalculate the positions in
+                // pod, if relevant
+                if (Type == ServerType.Pod) 
+                    RecalculatePodPositions();
                 
                 break;
             }
