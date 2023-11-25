@@ -200,6 +200,9 @@ public class RoomManager
     {
         List<GameRoom> rooms = GetRooms().Where(room =>
         {
+            // Don't allow searching for other people's pod instances
+            if (room.Simulation.Type == ServerType.Pod) return false;
+            
             if (room.Platform != id) return false;
             if (room.NumFreeSlots < freeSlotsRequired) return false;
             
