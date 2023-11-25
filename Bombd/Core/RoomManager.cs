@@ -96,22 +96,20 @@ public class RoomManager
         // sent by the game for whatever reason.
         request.Attributes.TryAdd("__JOIN_MODE", "OPEN");
         request.Attributes.TryAdd("__MM_MODE_G", "OPEN");
-        request.Attributes.TryAdd("__MAX_PLAYERS", "8");
         request.Attributes.TryAdd("SERVER_TYPE", "kartPark");
 
-        // If we can't parse the number of players, just default to an existing number.
-        // Alternatively, should we just deny the room creation request? Because how did this even happen
-        if (!int.TryParse(request.Attributes["__MAX_PLAYERS"], out int maxSlots))
-        {
-            maxSlots = 8;
-            request.Attributes["__MAX_PLAYERS"] = maxSlots.ToString();
-        }
-        
         var type = ServerType.KartPark;
         if (request.Attributes["SERVER_TYPE"] == "competitive")
             type = ServerType.Competitive;
         else if (request.Platform == Platform.Karting)
             type = ServerType.Pod;
+        
+        // If we can't parse the number of players, just default to an existing number.
+        if (!int.TryParse(request.Attributes["__MAX_PLAYERS"], out int maxSlots))
+        {
+            maxSlots = type == ServerType.Pod ? 4 : 8;
+            request.Attributes["__MAX_PLAYERS"] = maxSlots.ToString();
+        }
 
         bool isUserOwnedGame = (type == ServerType.Competitive && !request.IsRanked) || (type == ServerType.Pod);
         lock (_roomLock)
