@@ -1,4 +1,4 @@
-﻿using System.Xml.Serialization;
+using System.Xml.Serialization;
 using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
@@ -1165,6 +1165,11 @@ public class GameSimulation
                     string destination = IsModnation ? "destKartPark" : "destPod";
                     if (_raceSettings!.Value.AutoReset)
                         destination = "destGameroom";
+
+
+                    int postRaceDelay = IsKarting
+                        ? BombdConfig.Instance.KartingPostRaceTime
+                        : BombdConfig.Instance.ModNationPostRaceTime;
                     
                     BroadcastMessage(new NetMessageEventResults
                     {
@@ -1172,8 +1177,8 @@ public class GameSimulation
                         Platform = Platform,
                         ResultsXml = EventResult.Serialize(_eventResults),
                         Destination = destination,
-                        PostEventDelayTime = TimeHelper.LocalTime + 15000,
-                        PostEventScreenTime = 15.0f
+                        PostEventDelayTime = TimeHelper.LocalTime + postRaceDelay,
+                        PostEventScreenTime = postRaceDelay
                     }, PacketType.ReliableGameData);
 
                     // Broadcast new seed for the next race

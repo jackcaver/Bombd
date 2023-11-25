@@ -50,9 +50,14 @@ public class BombdConfig
     public float KartingGameroomTimerLock { get; set; } = 5000;
 
     /// <summary>
-    ///     How long to give the players to vote after a race is completed
+    ///     How long to give the players to vote after a race is completed in Karting.
     /// </summary>
-    public int PostRaceVoteTime { get; set; } = 45000;
+    public int KartingPostRaceTime { get; set; } = 45000;
+
+    /// <summary>
+    ///     How long to give players to vote after a race is completed in ModNation.
+    /// </summary>
+    public int ModNationPostRaceTime { get; set; } = 15000;
     
     /// <summary>
     ///     Whether or not to force the minimum racer requirement of 2 in online races.
