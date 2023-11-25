@@ -31,7 +31,7 @@ public class GameBrowser : BombdService
         if (attributes.TryGetValue("SERVER_TYPE", out string? type))
             createIfNoneExists = type == "kartPark";
         
-        List<GameBrowserGame> games = Bombd.RoomManager.SearchRooms(attributes, context.Connection.Platform, createIfNoneExists);
+        List<GameBrowserGame> games = Bombd.RoomManager.SearchRooms(attributes, context.Connection.Platform, 1, createIfNoneExists);
         return CreateServerGameList(games);
     }
 
@@ -83,7 +83,11 @@ public class GameBrowser : BombdService
     {
         // TODO: Search based on all parameters, not just the game attributes.
         var searchData = NetworkReader.Deserialize<GameSearchData>(context.Request["searchData"]);
-        List<GameBrowserGame> games = Bombd.RoomManager.SearchRooms(searchData.Attributes, context.Connection.Platform, false);
+        
+        // If you're not in a group, FreeSlotsRequired will be 0
+        int freeSlotsRequired = Math.Max(1, searchData.FreeSlotsRequired);
+        
+        List<GameBrowserGame> games = Bombd.RoomManager.SearchRooms(searchData.Attributes, context.Connection.Platform, freeSlotsRequired, false);
         return CreateServerGameList(games);
     }
     

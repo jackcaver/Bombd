@@ -198,12 +198,12 @@ public class RoomManager
         }
     }
     
-    public List<GameBrowserGame> SearchRooms(GameAttributes attributes, Platform id, bool createIfNoneExist = true)
+    public List<GameBrowserGame> SearchRooms(GameAttributes attributes, Platform id, int freeSlotsRequired, bool createIfNoneExist = true)
     {
         List<GameRoom> rooms = GetRooms().Where(room =>
         {
             if (room.Platform != id) return false;
-            if (room.NumFreeSlots == 0) return false;
+            if (room.NumFreeSlots < freeSlotsRequired) return false;
             
             // If the owner isn't in the game, the race either ended and the gameroom is shutting down
             // or they just haven't connected yet, so wait for that.
