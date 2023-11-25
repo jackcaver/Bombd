@@ -1,9 +1,10 @@
-using System.Xml.Serialization;
+﻿using System.Xml.Serialization;
 using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
+using Bombd.Serialization.Wrappers;
 using Bombd.Types.Network;
 using Bombd.Types.Network.Messages;
 using Bombd.Types.Network.Objects;
@@ -27,6 +28,7 @@ public class GameSimulation
     public readonly ServerType Type;
     
     private GenericSyncObject<CoiInfo> _coiInfo;
+    private GenericSyncObject<VotePackage> _votePackage;
     private GenericSyncObject<GameroomState> _gameroomState;
     private GenericSyncObject<AiInfo> _aiInfo;
     private GenericSyncObject<SpectatorInfo> _raceInfo;
@@ -70,6 +72,8 @@ public class GameSimulation
 
         if (Type == ServerType.Competitive)
         {
+            if (IsKarting)
+                _votePackage = CreateSystemSyncObject(new VotePackage(), NetObjectType.VotePackage);
             _gameroomState = CreateSystemSyncObject(new GameroomState(Platform), NetObjectType.GameroomState);
             _raceInfo = CreateSystemSyncObject(new SpectatorInfo(Platform), NetObjectType.SpectatorInfo);
             _aiInfo = CreateSystemSyncObject(new AiInfo(Platform), NetObjectType.AiInfo);
@@ -166,7 +170,8 @@ public class GameSimulation
         if (Owner == -1) return true;
         if (_playerStates.TryGetValue(Owner, out PlayerState? state))
         {
-            return !state.IsConnecting;
+            if (Type != ServerType.Competitive) return !state.IsConnecting;
+            return !state.IsConnecting && (state.Flags & PlayerStateFlags.GameRoomReady) != 0;
         }
         return false;
     }
@@ -263,6 +268,12 @@ public class GameSimulation
         
         // Make sure to re-order the pod if necessary
         if (Type == ServerType.Pod) RecalculatePodPositions();
+        
+        // If we're in Karting and in the voting stage, make sure to remove our vote
+        if (IsKarting && Type == ServerType.Competitive && _votePackage.Value.IsVoting)
+        {
+            _votePackage.Value.RemoveVote(player.UserId);
+        }
         
         // If we're the owner, change the host to someone random
         if (player.UserId == Owner)
@@ -373,6 +384,14 @@ public class GameSimulation
         }
         
         BroadcastMessage(new NetMessageModnationPlayerUpdate { StateUpdates = _playerStates.Values }, PacketType.ReliableGameData);
+    }
+
+    private void UpdateVotePackage()
+    {
+        if (_raceSettings == null) return;
+        
+        _votePackage.Value.StartVote(_raceSettings.Value.CreationId);
+        _votePackage.Sync();
     }
     
     private void SetCurrentGameroomState(RoomState state)
@@ -667,9 +686,9 @@ public class GameSimulation
         if (
             type != NetMessageType.VoipPacket && 
             type != NetMessageType.MessageUnreliableBlock && 
+            type != NetMessageType.MessageReliableBlock &&
             type != NetMessageType.GenericGameplay &&
-            type != NetMessageType.Gameplay &&
-            type != NetMessageType.SpectatorInfo)
+            type != NetMessageType.Gameplay)
         {
             Logger.LogTrace<GameSimulation>($"Received NetMessage {type} from {player.Username} ({(uint)player.UserId}:{(uint)player.PlayerId})");   
         }
@@ -702,6 +721,7 @@ public class GameSimulation
                 break;
             }
             case NetMessageType.ArbitratedItemAcquire:
+            case NetMessageType.ArbitratedItemRelease:
             {
                 // This message can be responded to with a failure, what's the case for that?
                 // Is it just if it's currently in timeout?
@@ -716,6 +736,10 @@ public class GameSimulation
                 NetMessagePlayerCreateInfo message;
                 try
                 {
+                    byte[] b = new byte[data.Count];
+                    data.CopyTo(b, 0);
+                    File.WriteAllBytes(type.ToString(), b);
+                    
                     message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);
                 }
                 catch (Exception)
@@ -725,7 +749,7 @@ public class GameSimulation
                     break;
                 }
 
-                if (message.Data.Count != 1)
+                if (message.Data.Count < 1)
                 {
                     Logger.LogWarning<GameSimulation>($"PlayerCreateInfo from {player.Username} doesn't contain any data! Disconnecting them from the session.");
                     player.Disconnect();
@@ -792,13 +816,8 @@ public class GameSimulation
                     info.Operation = GameJoinStatus.RacerPending;
                     BroadcastMessage(new NetMessagePlayerCreateInfo
                     {
-                        Data = new List<PlayerInfo>(_playerInfos.Values)
+                        Data = new List<PlayerInfo> { info }
                     }, PacketType.ReliableGameData);
-                    
-                    // BroadcastMessage(new NetMessagePlayerCreateInfo
-                    // {
-                    //     Data = new List<PlayerInfo> { info }
-                    // }, PacketType.ReliableGameData);
                 }
                 
                 break;
@@ -809,6 +828,35 @@ public class GameSimulation
                 SetCurrentGameroomState(RoomState.CountingDownPaused);
                 break;
             }
+            case NetMessageType.PostRaceVoteForTrack:
+            {
+                if (IsKarting)
+                {
+                    var votes = _votePackage.Value;
+                    
+                    // If we're not in a voting state, don't accept any votes
+                    if (!votes.IsVoting) break;
+                    
+                    // Data must be 4 bytes since it's just the voted track id
+                    if (data.Count != 4)
+                    {
+                        Logger.LogWarning<GameSimulation>($"Failed to parse PostRaceVoteForTrack from {player.Username}, disconnecting them from the session.");
+                        player.Disconnect();
+                        break;
+                    }
+                    
+                    int trackId = 0;
+                    trackId |= data[0] << 24;
+                    trackId |= data[1] << 16;
+                    trackId |= data[2] << 8;
+                    trackId |= data[3] << 0;
+                    
+                    votes.CastVote(player.UserId, trackId);
+                    _votePackage.Sync();
+                }
+                
+                break;
+            }
             case NetMessageType.SpectatorInfo:
             {
                 // Only the owner should be able to update the spectator info for the gameroom
@@ -816,7 +864,31 @@ public class GameSimulation
                 
                 try
                 {
+
+                    RaceState oldState = _raceInfo.Value.RaceState;
                     _raceInfo.Value = SpectatorInfo.ReadVersioned(data, Platform);
+                    RaceState newState = _raceInfo.Value.RaceState;
+
+                    if (oldState == RaceState.PostRace && newState == RaceState.Invalid)
+                    {
+                        if (IsKarting && _votePackage.Value.IsVoting)
+                        {
+                            var votes = _votePackage.Value;
+                            if (votes.NumPlayersVoted != 0)
+                            {
+                                votes.FinishVote();
+                                _votePackage.Sync();
+                            }
+                            
+                            _votePackage.Value.Reset();
+                            _votePackage.Sync();
+                        }
+                    }
+                    
+                    Logger.LogDebug<GameSimulation>("RaceState: " + _raceInfo.Value.RaceState);
+                    Logger.LogDebug<GameSimulation>("RaceEndServerTime: " + _raceInfo.Value.RaceEndServerTime);
+                    Logger.LogDebug<GameSimulation>("PostRaceServerTime: " + _raceInfo.Value.PostRaceServerTime);
+                    
                 }
                 catch (Exception)
                 {
@@ -969,7 +1041,7 @@ public class GameSimulation
                 _playerStates[player.UserId] = state;
                 
                 BroadcastPlayerStates();
-            
+                
                 break;
             }
 
@@ -1165,8 +1237,7 @@ public class GameSimulation
                     string destination = IsModnation ? "destKartPark" : "destPod";
                     if (_raceSettings!.Value.AutoReset)
                         destination = "destGameroom";
-
-
+                    
                     int postRaceDelay = IsKarting
                         ? BombdConfig.Instance.KartingPostRaceTime
                         : BombdConfig.Instance.ModNationPostRaceTime;
@@ -1180,6 +1251,8 @@ public class GameSimulation
                         PostEventDelayTime = TimeHelper.LocalTime + postRaceDelay,
                         PostEventScreenTime = postRaceDelay
                     }, PacketType.ReliableGameData);
+                    
+                    if (IsKarting) UpdateVotePackage();
 
                     // Broadcast new seed for the next race
                     _seed = CryptoHelper.GetRandomSecret();
