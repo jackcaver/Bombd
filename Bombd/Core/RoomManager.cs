@@ -96,6 +96,7 @@ public class RoomManager
         // sent by the game for whatever reason.
         request.Attributes.TryAdd("__JOIN_MODE", "OPEN");
         request.Attributes.TryAdd("__MM_MODE_G", "OPEN");
+        request.Attributes.TryAdd("__MAX_PLAYERS", "8");
         request.Attributes.TryAdd("SERVER_TYPE", "kartPark");
 
         var type = ServerType.KartPark;
@@ -104,10 +105,17 @@ public class RoomManager
         else if (request.Platform == Platform.Karting)
             type = ServerType.Pod;
         
-        // If we can't parse the number of players, just default to an existing number.
-        if (!int.TryParse(request.Attributes["__MAX_PLAYERS"], out int maxSlots))
+        int maxSlots;
+        // If we're in a pod, override max players to 4
+        if (type == ServerType.Pod)
         {
-            maxSlots = type == ServerType.Pod ? 4 : 8;
+            maxSlots = 4;
+            request.Attributes["__MAX_PLAYERS"] = "4";
+        }
+        // Otherwise, if we can't parse the number of players, just default to 8
+        else if (!int.TryParse(request.Attributes["__MAX_PLAYERS"], out maxSlots))
+        {
+            maxSlots = 8;
             request.Attributes["__MAX_PLAYERS"] = maxSlots.ToString();
         }
 

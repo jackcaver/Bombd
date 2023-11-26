@@ -106,14 +106,22 @@ public class RudpServer : IServer
 
     public void Tick()
     {
-        while (ReceiveFrom(out ArraySegment<byte> segment)) HandleData(segment);
+        try
+        {
+            while (ReceiveFrom(out ArraySegment<byte> segment)) HandleData(segment);
+            _service.OnTick();
+            
+            foreach (RudpConnection connection in Connections.Values) connection.Update();
+            
+            foreach (EndPoint client in connectionsToRemove) Connections.Remove(client);
+            connectionsToRemove.Clear();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError<RudpServer>($"An error occurred while performing server tick!");
+            Logger.LogError<RudpServer>(ex.ToString());
+        }
+        
 
-        _service.OnTick();
-
-        foreach (RudpConnection connection in Connections.Values) connection.Update();
-
-        foreach (EndPoint client in connectionsToRemove) Connections.Remove(client);
-
-        connectionsToRemove.Clear();
     }
 }

@@ -45,10 +45,12 @@ public abstract class BombdService
 
         foreach (MethodInfo method in _type.GetMethods())
         {
-            TransactionAttribute? attribute = method.GetCustomAttributes<TransactionAttribute>().FirstOrDefault();
-            if (attribute == null) continue;
-            _methods[attribute.Method] = method;
-            Logger.LogInfo(_type, $"-> Registered '{attribute.Method}' to {_type.Name}::{method.Name}");
+            var attributes = method.GetCustomAttributes<TransactionAttribute>();
+            foreach (var attribute in attributes)
+            {
+                _methods[attribute.Method] = method;
+                Logger.LogInfo(_type, $"-> Registered '{attribute.Method}' to {_type.Name}::{method.Name}");   
+            }
         }
         
         string address = BombdConfig.Instance.ListenIP;

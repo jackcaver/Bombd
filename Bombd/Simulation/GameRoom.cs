@@ -1,6 +1,7 @@
 ﻿using Bombd.Helpers;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
+using Bombd.Types.Network;
 using Bombd.Types.Requests;
 
 namespace Bombd.Simulation;
@@ -64,7 +65,7 @@ public class GameRoom
         if (guests != null)
         {
             foreach (var guest in guests)
-                player.Guests.Add(new GameGuest(guest));
+                player.Guests.Add(new GameGuest(username, guest));
         }
         
         _playerIdLookup[playerId] = player;
@@ -88,6 +89,51 @@ public class GameRoom
         }
 
         return false;
+    }
+
+    public void UpdateGuestStatuses(GamePlayer player, GuestStatusBlock block)
+    {
+        int gameId = player.PlayerId >>> 8;
+        if (gameId != Game.GameId) return;
+        int slotId = player.PlayerId & 0x3f;
+        
+        foreach (GuestStatus guestStatus in block)
+        {
+            GameGuest? guest = player.GetGuestByName(guestStatus.Username);
+            switch (guestStatus.Status)
+            {
+                case GuestStatusCode.AttachRequest:
+                {
+                    // Another case where the guest shouldn't exist in game already if
+                    // we're receiving an attach request, but still check for it anyway
+                    if (NumFreeSlots == 0 || guest != null)
+                    {
+                        guestStatus.Status = GuestStatusCode.AttachFail;
+                        continue;
+                    }
+
+                    UsedSlots += 1;
+                    _slotGuestCounts[slotId]++;
+                    player.Guests.Add(new GameGuest(player.Username, guestStatus.Username));
+                    guestStatus.Status = GuestStatusCode.AttachSuccess;
+                    break;
+                }
+                case GuestStatusCode.DetachRequest:
+                {
+                    // The guest should be in game if we've received a detach request,
+                    // but check if its null anyway.
+                    if (guest != null)
+                    {
+                        UsedSlots -= 1;
+                        _slotGuestCounts[slotId]--;
+                        player.Guests.Remove(guest);
+                    }
+                    
+                    guestStatus.Status = GuestStatusCode.Detached;
+                    break;   
+                }
+            }
+        }
     }
 
     public bool RequestSlotWithGuests(int guestCount, out int playerId)

@@ -2,7 +2,7 @@
 
 namespace Bombd.Attributes;
 
-[AttributeUsage(AttributeTargets.Method)]
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
 [MeansImplicitUse]
 public class TransactionAttribute : Attribute
 {

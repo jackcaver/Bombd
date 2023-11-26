@@ -27,6 +27,41 @@ public class GameServer : BombdService
     public event EventHandler<PlayerJoinEventArgs>? OnPlayerJoined;
     public event EventHandler<PlayerLeaveEventArgs>? OnPlayerLeft;
 
+    public void UpdateGuestStatuses(GamePlayer player, GuestStatusBlock block)
+    {
+        _playerLock.Wait();
+        try
+        {
+            player.Room.UpdateGuestStatuses(player, block);
+            
+            // Tell everybody else in the gameroom about any guests
+            // that were either attached or detached
+            var gamemanager = Bombd.GetService<GameManager>();
+            foreach (GuestStatus guestStatus in block)
+            {
+                bool wasAttached = guestStatus.Status == GuestStatusCode.AttachSuccess;
+                bool wasDetached = guestStatus.Status == GuestStatusCode.Detached;
+                
+                if (!wasAttached && !wasDetached) continue;
+                
+                var transaction = NetcodeTransaction.MakeRequest("gamemanager", wasAttached ? "guestJoined" : "guestLeft");
+                transaction["gamename"] = player.Room.Game.GameName;
+                transaction["playername"] = player.Username;
+                transaction["guestname"] = guestStatus.Username;
+                
+                foreach (var peer in player.Room.Game.Players)
+                {
+                    if (peer == player) continue;
+                    gamemanager.SendTransaction(peer.UserId, transaction);
+                }
+            }
+        }
+        finally
+        {
+            _playerLock.Release();
+        }
+    }
+
     public bool ReserveSlotsInGame(string gameName, int numSlots, [MaybeNullWhen(false)] out string reservationKey)
     {
         reservationKey = null;

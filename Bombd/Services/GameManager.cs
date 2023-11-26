@@ -9,6 +9,7 @@ using Bombd.Simulation;
 using Bombd.Types.Events;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
+using Bombd.Types.Network;
 using Bombd.Types.Requests;
 using Bombd.Types.Services;
 
@@ -102,7 +103,10 @@ public class GameManager : BombdService
             context.Response.Error = "ParseFail";
             return;
         }
-
+        
+        // NOTE:
+        // If you're in a group, it'll just give 1 for numSlots?
+        // If you're not in a group, it'll give 0?
         numSlots++;
         
         if (Bombd.GameServer.ReserveSlotsInGame(gameName, numSlots, out string? reservationKey))
@@ -135,11 +139,7 @@ public class GameManager : BombdService
         // disconnect users from games if they drop the connection to the server.
         // But Karting will send leaveCurrentGame for the old pod gameroom *after* they
         // join another game, so just handle that case here by returning early.
-        if (gameName != currentGameName)
-        {
-            context.Response.Error = "alreadyLeftGame";
-            return;
-        }
+        if (gameName != currentGameName) return;
         
         Bombd.GameServer.AddPlayerToLeaveQueue(context.Connection.UserId, context.Connection.Username, "leftGame");
     }
@@ -169,6 +169,23 @@ public class GameManager : BombdService
             Attributes = attributes,
             PlayerIdList = players
         });
+    }
+
+    [Transaction("detachGuests")]
+    [Transaction("attachGuests")]
+    public void HandleGuestRequests(TransactionContext context)
+    {
+        GamePlayer? player = Bombd.RoomManager.GetPlayerInRoom(context.Connection.UserId);
+        if (player == null)
+        {
+            context.Response.Error = "notInGame";
+            return;
+        }
+        
+        var block = NetworkReader.Deserialize<GuestStatusBlock>(context.Request["guestBlock"]);
+        Bombd.GameServer.UpdateGuestStatuses(player, block);
+        
+        context.Response["guestBlock"] = Convert.ToBase64String(NetworkWriter.Serialize((INetworkWritable)block));
     }
     
     private void OnPlayerJoin(object? sender, PlayerJoinEventArgs args)

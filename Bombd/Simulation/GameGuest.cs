@@ -1,9 +1,17 @@
-﻿namespace Bombd.Simulation;
+﻿using Bombd.Serialization;
+using Bombd.Types.Network;
+
+namespace Bombd.Simulation;
 
 public class GameGuest
 {
-    public GameGuest(string username) => Username = username;
+    public GameGuest(string playerName, string guestName)
+    {
+        PlayerName = playerName;
+        GuestName = guestName;
+    }
     
-    public string Username;
+    public readonly string PlayerName;
+    public readonly string GuestName;
     public int NameUid;
 }

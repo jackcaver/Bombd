@@ -18,6 +18,7 @@ public class GameSimulation
     private readonly List<GamePlayer> _players;
     private readonly Dictionary<int, PlayerState> _playerStates = new();
     private readonly Dictionary<int, PlayerInfo> _playerInfos = new();
+    private readonly Dictionary<string, PlayerInfo> _guestInfos = new();
     
     private int _seed = CryptoHelper.GetRandomSecret();
     private int _lastStateTime = TimeHelper.LocalTime;
@@ -46,22 +47,6 @@ public class GameSimulation
         Platform = platform;
         _players = players;
         Owner = owner;
-        
-        // MODNATION ITEM USAGE
-            // When player first starts race, they request ArbitratedItemCreateBlock
-                // Not sure if there's an error response or if this should be sent to everybody in the server
-                // but just send it back to the player
-            // When player goes over an item, they request ArbitratedItemAcquire
-                // 
-        
-        // upon having minimum number of players
-        // it seems to wait 3 or 5 seconds until starting the timer
-        // timer lock is 55 seconds elapsed (when timer hits 5) this might also be the player lock?
-        // pregame timer in karting is 60 seconds
-        // voting time should be 45 seconds it seems
-        // after voting thrown into another pre game lobby
-        
-        
         
         Logger.LogInfo<GameSimulation>($"Starting Game Simulation ({type}:{platform})");
         
@@ -94,8 +79,8 @@ public class GameSimulation
             IsFakePlayer = true,
             Platform = Platform,
             PlayerId = playerId,
-            Send = (data, type) => { },
-            Disconnect = { },
+            Send = (_, _) => { },
+            Disconnect = () => { },
             UserId = userId,
             Username = username
         };
@@ -113,7 +98,7 @@ public class GameSimulation
 
         _playerInfos[userId] = new PlayerInfo
         {
-            Operation = GameJoinStatus.RacerPending,
+            Operation = CanJoinAsRacer() ? GameJoinStatus.RacerPending : GameJoinStatus.SpectatorPending,
             NetcodeUserId = userId,
             NetcodeGamePlayerId = playerId,
             PlayerConnectId = userId,
@@ -175,29 +160,45 @@ public class GameSimulation
         }
         return false;
     }
+
+    public void SwitchAllToRacers()
+    {
+        if (IsKarting)
+        {
+            foreach (var info in _playerInfos.Values) info.Operation = GameJoinStatus.RacerPending;
+            foreach (var info in _guestInfos.Values) info.Operation = GameJoinStatus.RacerPending;
+            BroadcastKartingPlayerSessionInfo();
+        }
+        else
+        {
+            BroadcastMessage(new NetMessagePlayerSessionInfo { JoinStatus = GameSessionStatus.SwitchAllToRacer }, PacketType.ReliableGameData);
+        }
+    }
+
+    public void BroadcastKartingPlayerSessionInfo()
+    {
+        if (!IsKarting) return;
+        var infos = new List<PlayerInfo>(_playerInfos.Values);
+        infos.AddRange(_guestInfos.Values);
+        BroadcastMessage(new NetMessagePlayerCreateInfo { Data = infos }, PacketType.ReliableGameData);
+    }
     
     public void OnPlayerJoin(GamePlayer player)
     {
         // Don't actually know if this is random per room or random per player,
         // I assume it's used for determinism, but I don't know?
         player.SendReliableMessage(new NetMessageRandomSeed { Seed = _seed });
-        
-        if (IsKarting)
-        {
-            // Send all player infos
-            player.SendReliableMessage(new NetMessagePlayerCreateInfo
-            {
-                Data = new List<PlayerInfo>(_playerInfos.Values)
-            });
-        }
-        else
+
+        if (IsModnation)
         {
             // Tell everybody else about yourself
             foreach (GamePlayer peer in _players)
             {
+                GameSessionStatus status =
+                    CanJoinAsRacer() ? GameSessionStatus.JoinAsRacer : GameSessionStatus.JoinAsSpectator;
                 peer.SendReliableMessage(new NetMessagePlayerSessionInfo
                 {
-                    JoinStatus = GameSessionStatus.JoinAsRacer,
+                    JoinStatus = status,
                     PlayerId = player.PlayerId,
                     UserId = player.UserId
                 });
@@ -213,9 +214,8 @@ public class GameSimulation
                     PlayerId = peer.PlayerId,
                     UserId = peer.UserId
                 });
-            }   
-        }
-        
+            }
+        } else BroadcastKartingPlayerSessionInfo();
 
         // Initialize any sync objects that exist
         foreach (SyncObject syncObject in _syncObjects.Values)
@@ -242,6 +242,9 @@ public class GameSimulation
         // Make sure we're not still keeping track of the player's state even after they left.
         _playerStates.Remove(player.UserId);
         _playerInfos.Remove(player.UserId);
+        foreach (GameGuest guest in player.Guests)
+            _guestInfos.Remove(guest.PlayerName);
+        
         
         // Destroy all sync objects owned by the player, this will realistically only be the player info object,
         // but just to be safe search for all owned objects anyway.
@@ -299,14 +302,15 @@ public class GameSimulation
         {
             if (!_playerInfos.TryGetValue(player.UserId, out PlayerInfo? info)) continue;
             info.PodLocation = $"POD_Player0{position++}_Placer";
-            if (player.Guest != null) position++;
+            foreach (var guest in player.Guests)
+            {
+                if (!_guestInfos.TryGetValue(guest.GuestName, out PlayerInfo? guestInfo)) continue;
+                guestInfo.PodLocation = $"POD_Player0{position++}_Placer";
+            }
         }
         
         // Send the new session info to everybody in the game
-        BroadcastMessage(new NetMessagePlayerCreateInfo
-        {
-            Data = new List<PlayerInfo>(_playerInfos.Values)
-        }, PacketType.ReliableGameData);
+        BroadcastKartingPlayerSessionInfo();
     }
 
     private void BroadcastVoipData(GamePlayer sender, ArraySegment<byte> data)
@@ -424,6 +428,7 @@ public class GameSimulation
                 _hasSentEventResults = false;
                 foreach (var playerState in _playerStates.Values)
                     playerState.Flags = PlayerStateFlags.None;
+                SwitchAllToRacers();
                 break;
             }
             case RoomState.RaceInProgress:
@@ -438,22 +443,10 @@ public class GameSimulation
                 if (IsKarting)
                 {
                     foreach (var info in _playerInfos.Values)
-                    {
                         info.Operation = GameJoinStatus.RacerPending;
-                    }
-                    
-                    // Send all player infos
-                    BroadcastMessage(new NetMessagePlayerCreateInfo {
-                        Data = new List<PlayerInfo>(_playerInfos.Values)
-                    }, PacketType.ReliableGameData);   
-                }
-                
-                Logger.LogDebug<GameSimulation>("Room has readied up, current state is as follows:");
-                foreach (var player in _players)
-                {
-                    Logger.LogDebug<GameSimulation>($"{player.Username}: UserId={player.UserId},PlayerId={player.PlayerId}");
-                    if (player.Guest != null)
-                        Logger.LogDebug<GameSimulation>($"  -> {player.Guest.Username}");
+                    foreach (var info in _guestInfos.Values)
+                        info.Operation = GameJoinStatus.RacerPending;
+                    BroadcastKartingPlayerSessionInfo();
                 }
                 
                 break;
@@ -633,14 +626,16 @@ public class GameSimulation
             
             // Type 1 is guest
             if (config.Type != 1) return;
-            if ((IsKarting && config.NetcodeUserId != -1) || (IsModnation && config.NetcodeUserId != player.UserId))
+            
+            GameGuest? guest = player.GetGuestByName(config.Username);
+            if (guest == null || (IsKarting && config.NetcodeUserId != -1) || (IsModnation && config.NetcodeUserId != player.UserId))
             {
                 Logger.LogWarning<GameSimulation>($"Guest doesn't belong to {player.Username}, this shouldn't happen, disconnecting!");
                 player.Disconnect();
                 return;
             }
             
-            player.Guest.NameUid = CryptoHelper.StringHash32(config.UidName);
+            guest.NameUid = CryptoHelper.StringHash32(config.UidName);
         }
         catch (Exception)
         {
@@ -660,10 +655,10 @@ public class GameSimulation
         data.CopyTo(array);
         syncObject.Data = new ArraySegment<byte>(array);
         
-        // If it's a player config object, pull the guest name uid from it if possible
+        // If we're on ModNation and it's a guest playerconfig, try to pull the nameUID from it since
+        // we don't get sent it at any point, it seems
         var playerConfigType = NetObjectType.PlayerConfig;
-        if ((IsModnation && syncObject.Type == playerConfigType.ModnationTypeId) ||
-                                     (IsKarting && syncObject.Type == playerConfigType.KartingTypeId))
+        if (IsModnation && syncObject.Type == playerConfigType.ModnationTypeId)
         {
             ParseGuestInfo(data, player);
         }
@@ -695,6 +690,34 @@ public class GameSimulation
         
         switch (type)
         {
+            case NetMessageType.PlayerDetachGuestInfo:
+            {
+                NetMessagePlayerCreateInfo message;
+                try
+                {
+                    message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);
+                }
+                catch (Exception)
+                {
+                    Logger.LogWarning<GameSimulation>($"Failed to parse PlayerDetachGuestInfo for {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+
+                // Remove the detaching guests from the global guest infos
+                foreach (var guestInfo in message.Data)
+                {
+                    _guestInfos.Remove(guestInfo.PlayerName);
+                }
+                
+                // Tell everybody else that we've detached the guest(s)
+                BroadcastGenericMessage(data, type, PacketType.ReliableGameData);
+                
+                // Recalculate the pod positions
+                if (Type == ServerType.Pod) RecalculatePodPositions();
+                
+                break;
+            }
             case NetMessageType.ItemMessage_0x10:
             case NetMessageType.ItemDestroy:
             case NetMessageType.ItemHitPlayer:
@@ -736,10 +759,6 @@ public class GameSimulation
                 NetMessagePlayerCreateInfo message;
                 try
                 {
-                    byte[] b = new byte[data.Count];
-                    data.CopyTo(b, 0);
-                    File.WriteAllBytes(type.ToString(), b);
-                    
                     message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);
                 }
                 catch (Exception)
@@ -749,26 +768,55 @@ public class GameSimulation
                     break;
                 }
 
-                if (message.Data.Count < 1)
+                if (message.Data.Count != player.Guests.Count + 1)
                 {
-                    Logger.LogWarning<GameSimulation>($"PlayerCreateInfo from {player.Username} doesn't contain any data! Disconnecting them from the session.");
+                    Logger.LogWarning<GameSimulation>($"PlayerCreateInfo from {player.Username} doesn't contain correct number of infos! Disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
                 
                 var info = message.Data[0];
+
+                if (info.NetcodeUserId != player.UserId || info.NetcodeGamePlayerId != player.PlayerId)
+                {
+                    Logger.LogWarning<GameSimulation>($"PlayerCreateInfo from {player.Username} doesn't match their connection details! Disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+                
+                GameJoinStatus status =
+                    CanJoinAsRacer() ? GameJoinStatus.RacerPending : GameJoinStatus.SpectatorPending;
                 
                 // The player create info gets sent to the server with an operation of type none,
                 // send it to the other players telling them we're joining.
-                // TODO: I think we have to check the current state of the gameroom and send back racer or spectator accordingly.
-                info.Operation = GameJoinStatus.RacerPending;
+                info.Operation = status;
+                
+                // Make sure to cache the player information
+                _playerInfos[player.UserId] = info;
+                
+                // Handle additional guest player infos attached
+                for (int i = 1; i < message.Data.Count; ++i)
+                {
+                    var guestInfo = message.Data[i];
+                    var guest = player.GetGuestByName(guestInfo.PlayerName);
+                    if (guest == null || guestInfo.NetcodeUserId != player.UserId || guestInfo.NetcodeGamePlayerId != player.PlayerId)
+                    {
+                        Logger.LogWarning<GameSimulation>($"PlayerCreateInfo from {player.Username} contains invalid guest info! Disconnecting them from the session.");
+                        player.Disconnect();
+                        break;
+                    }
+                    
+                    // Cache the name uid for the starting grid
+                    guest.NameUid = CryptoHelper.StringHash32(guestInfo.NameUid);
+                    
+                    guestInfo.Operation = status;
+                    _guestInfos[guestInfo.PlayerName] = guestInfo;
+                }
                 
                 // Does the player need their status back? If we changed the status maybe, but we should probably
                 // just send it back when their gameroom is ready.
                 BroadcastMessage(message, PacketType.ReliableGameData);
                 
-                // Make sure to cache the player information
-                _playerInfos[player.UserId] = info;
                 
                 // Since we have the player info now, we can recalculate the positions in
                 // pod, if relevant
@@ -807,19 +855,6 @@ public class GameSimulation
             case NetMessageType.GameroomReady:
             {
                 _playerStates[player.UserId].Flags |= PlayerStateFlags.GameRoomReady;
-                
-                // Once the player has finished loading, we should now send them their session info
-                if (Platform == Platform.Karting)
-                {
-                    UpdateRaceSetup();
-                    var info = _playerInfos[player.UserId];
-                    info.Operation = GameJoinStatus.RacerPending;
-                    BroadcastMessage(new NetMessagePlayerCreateInfo
-                    {
-                        Data = new List<PlayerInfo> { info }
-                    }, PacketType.ReliableGameData);
-                }
-                
                 break;
             }
             case NetMessageType.GameroomStopTimer:
@@ -1031,7 +1066,16 @@ public class GameSimulation
                 
                 // Backup user flags
                 if (_playerStates.TryGetValue(player.UserId, out PlayerState? existingPlayerState))
-                    state.Flags = existingPlayerState.Flags;
+                {
+                    // Second player state update means we've finished connecting
+                    if (existingPlayerState.IsConnecting)
+                    {
+                        BroadcastKartingPlayerSessionInfo();
+                        if (Type == ServerType.Competitive && _gameroomState.Value.State == RoomState.CountingDown)
+                            UpdateRaceSetup();
+                    }
+                    state.Flags = existingPlayerState.Flags;   
+                }
                 else
                     // I'm fairly sure the player isn't actually "ready" and thus connecting
                     // until the server receives the second player state update.

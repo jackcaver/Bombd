@@ -27,6 +27,11 @@ public class GamePlayer
     public bool IsFakePlayer;
     public bool HasSentLeaveReason;
     public bool ListeningForGameEvents;
+
+    public GameGuest? GetGuestByName(string username)
+    {
+        return Guests.FirstOrDefault(x => x.GuestName == username);
+    }
     
     public void OnNetworkMessage(NetMessageType type, int sender, ArraySegment<byte> data)
     {

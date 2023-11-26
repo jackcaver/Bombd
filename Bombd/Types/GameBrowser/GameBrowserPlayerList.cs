@@ -21,7 +21,7 @@ public class GameBrowserPlayerList : List<GamePlayer>, INetworkWritable
         {
             writer.Write(player.Username);
             writer.Write(player.Guests.Count);
-            foreach (GameGuest guest in player.Guests) writer.Write(guest.Username);
+            foreach (GameGuest guest in player.Guests) writer.Write(guest.GuestName);
         }
     }
 }
