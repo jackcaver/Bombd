@@ -19,7 +19,7 @@ public abstract class ConnectionBase
         Server = server;
     }
 
-    public bool IsConnected => State == ConnectionState.Connected;
+    public bool IsAuthenticated => State == ConnectionState.Connected;
 
     public bool IsAuthenticating =>
         State is ConnectionState.WaitingForConnection or ConnectionState.WaitingForTimeSync;

@@ -52,7 +52,18 @@ public class RudpServer : IServer
 
     public void Stop()
     {
-        // TODO: Implement this???
+        if (_socket == null)
+        {
+            Logger.LogWarning<RudpServer>("Server hasn't been started!");
+            return;
+        }
+        
+        foreach (var connection in Connections.Values)
+            connection.Disconnect();
+        Connections.Clear();
+        
+        _socket.Close();
+        _socket = null;
     }
 
     private bool ReceiveFrom(out ArraySegment<byte> segment)
@@ -121,7 +132,5 @@ public class RudpServer : IServer
             Logger.LogError<RudpServer>($"An error occurred while performing server tick!");
             Logger.LogError<RudpServer>(ex.ToString());
         }
-        
-
     }
 }

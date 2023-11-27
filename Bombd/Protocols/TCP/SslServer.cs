@@ -9,12 +9,8 @@ namespace Bombd.Protocols.TCP;
 public class SslServer : IServer
 {
     private readonly BombdService _service;
-    internal readonly Action<int> OnConnected;
-    internal readonly Action<int, ArraySegment<byte>, PacketType> OnData;
-    internal readonly Action<int> OnDisconnected;
-
     private Socket? _socket;
-
+    
     public SslServer(
         string address,
         int port,
@@ -67,17 +63,7 @@ public class SslServer : IServer
     {
         _service.OnTick();
     }
-
-    public void Send(int id, ArraySegment<byte> data, PacketType type)
-    {
-        if (Connections.TryGetValue(id, out SslConnection? connection)) connection.Send(data, type);
-    }
-
-    public void Disconnect(int id)
-    {
-        if (Connections.TryGetValue(id, out SslConnection? connection)) connection.Disconnect();
-    }
-
+    
     private async void StartAccept()
     {
         if (!IsActive) return;
@@ -91,9 +77,10 @@ public class SslServer : IServer
         }
         catch (Exception e)
         {
-            // log later ig
+            Logger.LogError<SslServer>("An error occurred while accepting a connection");
+            Logger.LogError<SslServer>(e.ToString());
         }
-
+        
         StartAccept();
     }
 }

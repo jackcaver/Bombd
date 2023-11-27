@@ -295,7 +295,7 @@ public class GameServer : BombdService
 
             if (UserInfo.TryGetValue(request.UserId, out ConnectionBase? connection))
             {
-                if (!connection.IsConnected) continue;
+                if (!connection.IsAuthenticated) continue;
 
                 GamePlayer? player;
                 if (request.ReservationKey != null)
@@ -364,7 +364,7 @@ public class GameServer : BombdService
                     continue;
                 }
 
-                if (player.Status == MigrationStatus.WaitingForConnect && connection.IsConnected)
+                if (player.Status == MigrationStatus.WaitingForConnect && connection.IsAuthenticated)
                     player.Status = MigrationStatus.Migrated;
             }
 
@@ -378,7 +378,7 @@ public class GameServer : BombdService
                 bool isOwner = player.UserId == group.Owner;
                 
                 // In case the player closed their game during migration or if something else caused a disconnection.
-                if (!UserInfo.TryGetValue(player.UserId, out ConnectionBase? connection) || !connection.IsConnected)
+                if (!UserInfo.TryGetValue(player.UserId, out ConnectionBase? connection) || !connection.IsAuthenticated)
                 {
                     player.Status = MigrationStatus.MigrationFailed;
                     group.Room.FreeSlot(player.PlayerId);

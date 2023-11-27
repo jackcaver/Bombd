@@ -13,56 +13,50 @@ public class SslConnection : ConnectionBase
 {
     private const int MaxMessageSize = 8192;
     private const int KeepAliveFrequency = 3000;
-
+    
     // u32 MsgLength
     // char Md5Digest[16]
     // char Protocol
     // char Source
     // short Destination
     private const int MessageHeaderSize = 24;
+    
     private readonly byte[] _recv = new byte[MaxMessageSize];
-
     private readonly byte[] _send = new byte[MaxMessageSize];
 
     private readonly object _sendLock = new();
     private Timer? _keepAliveTimer;
-
+    
     private SslStream _sslStream;
 
     public SslConnection(BombdService service, SslServer server) : base(service, server)
     {
         Id = CryptoHelper.GetRandomSecret();
-        Server = server;
         State = ConnectionState.WaitingForConnection;
+        _server = server;
     }
 
     public int Id { get; }
-    public bool IsConnected { get; private set; }
-    public SslServer Server { get; }
-    public Socket Socket { get; private set; }
-
+    private readonly SslServer _server;
+    private Socket _socket;
+    
     public void Connect(Socket socket)
     {
-        Socket = socket;
-
-        // Socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-        // Socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 3);
-
-        IsConnected = true;
-
+        _socket = socket;
+        
         try
         {
-            _sslStream = new SslStream(new NetworkStream(Socket, false), false);
-            _sslStream.AuthenticateAsServer(Server.Certificate, false, SslProtocols.Ssl3 | SslProtocols.Tls, false);
+            _sslStream = new SslStream(new NetworkStream(_socket, false), false);
+            _sslStream.AuthenticateAsServer(_server.Certificate, false, SslProtocols.Ssl3 | SslProtocols.Tls, false);
 
             _keepAliveTimer = new Timer(KeepAliveFrequency);
             _keepAliveTimer.Elapsed += OnKeepAliveTimerElapsed;
             _keepAliveTimer.AutoReset = false;
             _keepAliveTimer.Enabled = true;
-
+            
             StartReceive();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             Logger.LogError<SslConnection>("Handshake failed. Disconnecting.");
             Disconnect();
@@ -71,7 +65,7 @@ public class SslConnection : ConnectionBase
 
     public override void Disconnect()
     {
-        if (!IsConnected) return;
+        if (State == ConnectionState.Disconnected) return;
 
         try
         {
@@ -90,24 +84,24 @@ public class SslConnection : ConnectionBase
 
             try
             {
-                Socket.Shutdown(SocketShutdown.Both);
+                _socket.Shutdown(SocketShutdown.Both);
             }
-            catch (SocketException ex)
+            catch (SocketException)
             {
                 Logger.LogError<SslConnection>("An error occurred while shutting down socket.");
             }
 
-            Socket.Close();
-            Socket.Dispose();
+            _socket.Close();
+            _socket.Dispose();
         }
         catch (ObjectDisposedException)
         {
-            // log later ig
+            
         }
-
-        Server.Connections.Remove(Id);
-        if (State > ConnectionState.WaitingForConnection) Service.OnDisconnected(this);
-        IsConnected = false;
+        
+        _server.Connections.Remove(Id);
+        if (State > ConnectionState.WaitingForConnection)
+            Service.OnDisconnected(this);
     }
 
     private void OnKeepAliveTimerElapsed(object? source, ElapsedEventArgs e)
@@ -117,7 +111,8 @@ public class SslConnection : ConnectionBase
 
     public override void Send(ArraySegment<byte> data, PacketType type)
     {
-        if (!IsConnected) return;
+        if (State == ConnectionState.Disconnected) return;
+        
         int messageSize = MessageHeaderSize + data.Count;
         lock (_sendLock)
         {
@@ -155,7 +150,7 @@ public class SslConnection : ConnectionBase
 
     private async void StartReceive()
     {
-        if (!IsConnected) return;
+        if (State == ConnectionState.Disconnected) return;
 
         int payloadSize;
         PacketType type;

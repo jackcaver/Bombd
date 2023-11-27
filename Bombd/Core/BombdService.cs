@@ -106,9 +106,9 @@ public abstract class BombdService
     {
     }
 
-    public virtual void OnConnected(int connectionId)
+    protected virtual void OnConnected(ConnectionBase connection)
     {
-        Logger.LogInfo(_type, $"Connection {connectionId} has been connected.");
+        Logger.LogInfo(_type, $"{connection.Username} has been connected.");
     }
 
     public bool Login(ConnectionBase connection, NetcodeTransaction request, NetcodeTransaction response)
@@ -200,7 +200,9 @@ public abstract class BombdService
             response["MMConfigFile"] = Convert.ToBase64String(config);
             response["MMConfigFileSize"] = config.Length.ToString();
         }
-
+        
+        OnConnected(connection);
+        
         return true;
     }
 
