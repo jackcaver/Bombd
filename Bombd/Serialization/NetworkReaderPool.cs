@@ -4,6 +4,7 @@ public static class NetworkReaderPool
 {
     private const int PoolSize = 128;
     private static readonly Stack<NetworkReaderPooled> Pool = new(PoolSize);
+    private static readonly object AcquireLock = new();
 
     static NetworkReaderPool()
     {
@@ -11,9 +12,14 @@ public static class NetworkReaderPool
             Pool.Push(new NetworkReaderPooled(ArraySegment<byte>.Empty));
     }
 
-    private static NetworkReaderPooled Get() =>
-        Pool.Count > 0 ? Pool.Pop() : new NetworkReaderPooled(ArraySegment<byte>.Empty);
-
+    private static NetworkReaderPooled Get() 
+    {
+        lock (AcquireLock)
+        {
+            return Pool.Count > 0 ? Pool.Pop() : new NetworkReaderPooled(ArraySegment<byte>.Empty);       
+        }
+    }
+    
     public static NetworkReaderPooled Get(byte[] buffer)
     {
         NetworkReaderPooled reader = Get();
@@ -37,6 +43,9 @@ public static class NetworkReaderPool
 
     public static void Return(NetworkReaderPooled reader)
     {
-        Pool.Push(reader);
+        lock (AcquireLock)
+        {
+            Pool.Push(reader);   
+        }
     }
 }

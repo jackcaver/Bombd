@@ -4,6 +4,7 @@ public static class NetworkWriterPool
 {
     private const int PoolSize = 128;
     private static readonly Stack<NetworkWriterPooled> Pool = new(PoolSize);
+    private static readonly object AcquireLock = new();
 
     static NetworkWriterPool()
     {
@@ -11,11 +12,20 @@ public static class NetworkWriterPool
             Pool.Push(new NetworkWriterPooled());
     }
 
-    public static NetworkWriterPooled Get() => Pool.Count > 0 ? Pool.Pop() : new NetworkWriterPooled();
+    public static NetworkWriterPooled Get()
+    {
+        lock (AcquireLock)
+        {
+            return Pool.Count > 0 ? Pool.Pop() : new NetworkWriterPooled();
+        }
+    }
 
     public static void Return(NetworkWriterPooled writer)
     {
-        writer.Reset();
-        Pool.Push(writer);
+        lock (AcquireLock)
+        {
+            writer.Reset();
+            Pool.Push(writer);
+        }
     }
 }
