@@ -17,15 +17,15 @@ public struct NetMessageKartingPlayerUpdate : INetworkMessage, INetworkReadable
             var state = new PlayerState
             {
                 NameUid = reader.ReadUInt32(),
-                Away = (uint)(reader.ReadBool() ? 1 : 0),
-                Mic = (uint)(reader.ReadBool() ? 1 : 0),
+                Away = (reader.ReadBool() ? 1 : 0),
+                Mic = (reader.ReadBool() ? 1 : 0),
                 HasEventVetoed = reader.ReadBool(),
                 HasLeaderVetoed = reader.ReadBool(),
                 IsConnecting = reader.ReadBool(),
                 KartHandlingDrift = reader.ReadSingle(),
                 KartSpeedAccel = reader.ReadSingle(),
-                KartId = reader.ReadUInt32(),
-                CharacterId = reader.ReadUInt32()
+                KartId = reader.ReadInt32(),
+                CharacterId = reader.ReadInt32()
             };
             
             StateUpdates.Add(state);

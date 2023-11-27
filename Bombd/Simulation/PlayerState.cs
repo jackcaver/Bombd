@@ -12,11 +12,11 @@ public class PlayerState
     [XmlIgnore] public int NetcodeUserId;
     
     [XmlAttribute("nameUID")] public uint NameUid;
-    [XmlAttribute("pcId")] public uint PlayerConnectId;
-    [XmlAttribute("kartId")] public uint KartId;
-    [XmlAttribute("characterId")] public uint CharacterId;
-    [XmlAttribute("away")] public uint Away;
-    [XmlAttribute("mic")] public uint Mic;
+    [XmlAttribute("pcId")] public int PlayerConnectId;
+    [XmlAttribute("kartId")] public int KartId;
+    [XmlAttribute("characterId")] public int CharacterId;
+    [XmlAttribute("away")] public int Away;
+    [XmlAttribute("mic")] public int Mic;
     [XmlAttribute("styleDrift")] public float KartHandlingDrift;
     [XmlAttribute("styleAccel")] public float KartSpeedAccel;
 

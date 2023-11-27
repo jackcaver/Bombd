@@ -1,4 +1,4 @@
-﻿using System.Xml.Serialization;
+using System.Xml.Serialization;
 using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
@@ -89,7 +89,7 @@ public class GameSimulation
 
         _playerStates[userId] = new PlayerState
         {
-            PlayerConnectId = (uint)userId,
+            PlayerConnectId = userId,
             NameUid = (uint)nameUid,
             KartId = 0x1324,
             CharacterId = 0x132c,
