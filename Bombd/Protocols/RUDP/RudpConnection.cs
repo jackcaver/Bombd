@@ -8,12 +8,18 @@ namespace Bombd.Protocols.RUDP;
 
 public class RudpConnection : ConnectionBase
 {
+    public const int MinPacketSize = 8;
+    public const int MaxPacketSize = 1040;
     public const int MaxPayloadSize = 1024;
+
+    public const int VoipDataSize = 896;
+    
     public const int PacketTimeout = 30000;
     public const int ResendTime = 300;
-
+    
     public const int MaxNetcodeSize = 0xFFFF;
-
+    public const int MaxGamedataSize = 0x7FFFFF;
+    
     private readonly List<RudpAckRecord> _ackList = new(16);
 
     // Start off with ModNation's packet size limit of ~65kbs,
@@ -46,17 +52,88 @@ public class RudpConnection : ConnectionBase
 
     public EndPoint Endpoint { get; }
 
+    private bool VerifyChecksum16(ArraySegment<byte> data, int checksumOffset)
+    {
+        ushort csum = 0;
+        csum |= (ushort)(data[checksumOffset + 0] << 8);
+        csum |= (ushort)(data[checksumOffset + 1] << 0);
+
+        data[checksumOffset + 0] = 0;
+        data[checksumOffset + 1] = 0;
+
+        return CryptoHelper.GetMD516(data, CryptoHelper.Salt) == csum;
+    }
+
+    private bool VerifyChecksum32(ArraySegment<byte> data, int checksumOffset)
+    {
+        int csum = 0;
+        csum |= data[checksumOffset + 0] << 24;
+        csum |= data[checksumOffset + 1] << 16;
+        csum |= data[checksumOffset + 2] << 8;
+        csum |= data[checksumOffset + 3] << 0;
+        
+        data[checksumOffset + 0] = 0;
+        data[checksumOffset + 1] = 0;
+        data[checksumOffset + 2] = 0;
+        data[checksumOffset + 3] = 0;
+        
+        return CryptoHelper.GetMD532(data, CryptoHelper.Salt) == csum;
+    }
+    
+    private bool VerifyPacket(ArraySegment<byte> data)
+    {
+        if (data.Count is < MinPacketSize or > MaxPacketSize) return false;
+        
+        var protocol = (PacketType)data[0];
+        if (protocol is < PacketType.Reset or > PacketType.VoipData) return false;
+        
+        switch (protocol)
+        {
+            case PacketType.Reset:
+            {
+                return data.Count == 20;
+            }
+            case PacketType.Ack:
+            case PacketType.KeepAlive:
+            {
+                return data.Count == 16;
+            }
+            case PacketType.Handshake:
+            {
+                return data.Count == 20 && VerifyChecksum16(data, 2);
+            }
+            case PacketType.ReliableNetcodeData:
+            {
+                return data.Count >= 16 && VerifyChecksum32(data, 8);
+            }
+            case PacketType.UnreliableGameData:
+            {
+                int payloadBytes = (data[0x4] << 8) | data[0x5];
+                return 8 + payloadBytes == data.Count && VerifyChecksum16(data, 6);
+            }
+            case PacketType.ReliableGameData:
+            {
+                if (data.Count < 16) return false;
+                int payloadBytes = (data[0xE] << 8) | data[0xF];
+                return 16 + payloadBytes == data.Count && VerifyChecksum16(data, 12);
+            }
+            case PacketType.VoipData: return data.Count == (16 + VoipDataSize);
+        }
+        
+        return false;
+    }
+
     internal void OnData(ArraySegment<byte> data)
     {
-        if (data.Count < 8)
+        if (State == ConnectionState.Disconnected) return;
+        _lastReceiveTime = TimeHelper.LocalTime;
+
+        if (!VerifyPacket(data))
         {
-            Logger.LogInfo<RudpConnection>("Got packet with invalid length, dropping connection.");
+            Logger.LogInfo<RudpConnection>("Got invalid packet. Dropping connection.");
             Disconnect();
             return;
         }
-
-        if (State == ConnectionState.Disconnected) return;
-        _lastReceiveTime = TimeHelper.LocalTime;
 
         int offset = data.Offset;
         byte[] buffer = data.Array!;
@@ -220,6 +297,13 @@ public class RudpConnection : ConnectionBase
             if (groupId != _remoteGroupNumber)
             {
                 Logger.LogInfo<RudpConnection>("Got incorrect group number in reliable gamedata message. Disconnecting.");
+                Disconnect();
+                return;
+            }
+            
+            if (_groupOffset + payloadBytes > MaxGamedataSize)
+            {
+                Logger.LogInfo<RudpConnection>("Got gamedata that's about to exceed group buffer capacity. This shouldn't happen. Disconnecting.");
                 Disconnect();
                 return;
             }
