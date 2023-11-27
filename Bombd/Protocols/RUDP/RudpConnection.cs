@@ -12,6 +12,8 @@ public class RudpConnection : ConnectionBase
     public const int PacketTimeout = 30000;
     public const int ResendTime = 300;
 
+    public const int MaxNetcodeSize = 0xFFFF;
+
     private readonly List<RudpAckRecord> _ackList = new(16);
 
     // Start off with ModNation's packet size limit of ~65kbs,
@@ -27,6 +29,7 @@ public class RudpConnection : ConnectionBase
     private int _lastReceiveTime;
     private uint _localGamedataSequence;
     private ushort _localGroupNumber;
+    private ushort _remoteGroupNumber;
     
     private uint _localSequence;
     private uint _remoteGamedataSequence;
@@ -159,12 +162,27 @@ public class RudpConnection : ConnectionBase
                 Disconnect();
                 return;
             }
-
+            
             offset += buffer.ReadBoolean(offset, out bool groupCompleteFlag);
             offset += buffer.ReadUint16BE(offset, out ushort groupId);
             offset += 4 + 4 + 4;
-
+            
+            if (groupId != _remoteGroupNumber)
+            {
+                Logger.LogInfo<RudpConnection>("Got incorrect group number during authentication. Disconnecting.");
+                Disconnect();
+                return;
+            }
+            
             int size = data.Count - (offset - data.Offset);
+            
+            if (_groupOffset + size > MaxNetcodeSize)
+            {
+                Logger.LogInfo<RudpConnection>("Got netcode data that's about to exceed group buffer capacity. This shouldn't happen. Disconnecting.");
+                Disconnect();
+                return;
+            }
+            
             Buffer.BlockCopy(buffer, offset, _groupBuffer, _groupOffset, size);
             _groupOffset += size;
 
@@ -174,6 +192,7 @@ public class RudpConnection : ConnectionBase
                 if (State == ConnectionState.WaitingForConnection) HandleStartConnect(netcode);
                 else HandleTimeSync(netcode);
                 _groupOffset = 0;
+                _remoteGroupNumber++;
             }
 
             return;
@@ -198,6 +217,13 @@ public class RudpConnection : ConnectionBase
             offset += 2;
             offset += buffer.ReadUint16BE(offset, out ushort payloadBytes);
             
+            if (groupId != _remoteGroupNumber)
+            {
+                Logger.LogInfo<RudpConnection>("Got incorrect group number in reliable gamedata message. Disconnecting.");
+                Disconnect();
+                return;
+            }
+            
             bool isGroupComplete;
             if (Platform == Platform.Karting)
             {
@@ -213,6 +239,7 @@ public class RudpConnection : ConnectionBase
             {
                 Service.OnData(this, new ArraySegment<byte>(_groupBuffer, 0, _groupOffset), protocol);
                 _groupOffset = 0;
+                _remoteGroupNumber++;
             }
         }
         else
