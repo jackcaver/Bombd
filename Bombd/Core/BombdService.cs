@@ -126,6 +126,13 @@ public abstract class BombdService
             return false;
         }
 
+        int userId = CryptoHelper.StringHash32Upper(ticket.OnlineId + ticket.IssuerId);
+        if (UserInfo.ContainsKey(userId))
+        {
+            response.Error = "AlreadyLoggedIn";
+            return false;
+        }
+        
         if (request.TryGet("SessionKey", out string? encodedSessionKey))
         {
             // The login requests add the SessionKey param twice, so just take the first one.
@@ -160,7 +167,7 @@ public abstract class BombdService
         }
 
         connection.Username = ticket.OnlineId;
-        connection.UserId = CryptoHelper.StringHash32Upper(ticket.OnlineId + ticket.IssuerId);
+        connection.UserId = userId;
         connection.Platform = platform;
         Bombd.SessionManager.RegisterSession(connection);
 
