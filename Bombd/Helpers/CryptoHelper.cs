@@ -5,9 +5,7 @@ namespace Bombd.Helpers;
 public static class CryptoHelper
 {
     public const int Salt = 0x53414c54;
-
-    private static readonly byte[] RandomBytes = new byte[4];
-
+    
     private static readonly uint[] CrcTable32 =
     {
         0x00000000, 0x04C11DB7, 0x09823B6E, 0x0D4326D9, 0x130476DC,

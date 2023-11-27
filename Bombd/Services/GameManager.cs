@@ -31,7 +31,7 @@ public class GameManager : BombdService
     {
         context.Response["listenIP"] = BombdConfig.Instance.ExternalIP;
         context.Response["listenPort"] = Bombd.GameServer.Port.ToString();
-        context.Response["hashSalt"] = CryptoHelper.Salt.ToString();
+        context.Response["hashSalt"] = context.Session.HashSalt.ToString();
         context.Response["sessionId"] = context.Connection.SessionId.ToString();
         
         List<string> guests = new();
@@ -77,7 +77,7 @@ public class GameManager : BombdService
         context.Response["gamename"] = room.Game.GameName;
         context.Response["listenIP"] = BombdConfig.Instance.ExternalIP;
         context.Response["listenPort"] = Bombd.GameServer.Port.ToString();
-        context.Response["hashSalt"] = CryptoHelper.Salt.ToString();
+        context.Response["hashSalt"] = context.Session.HashSalt.ToString();
         context.Response["sessionId"] = context.Connection.SessionId.ToString();
         
         List<string> guests = new();

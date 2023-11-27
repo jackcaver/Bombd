@@ -24,7 +24,7 @@ public class RudpMessage
         _offset += _data.WriteUint32BE(_offset, 0);
     }
 
-    public void EncodeNetcode(ushort groupId, uint sequence, ArraySegment<byte> data, bool complete)
+    public void EncodeNetcode(ushort groupId, uint sequence, ArraySegment<byte> data, bool complete, uint salt)
     {
         Protocol = PacketType.ReliableNetcodeData;
         Sequence = sequence;
@@ -40,11 +40,11 @@ public class RudpMessage
         _offset += _data.WriteUint32BE(_offset, 0);
         _offset += _data.Write(_offset, data);
 
-        int checksum = CryptoHelper.GetMD532(GetArraySegment(), CryptoHelper.Salt);
+        int checksum = CryptoHelper.GetMD532(GetArraySegment(), salt);
         _data.WriteInt32BE(checksumOffset, checksum);
     }
 
-    public void EncodeGamedata(ushort groupId, uint sequence, int groupSize, ArraySegment<byte> data, bool complete)
+    public void EncodeGamedata(ushort groupId, uint sequence, int groupSize, ArraySegment<byte> data, bool complete, uint salt)
     {
         Protocol = PacketType.ReliableGameData;
         Sequence = sequence;
@@ -67,11 +67,11 @@ public class RudpMessage
         _offset += _data.WriteUint16BE(_offset, (ushort)data.Count);
         _offset += _data.Write(_offset, data);
 
-        ushort checksum = CryptoHelper.GetMD516(GetArraySegment(), CryptoHelper.Salt);
+        ushort checksum = CryptoHelper.GetMD516(GetArraySegment(), salt);
         _data.WriteUint16BE(checksumOffset, checksum);
     }
 
-    public void EncodeUnreliableGamedata(ArraySegment<byte> data)
+    public void EncodeUnreliableGamedata(ArraySegment<byte> data, uint salt)
     {
         Protocol = PacketType.UnreliableGameData;
 
@@ -85,7 +85,7 @@ public class RudpMessage
 
         _offset += _data.Write(_offset, data);
 
-        ushort checksum = CryptoHelper.GetMD516(GetArraySegment(), CryptoHelper.Salt);
+        ushort checksum = CryptoHelper.GetMD516(GetArraySegment(), salt);
         _data.WriteUint16BE(checksumOffset, checksum);
     }
 
@@ -103,7 +103,7 @@ public class RudpMessage
         _offset += _data.Write(_offset, data);
     }
 
-    public void EncodeHandshake(int sessionId, int secret)
+    public void EncodeHandshake(int sessionId, int secret, uint salt)
     {
         Protocol = PacketType.Handshake;
 
@@ -118,7 +118,7 @@ public class RudpMessage
         _offset += _data.WriteInt32BE(_offset, secret);
         _offset += _data.WriteUint32BE(_offset, 0);
 
-        ushort checksum = CryptoHelper.GetMD516(GetArraySegment(), CryptoHelper.Salt);
+        ushort checksum = CryptoHelper.GetMD516(GetArraySegment(), salt);
         _data.WriteUint16BE(checksumOffset, checksum);
     }
 

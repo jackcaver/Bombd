@@ -28,7 +28,7 @@ public abstract class ConnectionBase
     public int UserId { get; set; }
     public Platform Platform { get; set; } = Platform.Unknown;
     public int SessionId { get; set; }
-    public int HashSalt { get; set; } = CryptoHelper.Salt;
+    public uint HashSalt { get; set; } = CryptoHelper.Salt;
 
     private NetcodeTransaction? ParseConnectTransaction(ArraySegment<byte> data, string method)
     {

@@ -220,7 +220,13 @@ public abstract class BombdService
         {
             try
             {
-                Session session = Bombd.SessionManager.GetSession(connection);
+                Session? session = Bombd.SessionManager.GetSession(connection);
+                if (session == null)
+                {
+                    response.Error = "NotLoggedIn";
+                    return null;
+                }
+                
                 var context = new TransactionContext
                 {
                     Session = session,

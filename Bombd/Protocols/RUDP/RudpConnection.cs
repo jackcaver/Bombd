@@ -3,6 +3,7 @@ using Bombd.Core;
 using Bombd.Extensions;
 using Bombd.Helpers;
 using Bombd.Logging;
+using Bombd.Types.Services;
 
 namespace Bombd.Protocols.RUDP;
 
@@ -41,8 +42,7 @@ public class RudpConnection : ConnectionBase
     private uint _remoteGamedataSequence;
     private uint _remoteSequence;
     private int _secret;
-
-
+    
     public RudpConnection(EndPoint endpoint, BombdService service, RudpServer server) : base(service, server)
     {
         _server = server;
@@ -61,7 +61,7 @@ public class RudpConnection : ConnectionBase
         data[checksumOffset + 0] = 0;
         data[checksumOffset + 1] = 0;
 
-        return CryptoHelper.GetMD516(data, CryptoHelper.Salt) == csum;
+        return CryptoHelper.GetMD516(data, HashSalt) == csum;
     }
 
     private bool VerifyChecksum32(ArraySegment<byte> data, int checksumOffset)
@@ -77,7 +77,7 @@ public class RudpConnection : ConnectionBase
         data[checksumOffset + 2] = 0;
         data[checksumOffset + 3] = 0;
         
-        return CryptoHelper.GetMD532(data, CryptoHelper.Salt) == csum;
+        return CryptoHelper.GetMD532(data, HashSalt) == csum;
     }
     
     private bool VerifyPacket(ArraySegment<byte> data)
@@ -100,7 +100,8 @@ public class RudpConnection : ConnectionBase
             }
             case PacketType.Handshake:
             {
-                return data.Count == 20 && VerifyChecksum16(data, 2);
+                // We'll verify the checksum later, we need to actually pull the session id first
+                return data.Count == 20;
             }
             case PacketType.ReliableNetcodeData:
             {
@@ -173,8 +174,24 @@ public class RudpConnection : ConnectionBase
             _secret = secretNum;
             _remoteGamedataSequence = gamedataSequence;
 
+            Session? session = BombdServer.Instance.SessionManager.GetSession(this);
+            if (session == null)
+            {
+                Logger.LogInfo<RudpConnection>("Got invalid session id. Disconnecting.");
+                Disconnect();
+                return;
+            }
+
+            HashSalt = session.HashSalt;
+            if (!VerifyChecksum16(data, 2))
+            {
+                Logger.LogInfo<RudpConnection>("Handshake packet checksum failed. Disconnecting.");
+                Disconnect();
+                return;
+            }
+            
             RudpMessage msg = _messagePool.Get();
-            msg.EncodeHandshake(sessionId, _secret);
+            msg.EncodeHandshake(sessionId, _secret, HashSalt);
             _sendBuffer.Add(msg);
 
             _ackList.Add(new RudpAckRecord { Protocol = protocol, SequenceNumber = sequence });
@@ -389,7 +406,7 @@ public class RudpConnection : ConnectionBase
             case PacketType.UnreliableGameData:
             {
                 RudpMessage msg = _messagePool.Get();
-                msg.EncodeUnreliableGamedata(data);
+                msg.EncodeUnreliableGamedata(data, HashSalt);
                 _server.Send(this, msg.GetArraySegment());
                 _messagePool.Return(msg);
                 break;
@@ -442,9 +459,9 @@ public class RudpConnection : ConnectionBase
             len -= size;
 
             if (protocol == PacketType.ReliableNetcodeData)
-                msg.EncodeNetcode(groupNumber, _localSequence++, slice, len == 0);
+                msg.EncodeNetcode(groupNumber, _localSequence++, slice, len == 0, HashSalt);
             else
-                msg.EncodeGamedata(groupNumber, _localGamedataSequence++, groupSize, slice, len == 0);
+                msg.EncodeGamedata(groupNumber, _localGamedataSequence++, groupSize, slice, len == 0, HashSalt);
 
             _sendBuffer.Add(msg);
         }

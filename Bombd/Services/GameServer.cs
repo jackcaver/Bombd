@@ -169,7 +169,7 @@ public class GameServer : BombdService
                 var transaction = NetcodeTransaction.MakeRequest("gamemanager", "requestDirectHostConnection");
                 transaction["listenIP"] = BombdConfig.Instance.ExternalIP;
                 transaction["listenPort"] = Bombd.GameServer.Port.ToString();
-                transaction["hashSalt"] = CryptoHelper.Salt.ToString();
+                transaction["hashSalt"] = connection.HashSalt.ToString();
                 transaction["sessionId"] = connection.SessionId.ToString();
                 gamemanager.SendTransaction(connection.UserId, transaction);
             }

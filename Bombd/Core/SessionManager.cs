@@ -9,9 +9,15 @@ namespace Bombd.Core;
 public class SessionManager
 {
     private readonly object _sessionLock = new();
-    private readonly ConcurrentDictionary<int, Session> _sessions = new();
-
-    public Session GetSession(ConnectionBase connection) => _sessions[connection.SessionId];
+    private readonly Dictionary<int, Session> _sessions = new();
+    
+    public Session? GetSession(ConnectionBase connection)
+    {
+        lock (_sessionLock)
+        {
+            return _sessions.GetValueOrDefault(connection.SessionId);
+        }
+    }
 
     public void RegisterSession(ConnectionBase connection)
     {
@@ -21,7 +27,7 @@ public class SessionManager
             if (!_sessions.TryGetValue(sessionId, out Session? session))
             {
                 sessionId = CryptoHelper.GetRandomSecret();
-                int hashSalt = CryptoHelper.GetRandomSecret();
+                uint hashSalt = (uint)CryptoHelper.GetRandomSecret();
                 session = new Session
                 {
                     GameName = string.Empty,
@@ -64,7 +70,7 @@ public class SessionManager
             {
                 Logger.LogInfo<SessionManager>(
                     $"Destroying session for {connection.Username} since all services have been disconnected.");
-                _sessions.TryRemove(connection.SessionId, out _);
+                _sessions.Remove(connection.SessionId);
             }   
         }
     }
