@@ -14,8 +14,10 @@ public class RudpConnection : ConnectionBase
 
     private readonly List<RudpAckRecord> _ackList = new(16);
 
-    // The max size of a message is actually 0x800000, or something like 8mbs, but 1mb should probably be fine.
-    private readonly byte[] _groupBuffer = new byte[1000000]; 
+    // Start off with ModNation's packet size limit of ~65kbs,
+    // the gamedata message handler will resize the buffer if necessary.
+    private byte[] _groupBuffer = new byte[0x10000]; 
+    
     private readonly RudpMessagePool _messagePool = new(32);
     private readonly List<RudpMessage> _sendBuffer = new(16);
 
@@ -25,7 +27,7 @@ public class RudpConnection : ConnectionBase
     private int _lastReceiveTime;
     private uint _localGamedataSequence;
     private ushort _localGroupNumber;
-
+    
     private uint _localSequence;
     private uint _remoteGamedataSequence;
     private uint _remoteSequence;
@@ -189,20 +191,21 @@ public class RudpConnection : ConnectionBase
         else if (protocol == PacketType.ReliableGameData)
         {
             offset += 1 + 1;
-
-            byte groupCompleteFlags = buffer[offset++];
-            bool isGroupComplete;
-            if (Platform == Platform.Karting)
-                isGroupComplete = (groupCompleteFlags & 0x80) != 0;
-            else
-                isGroupComplete = (groupCompleteFlags != 0);
-            
+            byte groupFlags = buffer[offset++];
             offset += 4;
             offset += buffer.ReadUint16BE(offset, out ushort groupId);
             offset += buffer.ReadUint16BE(offset, out ushort groupSizeBytes);
             offset += 2;
             offset += buffer.ReadUint16BE(offset, out ushort payloadBytes);
-
+            
+            bool isGroupComplete;
+            if (Platform == Platform.Karting)
+            {
+                isGroupComplete = (groupFlags & 0x80) != 0;
+                EnsureGroupCapacity(groupSizeBytes | ((groupFlags & 0x7f) << 16));
+            }
+            else isGroupComplete = (groupFlags != 0);
+            
             Buffer.BlockCopy(buffer, offset, _groupBuffer, _groupOffset, payloadBytes);
             _groupOffset += payloadBytes;
 
@@ -214,6 +217,13 @@ public class RudpConnection : ConnectionBase
         }
         else
             Logger.LogInfo<RudpConnection>($"Unsupported protocol: {protocol}");
+    }
+
+    private void EnsureGroupCapacity(int value)
+    {
+        if (_groupBuffer.Length >= value) return;
+        int capacity = Math.Max(value, _groupBuffer.Length * 2);
+        Array.Resize(ref _groupBuffer, capacity);
     }
 
     internal void Update()
