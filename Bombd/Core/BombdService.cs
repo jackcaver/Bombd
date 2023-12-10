@@ -127,11 +127,11 @@ public abstract class BombdService
         }
 
         int userId = CryptoHelper.StringHash32Upper(ticket.OnlineId + ticket.IssuerId);
-        if (UserInfo.ContainsKey(userId))
-        {
-            response.Error = "AlreadyLoggedIn";
-            return false;
-        }
+        // if (UserInfo.ContainsKey(userId))
+        // {
+        //     response.Error = "AlreadyLoggedIn";
+        //     return false;
+        // }
         
         if (request.TryGet("SessionKey", out string? encodedSessionKey))
         {

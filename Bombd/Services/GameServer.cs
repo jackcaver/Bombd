@@ -281,6 +281,10 @@ public class GameServer : BombdService
                 Logger.LogWarning<GameServer>(
                     "A player tried to join a game room, but the room doesn't exist.");
                 _playerJoinQueue.RemoveAt(i--);
+                if (UserInfo.TryGetValue(request.UserId, out ConnectionBase? pendingConnection))
+                {
+                    pendingConnection.Disconnect();
+                }
                 continue;
             }
 

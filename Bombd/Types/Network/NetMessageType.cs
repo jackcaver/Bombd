@@ -1,24 +1,23 @@
 ﻿namespace Bombd.Types.Network;
 
-// Create = 0
-// Acquire = 1
-// Release = 2
-// Destroy = 3
-// AcquireFail = 4
-
-
-
-// fn (event_type, item_id, + 0x18, player_name_uid, + 0x8) 
-
 public enum NetMessageType : byte
 {
+    // 0x1
     KartNetState = 2,
+    // 0x3
+    // 0x4
+    // 0x5
+    // 0x6
+    // 0x7
+    // 0x8
+    // 0x9
     ItemHitConfirm = 0xa,
     TeamMessage = 0xb,
     SecondaryCollision = 0xc,
     WandererUpdate = 0xd,
-    Gameplay = 0xe,
-    ItemMessage_0x10 = 0x10,
+    Gameplay = 0xe, // treated the same as 0x50
+    // 0xf
+    ItemMessage_0x10 = 0x10, // are these stats?
     ItemDestroy = 0x11,
     ItemMoveData = 0x12,
     ItemHitPlayer = 0x13,
@@ -67,7 +66,11 @@ public enum NetMessageType : byte
     EventSettingsUpdate = 0x1f,
     TextChatMsg = 0x20,
     SeriesResults = 0x21,
+    // 0x22
+    // 0x23
+    // 0x24
     GameroomReady = 0x25,
+    // 0x26
     LeaderChangeRequest = 0x27,
     KickPlayerRequest = 0x28,
     RankedEventVeto = 0x29,
@@ -83,6 +86,7 @@ public enum NetMessageType : byte
     VoipPacket = 0x33,
     BulkPlayerStateUpdate = 0x34,
     RandomSeed = 0x35,
+    // 0x36
     GameroomDownloadTracksComplete = 0x37,
     GameroomDownloadTracksFailed = 0x38,
     ReadyForNisStart = 0x39,
@@ -132,4 +136,7 @@ public enum NetMessageType : byte
     // mPlaygroupId
     // mOption
     CoopPostraceLeaderAction = 0x4f
+    
+    // 0x50
+    // 0x51
 }

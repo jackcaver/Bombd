@@ -14,11 +14,7 @@ public struct NetMessagePlayerCreateInfo : INetworkMessage, INetworkReadable
         Data = new List<PlayerInfo>();
         int count = reader.ReadInt32();
         for (int i = 0; i < count; ++i)
-        {
-            var info = new PlayerInfo();
-            info.Read(reader);
-            Data.Add(info);
-        }
+            Data.Add(reader.Read<PlayerInfo>());
     }
     
     public void Write(NetworkWriter writer)

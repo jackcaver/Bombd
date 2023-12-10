@@ -16,7 +16,7 @@ public class MatchmakingPlayer
     public Platform Platform;
     public List<GameAttributePair> SimpleFilters = new();
     public List<GameAttributePair> AdvancedFilters = new();
-    public int MatchSizeTable;
+    public string MatchSizeTable;
     public int GroupSize;
     public int GuestCount;
 }

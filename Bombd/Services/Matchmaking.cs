@@ -38,7 +38,7 @@ public class Matchmaking : BombdService
                 NetworkReader.Deserialize<GameAttributePair>(context.Request["advancedFilters"], numAdvancedFilters);
         }
         
-        player.MatchSizeTable = int.Parse(context.Request["matchSizeTable"]);
+        player.MatchSizeTable = context.Request["matchSizeTable"];
         player.GroupSize = int.Parse(context.Request["groupSize"]);
         player.GuestCount = int.Parse(context.Request["numGuests"]);
         
