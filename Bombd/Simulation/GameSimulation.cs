@@ -98,7 +98,7 @@ public class GameSimulation
 
         _playerInfos[userId] = new PlayerInfo
         {
-            Operation = CanJoinAsRacer() ? GameJoinStatus.RacerPending : GameJoinStatus.SpectatorPending,
+            Operation = GameJoinStatus.RacerPending,
             NetcodeUserId = userId,
             NetcodeGamePlayerId = playerId,
             PlayerConnectId = userId,
@@ -291,7 +291,6 @@ public class GameSimulation
                 _raceSettings.Value.OwnerNetcodeUserId = Owner;
                 _raceSettings.Sync();
             }
-            BroadcastGenericIntMessage(randomPlayer.UserId, NetMessageType.LeaderChangeRequest, PacketType.ReliableGameData);
         }
     }
 
@@ -828,6 +827,39 @@ public class GameSimulation
             case NetMessageType.WorldobjectCreate:
             {
                 BroadcastGenericMessage(data, NetMessageType.WorldobjectCreate, PacketType.ReliableGameData);
+                break;
+            }
+            case NetMessageType.LeaderChangeRequest:
+            {
+                // Only the current session leader can change the host
+                if (player.UserId != Owner) break;
+                // Make sure we're in a valid gameroom state
+                if (Type != ServerType.Competitive || _raceSettings == null) break;
+                
+                // Data must be 4 bytes since it's just the new host's nameuid
+                if (data.Count != 4)
+                {
+                    Logger.LogWarning<GameSimulation>($"Failed to parse LeaderChangeRequest from {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+                
+                uint nameUid = 0;
+                nameUid |= (uint)(data[0] << 24);
+                nameUid |= (uint)(data[1] << 16);
+                nameUid |= (uint)(data[2] << 8);
+                nameUid |= (uint)(data[3] << 0);
+                
+                // Find the player by nameUID, if they exist, set them to host
+                foreach (var state in _playerStates.Values)
+                {
+                    if (state.NameUid != nameUid) continue;
+                    _raceSettings.Value.OwnerNetcodeUserId = state.NetcodeUserId;
+                    _raceSettings.Sync();
+                    Owner = state.NetcodeUserId;
+                    break;
+                }
+                
                 break;
             }
             case NetMessageType.PlayerLeave:
