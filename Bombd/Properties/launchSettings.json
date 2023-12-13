@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Bombd": {
+      "commandName": "Project"
+    },
+    "Docker": {
+      "commandName": "Docker"
+    }
+  }
+}

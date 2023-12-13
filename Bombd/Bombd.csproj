@@ -6,6 +6,7 @@
         <Nullable>enable</Nullable>
         <RootNamespace>Bombd</RootNamespace>
         <LangVersion>default</LangVersion>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     </PropertyGroup>
     <ItemGroup>
         <None Update="Data\MatchmakingConfiguration.xml">
@@ -34,7 +35,8 @@
         </None>
     </ItemGroup>
     <ItemGroup>
-        <PackageReference Include="JetBrains.Annotations" Version="2023.3.0-eap3"/>
+        <PackageReference Include="JetBrains.Annotations" Version="2023.3.0-eap3" />
+        <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.5" />
     </ItemGroup>
     <ItemGroup>
       <Folder Include="Data\Blobs\Karting\" />
