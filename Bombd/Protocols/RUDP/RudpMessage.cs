@@ -9,7 +9,7 @@ public class RudpMessage
     private int _offset;
     internal PacketType Protocol;
     internal uint Sequence;
-    internal int Timestamp;
+    internal uint Timestamp;
 
     public void EncodeAck(PacketType protocol, uint sequence)
     {

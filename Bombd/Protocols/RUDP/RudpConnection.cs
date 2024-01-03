@@ -33,7 +33,7 @@ public class RudpConnection : ConnectionBase
     private readonly RudpServer _server;
     private int _groupOffset;
 
-    private int _lastReceiveTime;
+    private uint _lastReceiveTime;
     private uint _localGamedataSequence;
     private ushort _localGroupNumber;
     private ushort _remoteGroupNumber;
@@ -127,7 +127,7 @@ public class RudpConnection : ConnectionBase
     internal void OnData(ArraySegment<byte> data)
     {
         if (State == ConnectionState.Disconnected) return;
-        _lastReceiveTime = TimeHelper.LocalTime;
+        _lastReceiveTime = (uint)TimeHelper.LocalTime;
 
         if (!VerifyPacket(data))
         {
@@ -196,6 +196,8 @@ public class RudpConnection : ConnectionBase
 
             _ackList.Add(new RudpAckRecord { Protocol = protocol, SequenceNumber = sequence });
 
+            Logger.LogDebug<RudpConnection>("Player has connected!");
+            
             State = ConnectionState.WaitingForConnection;
             return;
         }
@@ -356,7 +358,7 @@ public class RudpConnection : ConnectionBase
 
     internal void Update()
     {
-        int time = TimeHelper.LocalTime;
+        uint time = (uint)TimeHelper.LocalTime;
 
         if (time >= _lastReceiveTime + PacketTimeout)
         {
@@ -368,6 +370,7 @@ public class RudpConnection : ConnectionBase
         foreach (RudpMessage message in _sendBuffer)
         {
             if (time - message.Timestamp < ResendTime) continue;
+            
             
             message.Timestamp = time;
             _server.Send(this, message.GetArraySegment());
