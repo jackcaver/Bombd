@@ -1,0 +1,17 @@
+version: '3'
+services:
+  bombd:
+    build: .
+    container_name: bombd
+    restart: unless-stopped
+    ports:
+      - 10501:10501/tcp
+      - 10510:10510/tcp
+      - 10505:10505/tcp
+      - 10412:10412/tcp
+      - 10513:10513/tcp
+      - 10514:10514/tcp
+      - 13452:13452/tcp
+      - 50002:50002/udp
+    environment:
+      OPENSSL_CONF: /bombd/ssl.cnf
