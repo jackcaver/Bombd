@@ -7,7 +7,7 @@ COPY ["Bombd/Bombd.csproj", "Bombd/"]
 RUN dotnet restore "./Bombd/./Bombd.csproj"
 COPY . .
 WORKDIR "/src/Bombd"
-RUN dotnet publish -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o /app/publish #/p:UseAppHost=false
+RUN dotnet publish -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true,InvariantGlobalization=true -o /app/publish #/p:UseAppHost=false
 
 FROM debian:bullseye-slim
 WORKDIR /
@@ -22,7 +22,7 @@ RUN ldconfig /usr/local/lib64/
 #USER app
 WORKDIR /app
 COPY --from=build /app/publish /app
-ENTRYPOINT Bombd
+ENTRYPOINT /app/Bombd
 EXPOSE 10501
 EXPOSE 10510
 EXPOSE 10505
