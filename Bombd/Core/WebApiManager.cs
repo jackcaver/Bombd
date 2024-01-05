@@ -94,6 +94,12 @@ public class WebApiManager
     
     public static void Initialize()
     {
+        if (string.IsNullOrEmpty(BombdConfig.Instance.ApiURL))
+        {
+            Logger.LogWarning<WebApiManager>("No Web API URL provided!");
+            return;
+        }
+        
         string xml = MakeRequest($"{BombdConfig.Instance.ApiURL}/resources/content_update.latest.xml");
         if (string.IsNullOrEmpty(xml))
         {
