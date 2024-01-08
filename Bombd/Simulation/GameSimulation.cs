@@ -1369,7 +1369,9 @@ public class GameSimulation
                     if (TimeHelper.LocalTime >= raceInfo.RaceEndServerTime && !_hasSentEventResults)
                     {
                         _hasSentEventResults = true;
-
+                        string results = EventResult.Serialize(_eventResults);
+                        _eventResults.Clear();
+                        
                         string destination = IsModNation ? "destKartPark" : "destPod";
                         if (_raceSettings!.Value.AutoReset)
                             destination = "destGameroom";
@@ -1377,17 +1379,17 @@ public class GameSimulation
                         int postRaceDelay = IsKarting
                             ? BombdConfig.Instance.KartingPostRaceTime
                             : BombdConfig.Instance.ModNationPostRaceTime;
-                    
+                        
                         BroadcastMessage(new NetMessageEventResults
                         {
                             SenderNameUid = NetworkMessages.SimServerUID,
                             Platform = Platform,
-                            ResultsXml = EventResult.Serialize(_eventResults),
+                            ResultsXml = results,
                             Destination = destination,
                             PostEventDelayTime = TimeHelper.LocalTime + postRaceDelay,
                             PostEventScreenTime = postRaceDelay
                         }, PacketType.ReliableGameData);
-                    
+                        
                         if (IsKarting) UpdateVotePackage();
 
                         // Broadcast new seed for the next race
