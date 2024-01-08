@@ -1141,7 +1141,7 @@ public class GameSimulation
                 
                 // Wait until we've received the player config and the second player state update
                 // to finish our "connecting" process.
-                if (player.State.IsConnecting && !player.State.WaitingForPlayerConfig)
+                if (player.State is { IsConnecting: true, WaitingForPlayerConfig: false })
                 {
                     player.State.IsConnecting = false;
                     BroadcastKartingPlayerSessionInfo();
@@ -1279,12 +1279,11 @@ public class GameSimulation
 
         foreach (var player in _players)
         {
-            if (player.IsFakePlayer)
-            {
-                player.State.Flags = PlayerStateFlags.AllFlags;
-                player.State.IsConnecting = false;
-                player.HasSentRaceResults = true;
-            }
+            if (!player.IsFakePlayer) continue;
+            
+            player.State.Flags = PlayerStateFlags.AllFlags;
+            player.State.IsConnecting = false;
+            player.HasSentRaceResults = true;
         }
 
         // If the race hasn't started update the gameroom's state based on 
@@ -1305,7 +1304,6 @@ public class GameSimulation
                 SetCurrentGameroomState(RoomState.WaitingMinPlayers);
         }
         
-        // TODO: Exclude players who joined after the countdown
         switch (room.State)
         {
             case RoomState.CountingDown:
