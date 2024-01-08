@@ -13,5 +13,6 @@ public class GameGuest
     
     public readonly string PlayerName;
     public readonly string GuestName;
+    public PlayerInfo? Info;
     public int NameUid;
 }

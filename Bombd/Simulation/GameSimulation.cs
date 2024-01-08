@@ -1,10 +1,8 @@
-using System.Xml.Serialization;
 using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
-using Bombd.Serialization.Wrappers;
 using Bombd.Types.Network;
 using Bombd.Types.Network.Messages;
 using Bombd.Types.Network.Objects;
@@ -14,17 +12,17 @@ namespace Bombd.Simulation;
 public class GameSimulation
 {
     public int Owner;
-    
+
     private readonly List<GamePlayer> _players;
-    private readonly Dictionary<int, PlayerState> _playerStates = new();
-    private readonly Dictionary<int, PlayerInfo> _playerInfos = new();
-    private readonly Dictionary<string, PlayerInfo> _guestInfos = new();
+    private readonly List<PlayerInfo> _playerInfos = new();
+    private readonly List<PlayerState> _playerStates = new();
+    private readonly Dictionary<int, GamePlayer> _playerLookup = new();
     
     private int _seed = CryptoHelper.GetRandomSecret();
     private int _lastStateTime = TimeHelper.LocalTime;
-    private readonly XmlSerializer _stateSerializer = new(typeof(PlayerState));
     private readonly Dictionary<int, SyncObject> _syncObjects = new();
-    
+
+    public readonly GameRoom Room;
     public readonly Platform Platform;
     public readonly ServerType Type;
     
@@ -41,14 +39,17 @@ public class GameSimulation
     private bool _waitingForPlayerStartEvents;
     private bool _hasSentEventResults;
 
-    public GameSimulation(ServerType type, Platform platform, int owner, List<GamePlayer> players)
+    private float _pausedTimeRemaining;
+
+    public GameSimulation(ServerType type, GameRoom room, int owner)
     {
+        Room = room;
         Type = type;
-        Platform = platform;
-        _players = players;
+        Platform = room.Platform;
         Owner = owner;
+        _players = room.Game.Players;
         
-        Logger.LogInfo<GameSimulation>($"Starting Game Simulation ({type}:{platform})");
+        Logger.LogInfo<GameSimulation>($"Starting Game Simulation ({Type}:{Platform})");
         
         if (Type == ServerType.KartPark)
         {
@@ -63,6 +64,8 @@ public class GameSimulation
             _raceInfo = CreateSystemSyncObject(new SpectatorInfo(Platform), NetObjectType.SpectatorInfo);
             _aiInfo = CreateSystemSyncObject(new AiInfo(Platform), NetObjectType.AiInfo);
             _startingGrid = CreateSystemSyncObject(new StartingGrid(Platform), NetObjectType.StartingGrid);
+            
+            AddFakePlayer("Onizuka");
         }
     }
 
@@ -73,30 +76,22 @@ public class GameSimulation
         
         int userId = CryptoHelper.GetRandomSecret();
         int playerId = CryptoHelper.GetRandomSecret();
-        
-        var player = new GamePlayer
+
+        var player = new GamePlayer(Room, username, userId, playerId)
         {
-            IsFakePlayer = true,
-            Platform = Platform,
-            PlayerId = playerId,
-            Send = (_, _) => { },
-            Disconnect = () => { },
-            UserId = userId,
-            Username = username
+            IsFakePlayer = true
         };
         
-        _players.Add(player);
-
-        _playerStates[userId] = new PlayerState
+        player.State.Update(new PlayerState
         {
             PlayerConnectId = userId,
             NameUid = (uint)nameUid,
             KartId = 0x1324,
             CharacterId = 0x132c,
             KartSpeedAccel = 0x0
-        };
+        });
 
-        _playerInfos[userId] = new PlayerInfo
+        player.Info = new PlayerInfo
         {
             Operation = GameJoinStatus.RacerPending,
             NetcodeUserId = userId,
@@ -109,6 +104,11 @@ public class GameSimulation
             PlayerName = username,
             PodLocation = string.Empty
         };
+        
+        _players.Add(player);
+        _playerLookup[player.UserId] = player;
+        _playerInfos.Add(player.Info);
+        _playerStates.Add(player.State);
 
         byte[] charDataBlob;
         byte[] kartDataBlob;
@@ -147,40 +147,36 @@ public class GameSimulation
     }
 
     public bool IsKarting => Platform == Platform.Karting;
-    public bool IsModnation => Platform == Platform.ModNation;
+    public bool IsModNation => Platform == Platform.ModNation;
     public bool HasRaceSettings => _raceSettings != null;
 
     public bool IsHostReady()
     {
         if (Owner == -1) return true;
-        if (_playerStates.TryGetValue(Owner, out PlayerState? state))
-        {
-            if (Type != ServerType.Competitive) return !state.IsConnecting;
-            return !state.IsConnecting && (state.Flags & PlayerStateFlags.GameRoomReady) != 0;
-        }
-        return false;
+        if (!_playerLookup.TryGetValue(Owner, out GamePlayer? player)) return false;
+        
+        var state = player.State;
+        if (Type != ServerType.Competitive) return !state.IsConnecting;
+        return !state.IsConnecting && (state.Flags & PlayerStateFlags.GameRoomReady) != 0;
     }
 
-    public void SwitchAllToRacers()
+    private void SwitchAllToRacers()
     {
+        foreach (var player in _players)
+            player.IsSpectator = false;
+        foreach (var info in _playerInfos)
+            info.Operation = GameJoinStatus.RacerPending;
+        
         if (IsKarting)
-        {
-            foreach (var info in _playerInfos.Values) info.Operation = GameJoinStatus.RacerPending;
-            foreach (var info in _guestInfos.Values) info.Operation = GameJoinStatus.RacerPending;
             BroadcastKartingPlayerSessionInfo();
-        }
         else
-        {
             BroadcastMessage(new NetMessagePlayerSessionInfo { JoinStatus = GameSessionStatus.SwitchAllToRacer }, PacketType.ReliableGameData);
-        }
     }
 
-    public void BroadcastKartingPlayerSessionInfo()
+    private void BroadcastKartingPlayerSessionInfo()
     {
         if (!IsKarting) return;
-        var infos = new List<PlayerInfo>(_playerInfos.Values);
-        infos.AddRange(_guestInfos.Values);
-        BroadcastMessage(new NetMessagePlayerCreateInfo { Data = infos }, PacketType.ReliableGameData);
+        BroadcastMessage(new NetMessagePlayerCreateInfo { Data = _playerInfos }, PacketType.ReliableGameData);
     }
     
     public void OnPlayerJoin(GamePlayer player)
@@ -188,14 +184,21 @@ public class GameSimulation
         // Don't actually know if this is random per room or random per player,
         // I assume it's used for determinism, but I don't know?
         player.SendReliableMessage(new NetMessageRandomSeed { Seed = _seed });
-
-        if (IsModnation)
+        
+        // Add player to lookup cache
+        _playerLookup[player.UserId] = player;
+        _playerStates.Add(player.State);
+        
+        if (IsModNation)
         {
+            player.IsSpectator = !CanJoinAsRacer();
+            
             // Tell everybody else about yourself
             foreach (GamePlayer peer in _players)
             {
                 GameSessionStatus status =
-                    CanJoinAsRacer() ? GameSessionStatus.JoinAsRacer : GameSessionStatus.JoinAsSpectator;
+                    player.IsSpectator ? GameSessionStatus.JoinAsSpectator : GameSessionStatus.JoinAsRacer;
+                
                 peer.SendReliableMessage(new NetMessagePlayerSessionInfo
                 {
                     JoinStatus = status,
@@ -208,9 +211,11 @@ public class GameSimulation
             foreach (GamePlayer peer in _players)
             {
                 if (player == peer) continue;
+                GameSessionStatus status =
+                    peer.IsSpectator ? GameSessionStatus.JoinAsSpectator : GameSessionStatus.JoinAsRacer;
                 player.SendReliableMessage(new NetMessagePlayerSessionInfo
                 {
-                    JoinStatus = GameSessionStatus.JoinAsRacer,
+                    JoinStatus = status,
                     PlayerId = peer.PlayerId,
                     UserId = peer.UserId
                 });
@@ -239,12 +244,10 @@ public class GameSimulation
     
     public void OnPlayerLeft(GamePlayer player)
     {
-        // Make sure we're not still keeping track of the player's state even after they left.
-        _playerStates.Remove(player.UserId);
-        _playerInfos.Remove(player.UserId);
-        foreach (GameGuest guest in player.Guests)
-            _guestInfos.Remove(guest.PlayerName);
-        
+        // Destroy cached states
+        _playerStates.Remove(player.State);
+        _playerLookup.Remove(player.UserId);
+        _playerInfos.RemoveAll(info => info.NetcodeUserId == player.UserId);
         
         // Destroy all sync objects owned by the player, this will realistically only be the player info object,
         // but just to be safe search for all owned objects anyway.
@@ -294,19 +297,13 @@ public class GameSimulation
         }
     }
 
-    public void RecalculatePodPositions()
+    private void RecalculatePodPositions()
     {
+        if (!IsKarting) return;
+        
         int position = 1;
-        foreach (GamePlayer player in _players)
-        {
-            if (!_playerInfos.TryGetValue(player.UserId, out PlayerInfo? info)) continue;
-            info.PodLocation = $"POD_Player0{position++}_Placer";
-            foreach (var guest in player.Guests)
-            {
-                if (!_guestInfos.TryGetValue(guest.GuestName, out PlayerInfo? guestInfo)) continue;
-                guestInfo.PodLocation = $"POD_Player0{position++}_Placer";
-            }
-        }
+        foreach (PlayerInfo info in _playerInfos)
+           info.PodLocation = $"POD_Player0{position++}_Placer";
         
         // Send the new session info to everybody in the game
         BroadcastKartingPlayerSessionInfo();
@@ -372,21 +369,13 @@ public class GameSimulation
     
     private void BroadcastPlayerStates()
     {
-        Logger.LogInfo<GameSimulation>("Player state update received. Broadcasting new states to room.");
-        foreach (GamePlayer player in _players)
-        {
-            bool hasState = _playerStates.TryGetValue(player.UserId, out PlayerState? state);
-            if (hasState) Logger.LogDebug<GameSimulation>($" -> {player.Username} : {state}");
-            else Logger.LogDebug<GameSimulation>($" -> {player.Username} : NO STATE");
-        }
-        
         if (IsKarting)
         {
-            BroadcastMessage(new NetMessageKartingPlayerUpdate { StateUpdates = _playerStates.Values }, PacketType.ReliableGameData);
+            BroadcastMessage(new NetMessageKartingPlayerUpdate { StateUpdates = _playerStates }, PacketType.ReliableGameData);
             return;
         }
         
-        BroadcastMessage(new NetMessageModnationPlayerUpdate { StateUpdates = _playerStates.Values }, PacketType.ReliableGameData);
+        BroadcastMessage(new NetMessageModnationPlayerUpdate { StateUpdates = _playerStates }, PacketType.ReliableGameData);
     }
 
     private void UpdateVotePackage()
@@ -400,9 +389,16 @@ public class GameSimulation
     private void SetCurrentGameroomState(RoomState state)
     {
         var room = _gameroomState.Value;
-        if (state == room.State) return;
+        var oldState = room.State;
+        if (state == oldState) return;
         
         Logger.LogInfo<GameSimulation>($"Setting GameRoomState to {state}");
+
+        // Make sure we cache how much time is remaining when we paused the countdown
+        if (state == RoomState.CountingDownPaused)
+        {
+            _pausedTimeRemaining = (room.LoadEventTime - TimeHelper.LocalTime);
+        }
         
         room.State = state;
         room.LoadEventTime = 0;
@@ -412,9 +408,10 @@ public class GameSimulation
         if (state <= RoomState.Ready || state == RoomState.RaceInProgress)
         {
             // Reset the race loading flags for each player
-            foreach (var playerState in _playerStates.Values)
+            foreach (var player in _players)
             {
-                playerState.Flags &= ~PlayerStateFlags.RaceLoadFlags;
+                player.State.Flags &= ~PlayerStateFlags.RaceLoadFlags;
+                player.HasSentRaceResults = false;
             }
         }
         
@@ -425,8 +422,18 @@ public class GameSimulation
                 _waitingForPlayerNisEvents = false; 
                 _waitingForPlayerStartEvents = false; 
                 _hasSentEventResults = false;
-                foreach (var playerState in _playerStates.Values)
-                    playerState.Flags = PlayerStateFlags.None;
+                foreach (var player in _players)
+                {
+                    // We only need to reset the flags for people who are currently racing
+                    if (player.IsSpectator) continue;
+                    player.State.Flags = PlayerStateFlags.None;
+                    
+                    // Set the state back to connecting so people in lobby can see whether you're
+                    // back or not yet
+                    player.State.IsConnecting = true;
+                    player.State.WaitingForPlayerConfig = true;
+                }
+                BroadcastPlayerStates();
                 SwitchAllToRacers();
                 break;
             }
@@ -439,15 +446,7 @@ public class GameSimulation
             {
                 // If the gameroom isn't loaded before it receives the player create info,
                 // it won't ever update the racer state
-                if (IsKarting)
-                {
-                    foreach (var info in _playerInfos.Values)
-                        info.Operation = GameJoinStatus.RacerPending;
-                    foreach (var info in _guestInfos.Values)
-                        info.Operation = GameJoinStatus.RacerPending;
-                    BroadcastKartingPlayerSessionInfo();
-                }
-                
+                SwitchAllToRacers();
                 break;
             }
             case RoomState.CountingDown:
@@ -465,6 +464,12 @@ public class GameSimulation
                     room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.KartingGameroomCountdownTime;
                     room.LockedForRacerJoinsValue = BombdConfig.Instance.KartingGameroomTimerLock;
                     room.LockedTimerValue = BombdConfig.Instance.KartingGameroomTimerLock;
+                }
+
+                // Restore the old timer state pre-pause
+                if (oldState == RoomState.CountingDownPaused)
+                {
+                    room.LoadEventTime = TimeHelper.LocalTime + (int)_pausedTimeRemaining;
                 }
                 
                 break;
@@ -512,8 +517,8 @@ public class GameSimulation
         _startingGrid.Value.Clear();
         foreach (GamePlayer player in _players)
         {
-            if (!_playerStates.TryGetValue(player.UserId, out PlayerState? state)) continue;
-            _startingGrid.Value.Add(new GridPositionData((int)state.NameUid, false));
+            if (!player.State.HasNameUid) continue;
+            _startingGrid.Value.Add(new GridPositionData((int)player.State.NameUid, false));
             if (player.Guest != null)
                 _startingGrid.Value.Add(new GridPositionData(player.Guest.NameUid, true));
         }
@@ -616,29 +621,52 @@ public class GameSimulation
         return true;
     }
 
-    private void ParseGuestInfo(ArraySegment<byte> data, GamePlayer player)
+    private void ParsePlayerConfig(ArraySegment<byte> data, GamePlayer player)
     {
-        if (player.Guest == null) return;
         try
         {
             var config = PlayerConfig.ReadVersioned(data, Platform);
-            
-            // Type 1 is guest
-            if (config.Type != 1) return;
-            
-            GameGuest? guest = player.GetGuestByName(config.Username);
-            if (guest == null || (IsKarting && config.NetcodeUserId != -1) || (IsModnation && config.NetcodeUserId != player.UserId))
+
+            // Type 1 is guest, we need to extract the name uid on ModNation
+            if (config.Type == 1)
             {
-                Logger.LogWarning<GameSimulation>($"Guest doesn't belong to {player.Username}, this shouldn't happen, disconnecting!");
-                player.Disconnect();
-                return;
+                GameGuest? guest = player.GetGuestByName(config.Username);
+                if (guest == null || (IsKarting && config.NetcodeUserId != -1) ||
+                    (IsModNation && config.NetcodeUserId != player.UserId))
+                {
+                    Logger.LogWarning<GameSimulation>(
+                        $"Guest doesn't belong to {player.Username}, this shouldn't happen, disconnecting!");
+                    player.Disconnect();
+                    return;
+                }
+
+                // On Karting, we already got the NameUid from the PlayerInfoCreate message
+                if (IsModNation)
+                    guest.NameUid = CryptoHelper.StringHash32(config.UidName);
             }
-            
-            guest.NameUid = CryptoHelper.StringHash32(config.UidName);
+            else if (config.Type == 0)
+            {
+                if (config.NetcodeUserId != player.UserId)
+                {
+                    Logger.LogWarning<GameSimulation>(
+                        $"PlayerConfig doesn't belong to {player.Username}, this shouldn't happen, disconnecting!");
+                    player.Disconnect();
+                    return;
+                }
+
+                player.State.WaitingForPlayerConfig = false;
+            }
+            else
+            {
+                Logger.LogWarning<GameSimulation>(
+                    $"PlayerConfig for {player.Username} has invalid type! Disconnecting!");
+                player.Disconnect();
+            }
         }
         catch (Exception)
         {
-            Logger.LogError<GameSimulation>($"Failed to parse PlayerConfig for {player.Username}'s guest, disconnecting them from the game session.");
+            Logger.LogError<GameSimulation>(
+                $"Failed to parse PlayerConfig for {player.Username}'s guest, disconnecting them from the game session.");
             player.Disconnect();
         }
     }
@@ -654,13 +682,13 @@ public class GameSimulation
         data.CopyTo(array);
         syncObject.Data = new ArraySegment<byte>(array);
         
-        // If we're on ModNation and it's a guest playerconfig, try to pull the nameUID from it since
-        // we don't get sent it at any point, it seems
+
+        // Check if we've received the player config object yet
         var playerConfigType = NetObjectType.PlayerConfig;
-        if (IsModnation && syncObject.Type == playerConfigType.ModnationTypeId)
-        {
-            ParseGuestInfo(data, player);
-        }
+        bool isKartingConfig = Platform == Platform.Karting && syncObject.Type == playerConfigType.KartingTypeId;
+        bool isModNationConfig = Platform == Platform.ModNation && syncObject.Type == playerConfigType.ModnationTypeId;
+        if (isModNationConfig || isKartingConfig)
+            ParsePlayerConfig(data, player);
         
         return true;
     }
@@ -703,10 +731,12 @@ public class GameSimulation
                     break;
                 }
 
-                // Remove the detaching guests from the global guest infos
-                foreach (var guestInfo in message.Data)
+                foreach (var detachInfo in message.Data)
                 {
-                    _guestInfos.Remove(guestInfo.PlayerName);
+                    int index = _playerInfos.FindIndex(info =>
+                        info.PlayerName == detachInfo.PlayerName && info.NetcodeUserId == player.UserId);
+                    if (index != -1)
+                        _playerInfos.RemoveAt(index);
                 }
                 
                 // Tell everybody else that we've detached the guest(s)
@@ -783,15 +813,20 @@ public class GameSimulation
                     break;
                 }
                 
+                // Player create info gets sent again when attaching guests, make sure we remove all our old infos
+                _playerInfos.RemoveAll(x => x.NetcodeUserId == player.UserId);
+                
+                player.IsSpectator = !CanJoinAsRacer();
                 GameJoinStatus status =
-                    CanJoinAsRacer() ? GameJoinStatus.RacerPending : GameJoinStatus.SpectatorPending;
+                    player.IsSpectator ? GameJoinStatus.SpectatorPending : GameJoinStatus.RacerPending;
                 
                 // The player create info gets sent to the server with an operation of type none,
                 // send it to the other players telling them we're joining.
                 info.Operation = status;
                 
-                // Make sure to cache the player information
-                _playerInfos[player.UserId] = info;
+                // Make sure to track our player info
+                player.Info = info;
+                _playerInfos.Add(info);
                 
                 // Handle additional guest player infos attached
                 for (int i = 1; i < message.Data.Count; ++i)
@@ -809,7 +844,8 @@ public class GameSimulation
                     guest.NameUid = CryptoHelper.StringHash32(guestInfo.NameUid);
                     
                     guestInfo.Operation = status;
-                    _guestInfos[guestInfo.PlayerName] = guestInfo;
+                    guest.Info = guestInfo;
+                    _playerInfos.Add(guestInfo);
                 }
                 
                 // Does the player need their status back? If we changed the status maybe, but we should probably
@@ -851,12 +887,12 @@ public class GameSimulation
                 nameUid |= (uint)(data[3] << 0);
                 
                 // Find the player by nameUID, if they exist, set them to host
-                foreach (var state in _playerStates.Values)
+                foreach (var racer in _players)
                 {
-                    if (state.NameUid != nameUid) continue;
-                    _raceSettings.Value.OwnerNetcodeUserId = state.NetcodeUserId;
+                    if (racer.State.NameUid != nameUid) continue;
+                    _raceSettings.Value.OwnerNetcodeUserId = racer.UserId;
                     _raceSettings.Sync();
-                    Owner = state.NetcodeUserId;
+                    Owner = racer.UserId;
                     break;
                 }
                 
@@ -886,13 +922,21 @@ public class GameSimulation
             }
             case NetMessageType.GameroomReady:
             {
-                _playerStates[player.UserId].Flags |= PlayerStateFlags.GameRoomReady;
+                player.State.Flags |= PlayerStateFlags.GameRoomReady;
                 break;
             }
             case NetMessageType.GameroomStopTimer:
             {
                 if (player.UserId != Owner) break;
-                SetCurrentGameroomState(RoomState.CountingDownPaused);
+                
+                // Make sure we're still within the threshold of being able to stop the timer
+                var room = _gameroomState.Value;
+                float timeRemaining = (room.LoadEventTime - TimeHelper.LocalTime);
+                if (timeRemaining > BombdConfig.Instance.ModnationGameroomTimerLockTime)
+                {
+                    SetCurrentGameroomState(RoomState.Ready);
+                }
+                
                 break;
             }
             case NetMessageType.PostRaceVoteForTrack:
@@ -938,6 +982,7 @@ public class GameSimulation
 
                     if (oldState == RaceState.PostRace && newState == RaceState.Invalid)
                     {
+                        SetCurrentGameroomState(RoomState.None);
                         if (IsKarting && _votePackage.Value.IsVoting)
                         {
                             var votes = _votePackage.Value;
@@ -967,17 +1012,17 @@ public class GameSimulation
             }
             case NetMessageType.GameroomDownloadTracksComplete:
             {
-                _playerStates[player.UserId].Flags |= PlayerStateFlags.DownloadedTracks;
+                player.State.Flags |= PlayerStateFlags.DownloadedTracks;
                 break;
             }
             case NetMessageType.ReadyForEventStart:
             {
-                _playerStates[player.UserId].Flags |= PlayerStateFlags.ReadyForEvent;
+                player.State.Flags |= PlayerStateFlags.ReadyForEvent;
                 break;
             }
             case NetMessageType.ReadyForNisStart:
             {
-                _playerStates[player.UserId].Flags |= PlayerStateFlags.ReadyForNis;
+                player.State.Flags |= PlayerStateFlags.ReadyForNis;
                 break;
             }
             case NetMessageType.GameroomRequestStartEvent:
@@ -1010,7 +1055,8 @@ public class GameSimulation
                     player.Disconnect();
                     break;
                 }
-                
+
+                player.HasSentRaceResults = true;
                 _eventResults.AddRange(results);
                 break;
             }
@@ -1043,10 +1089,6 @@ public class GameSimulation
                     player.Disconnect();
                     break;
                 }
-                
-                // This is mostly only used for debugging purposes.
-                if (!BombdConfig.Instance.EnforceMinimumRacerRequirement)
-                    settings.MinHumans = 1;
                 
                 if (_raceSettings != null) _raceSettings.Value = settings;
                 else _raceSettings = CreateSystemSyncObject(settings, NetObjectType.RaceSettings);
@@ -1084,37 +1126,28 @@ public class GameSimulation
                     }
                     else
                     {
-                        using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
-                        using var stringReader = new StringReader(reader.ReadString(reader.Capacity));
-                        state = (PlayerState)_stateSerializer.Deserialize(stringReader)!;
+                        state = PlayerState.LoadXml(data);
                     }
                 }
                 catch (Exception)
                 {
-                    Logger.LogWarning<GameSimulation>($"Failed to parse PlayerStateUpdate for {player.Username}, disconnecting them from the session.");
+                    Logger.LogWarning<GameSimulation>($"Invalid PlayerStateUpdate received from {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
+
+                // Patch our existing player state with the new message
+                player.State.Update(state);
                 
-                // Backup user flags
-                if (_playerStates.TryGetValue(player.UserId, out PlayerState? existingPlayerState))
+                // Wait until we've received the player config and the second player state update
+                // to finish our "connecting" process.
+                if (player.State.IsConnecting && !player.State.WaitingForPlayerConfig)
                 {
-                    // Second player state update means we've finished connecting
-                    if (existingPlayerState.IsConnecting)
-                    {
-                        BroadcastKartingPlayerSessionInfo();
-                        if (Type == ServerType.Competitive && _gameroomState.Value.State == RoomState.CountingDown)
-                            UpdateRaceSetup();
-                    }
-                    state.Flags = existingPlayerState.Flags;   
+                    player.State.IsConnecting = false;
+                    BroadcastKartingPlayerSessionInfo();
+                    if (Type == ServerType.Competitive && _gameroomState.Value.State == RoomState.CountingDown)
+                        UpdateRaceSetup();
                 }
-                else
-                    // I'm fairly sure the player isn't actually "ready" and thus connecting
-                    // until the server receives the second player state update.
-                    state.IsConnecting = true;
-                
-                state.NetcodeUserId = player.UserId;
-                _playerStates[player.UserId] = state;
                 
                 BroadcastPlayerStates();
                 
@@ -1166,7 +1199,7 @@ public class GameSimulation
             case NetMessageType.SyncObjectCreate:
             {
                 bool success = false;
-                if (IsModnation)
+                if (IsModNation)
                 {
                     NetMessageSyncObject message;
                     try
@@ -1247,7 +1280,11 @@ public class GameSimulation
         foreach (var player in _players)
         {
             if (player.IsFakePlayer)
-                _playerStates[player.UserId].Flags = PlayerStateFlags.AllFlags;
+            {
+                player.State.Flags = PlayerStateFlags.AllFlags;
+                player.State.IsConnecting = false;
+                player.HasSentRaceResults = true;
+            }
         }
 
         // If the race hasn't started update the gameroom's state based on 
@@ -1255,7 +1292,7 @@ public class GameSimulation
         if (_raceSettings != null && room.State < RoomState.RaceInProgress)
         {
             int numReadyPlayers =
-                _playerStates.Values.Count(x => (x.Flags & PlayerStateFlags.GameRoomReady) != 0 && x.Away == 0);
+                _players.Count(x => (x.State.Flags & PlayerStateFlags.GameRoomReady) != 0);
             bool hasMinPlayers = numReadyPlayers >= _raceSettings.Value.MinHumans;
             
             if (hasMinPlayers && room.State == RoomState.WaitingMinPlayers)
@@ -1273,6 +1310,18 @@ public class GameSimulation
         {
             case RoomState.CountingDown:
             {
+                float timeRemaining = (room.LoadEventTime - TimeHelper.LocalTime);
+                if (timeRemaining > BombdConfig.Instance.ModnationGameroomRacerLockTime)
+                {
+                    // If someone has joined the gameroom before the racer lock, we should pause the countdown until
+                    // they're finished connecting.
+                    if (_players.Any(x => (x.State.Flags & PlayerStateFlags.GameRoomReady) == 0))
+                    {
+                        SetCurrentGameroomState(RoomState.CountingDownPaused);
+                        break;
+                    }
+                }
+                
                 // Wait until the timer has finished counting down, then broadcast to everyone that the race is in progress
                 if (TimeHelper.LocalTime >= room.LoadEventTime)
                 {
@@ -1281,61 +1330,75 @@ public class GameSimulation
 
                 break;
             }
+            case RoomState.CountingDownPaused:
+            {
+                if (_players.All(x => (x.State.Flags & PlayerStateFlags.GameRoomReady) != 0))
+                {
+                    SetCurrentGameroomState(RoomState.CountingDown);
+                }
+                
+                break;
+            }
             case RoomState.DownloadingTracks:
             {
-                if (_playerStates.Values.All(x => (x.Flags & PlayerStateFlags.DownloadedTracks) != 0))
+                if (_players.All(x => (x.State.Flags & PlayerStateFlags.DownloadedTracks) != 0))
                     SetCurrentGameroomState(RoomState.CountingDown);
                 break;
             }
             case RoomState.RaceInProgress:
             {
-                if (_waitingForPlayerNisEvents && 
-                    _playerStates.Values.All(x => (x.Flags & PlayerStateFlags.ReadyForNis) != 0))
+                if (_waitingForPlayerNisEvents || _waitingForPlayerStartEvents)
                 {
-                    _waitingForPlayerNisEvents = false;
-                    BroadcastGenericIntMessage(TimeHelper.LocalTime, NetMessageType.NisStart, PacketType.ReliableGameData);
-                    _waitingForPlayerStartEvents = true;
+                    var racers = _players.Where(player => !player.IsSpectator).ToList();
+                    
+                    if (_waitingForPlayerNisEvents && racers.All(x => (x.State.Flags & PlayerStateFlags.ReadyForNis) != 0))
+                    {
+                        _waitingForPlayerNisEvents = false;
+                        BroadcastGenericIntMessage(TimeHelper.LocalTime, NetMessageType.NisStart, PacketType.ReliableGameData);
+                        _waitingForPlayerStartEvents = true;
+                    }
+                
+                    if (_waitingForPlayerStartEvents && racers.All(x => (x.State.Flags & PlayerStateFlags.ReadyForEvent) != 0))
+                    {
+                        int countdown = TimeHelper.LocalTime + BombdConfig.Instance.EventCountdownTime;
+                        BroadcastGenericIntMessage(countdown, NetMessageType.EventStart, PacketType.ReliableGameData);
+                        _waitingForPlayerStartEvents = false;
+                    }
+                }
+
+                if (raceInfo.RaceState == RaceState.WaitingForRaceEnd)
+                { 
+                    if (TimeHelper.LocalTime >= raceInfo.RaceEndServerTime && !_hasSentEventResults)
+                    {
+                        _hasSentEventResults = true;
+
+                        string destination = IsModNation ? "destKartPark" : "destPod";
+                        if (_raceSettings!.Value.AutoReset)
+                            destination = "destGameroom";
+                    
+                        int postRaceDelay = IsKarting
+                            ? BombdConfig.Instance.KartingPostRaceTime
+                            : BombdConfig.Instance.ModNationPostRaceTime;
+                    
+                        BroadcastMessage(new NetMessageEventResults
+                        {
+                            SenderNameUid = NetworkMessages.SimServerUID,
+                            Platform = Platform,
+                            ResultsXml = EventResult.Serialize(_eventResults),
+                            Destination = destination,
+                            PostEventDelayTime = TimeHelper.LocalTime + postRaceDelay,
+                            PostEventScreenTime = postRaceDelay
+                        }, PacketType.ReliableGameData);
+                    
+                        if (IsKarting) UpdateVotePackage();
+
+                        // Broadcast new seed for the next race
+                        _seed = CryptoHelper.GetRandomSecret();
+                        BroadcastMessage(new NetMessageRandomSeed { Seed = _seed }, PacketType.ReliableGameData);
+                    }
+                    
                 }
                 
-                if (_waitingForPlayerStartEvents && 
-                    _playerStates.Values.All(x => (x.Flags & PlayerStateFlags.ReadyForEvent) != 0))
-                {
-                    int countdown = TimeHelper.LocalTime + BombdConfig.Instance.EventCountdownTime;
-                    BroadcastGenericIntMessage(countdown, NetMessageType.EventStart, PacketType.ReliableGameData);
-                    _waitingForPlayerStartEvents = false;
-                }
-
-                if (raceInfo.RaceState == RaceState.WaitingForRaceEnd && 
-                    TimeHelper.LocalTime >= raceInfo.RaceEndServerTime && !_hasSentEventResults)
-                {
-                    _hasSentEventResults = true;
-
-                    string destination = IsModnation ? "destKartPark" : "destPod";
-                    if (_raceSettings!.Value.AutoReset)
-                        destination = "destGameroom";
-                    
-                    int postRaceDelay = IsKarting
-                        ? BombdConfig.Instance.KartingPostRaceTime
-                        : BombdConfig.Instance.ModNationPostRaceTime;
-                    
-                    BroadcastMessage(new NetMessageEventResults
-                    {
-                        SenderNameUid = NetworkMessages.SimServerUID,
-                        Platform = Platform,
-                        ResultsXml = EventResult.Serialize(_eventResults),
-                        Destination = destination,
-                        PostEventDelayTime = TimeHelper.LocalTime + postRaceDelay,
-                        PostEventScreenTime = postRaceDelay
-                    }, PacketType.ReliableGameData);
-                    
-                    if (IsKarting) UpdateVotePackage();
-
-                    // Broadcast new seed for the next race
-                    _seed = CryptoHelper.GetRandomSecret();
-                    BroadcastMessage(new NetMessageRandomSeed { Seed = _seed }, PacketType.ReliableGameData);
-                    
-                    SetCurrentGameroomState(RoomState.None);
-                }
                 
                 break;
             }

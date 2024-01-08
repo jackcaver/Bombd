@@ -36,7 +36,7 @@ public class GameRoom
         Game = request.Game;
         Platform = request.Platform;
         Simulation = new GameSimulation(
-            request.Type, request.Platform, request.OwnerUserId, Game.Players);
+            request.Type, this, request.OwnerUserId);
         _slots = Enumerable.Repeat(false, MaxSlots).ToList();
         _slotGuestCounts = Enumerable.Repeat(0, MaxSlots).ToList();
         MaxPlayers = request.MaxPlayers;
@@ -53,15 +53,7 @@ public class GameRoom
 
     public GamePlayer Join(string username, int userId, int playerId, List<string>? guests = null)
     {
-        var player = new GamePlayer
-        {
-            Platform = Platform,
-            PlayerId = playerId,
-            UserId = userId,
-            Username = username,
-            Room = this
-        };
-
+        var player = new GamePlayer(this, username, userId, playerId);
         if (guests != null)
         {
             foreach (var guest in guests)

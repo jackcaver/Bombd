@@ -1,4 +1,6 @@
-﻿using System.Xml.Serialization;
+﻿using System.Text;
+using System.Xml.Serialization;
+using Bombd.Serialization;
 using Bombd.Types.Network;
 
 namespace Bombd.Simulation;
@@ -6,10 +8,14 @@ namespace Bombd.Simulation;
 [XmlRoot("PlayerState")]
 public class PlayerState
 {
+    private static readonly XmlSerializer StateSerializer = new(typeof(PlayerState));
+
+    [XmlIgnore] public int NetcodeUserId;
     [XmlIgnore] public bool HasEventVetoed;
     [XmlIgnore] public bool HasLeaderVetoed;
-    [XmlIgnore] public bool IsConnecting;
-    [XmlIgnore] public int NetcodeUserId;
+    [XmlIgnore] public bool IsConnecting = true;
+    [XmlIgnore] public bool WaitingForPlayerConfig = true;
+    [XmlIgnore] public int Flags = PlayerStateFlags.None;
     
     [XmlAttribute("nameUID")] public uint NameUid;
     [XmlAttribute("pcId")] public int PlayerConnectId;
@@ -20,7 +26,30 @@ public class PlayerState
     [XmlAttribute("styleDrift")] public float KartHandlingDrift;
     [XmlAttribute("styleAccel")] public float KartSpeedAccel;
 
-    [XmlIgnore] public int Flags = PlayerStateFlags.None;
+    public bool HasNameUid => NameUid != 0;
+    
+    public static PlayerState LoadXml(ArraySegment<byte> data)
+    {
+        int len = 0;
+        while (len < data.Count && data[len] != 0)
+            len++;
+        
+        string xml = len == 0 ? string.Empty : Encoding.ASCII.GetString(data.Array!, data.Offset, len);
+        using var reader = new StringReader(xml);
+        return (PlayerState) StateSerializer.Deserialize(reader)!;
+    }
+
+    public void Update(PlayerState state)
+    {
+        NameUid = state.NameUid;
+        PlayerConnectId = state.PlayerConnectId;
+        KartId = state.KartId;
+        CharacterId = state.CharacterId;
+        Away = state.Away;
+        Mic = state.Mic;
+        KartHandlingDrift = state.KartHandlingDrift;
+        KartSpeedAccel = state.KartSpeedAccel;
+    }
     
     public override string ToString()
     {

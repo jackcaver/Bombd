@@ -302,6 +302,9 @@ public class GameServer : BombdService
                 if (!connection.IsAuthenticated) continue;
 
                 GamePlayer? player;
+                
+                // This is specifically for Karting, so we don't have to worry about this
+                // for ModNation
                 if (request.ReservationKey != null)
                 {
                     // TODO: CARRY OVER GUESTS

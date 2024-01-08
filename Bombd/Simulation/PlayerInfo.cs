@@ -5,16 +5,30 @@ namespace Bombd.Simulation;
 
 public class PlayerInfo : INetworkWritable, INetworkReadable
 {
-    public GameJoinStatus Operation;
+    public GameJoinStatus Operation = GameJoinStatus.Pending;
     public int NetcodeUserId;
     public int NetcodeGamePlayerId;
     public int PlayerConnectId;
     public int GuestOfPlayerNameUid;
     public bool IsGroupLeader;
     public int PlayerGroupId;
-    public string NameUid;
-    public string PlayerName;
-    public string PodLocation;
+    public string NameUid = string.Empty;
+    public string PlayerName = string.Empty;
+    public string PodLocation = string.Empty;
+
+    public void Update(PlayerInfo info)
+    {
+        Operation = info.Operation;
+        NetcodeUserId = info.NetcodeUserId;
+        NetcodeGamePlayerId = info.NetcodeGamePlayerId;
+        PlayerConnectId = info.PlayerConnectId;
+        GuestOfPlayerNameUid = info.GuestOfPlayerNameUid;
+        IsGroupLeader = info.IsGroupLeader;
+        PlayerGroupId = info.PlayerGroupId;
+        NameUid = info.NameUid;
+        PlayerName = info.PlayerName;
+        PodLocation = info.PodLocation;
+    }
     
     public void Read(NetworkReader reader)
     {

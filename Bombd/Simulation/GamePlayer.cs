@@ -8,14 +8,17 @@ namespace Bombd.Simulation;
 
 public class GamePlayer
 {
-    public required Platform Platform;
-    public GameRoom Room;
-    public Action<ArraySegment<byte>, PacketType> Send;
-    public Action Disconnect;
+    public readonly Platform Platform;
+    public readonly GameRoom Room;
+    public Action<ArraySegment<byte>, PacketType> Send = (_, _) => { };
+    public Action Disconnect = () => { };
     
-    public int PlayerId;
-    public int UserId;
-    public string Username;
+    public readonly int PlayerId;
+    public readonly int UserId;
+    public readonly string Username;
+    
+    public PlayerInfo? Info;
+    public readonly PlayerState State = new();
     
     // Convenience accessor for the primary guest
     public GameGuest? Guest => Guests.Count > 0 ? Guests[0] : null;
@@ -25,9 +28,23 @@ public class GamePlayer
     public readonly List<GameGuest> Guests = new();
     
     public bool IsFakePlayer;
+    public bool IsSpectator;
+    public bool HasSentRaceResults;
     public bool HasSentLeaveReason;
     public bool ListeningForGameEvents;
 
+    public GamePlayer(GameRoom room, string username, int userId, int playerId)
+    {
+        Platform = room.Platform;
+        
+        Room = room;
+        Username = username;
+        UserId = userId;
+        PlayerId = playerId;
+        
+        State.NetcodeUserId = userId;
+    }
+    
     public GameGuest? GetGuestByName(string username)
     {
         return Guests.FirstOrDefault(x => x.GuestName == username);
