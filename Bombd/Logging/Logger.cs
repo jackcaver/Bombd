@@ -1,10 +1,11 @@
 using System.Collections.Concurrent;
+using Bombd.Core;
 
 namespace Bombd.Logging;
 
 public class Logger
 {
-    private const LogLevel MaxLevel = LogLevel.Debug;
+    private const LogLevel MaxLevel = LogLevel.Info;
     private static readonly ConcurrentQueue<LogEntry> LogQueue = new();
 
     static Logger()

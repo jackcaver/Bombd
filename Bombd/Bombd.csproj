@@ -12,9 +12,6 @@
         <None Update="Data\MatchmakingConfiguration.xml">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
-        <None Update="Data\Certificate.pfx">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
         <None Update="Data\Blobs\Karting\CharDataBlob">
           <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>

@@ -1,3 +1,4 @@
+using Bombd.Configuration;
 using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
@@ -26,6 +27,8 @@ public class GameSimulation
     public readonly Platform Platform;
     public readonly ServerType Type;
     
+    private RaceConstants _raceConstants;
+    
     private GenericSyncObject<CoiInfo> _coiInfo;
     private GenericSyncObject<VotePackage> _votePackage;
     private GenericSyncObject<GameroomState> _gameroomState;
@@ -48,6 +51,9 @@ public class GameSimulation
         Platform = room.Platform;
         Owner = owner;
         _players = room.Game.Players;
+        _raceConstants = Platform == Platform.ModNation 
+            ? RaceConfig.Instance.ModNation 
+            : RaceConfig.Instance.Karting;
         
         Logger.LogInfo<GameSimulation>($"Starting Game Simulation ({Type}:{Platform})");
         
@@ -451,18 +457,9 @@ public class GameSimulation
             {
                 UpdateRaceSetup();
                 
-                if (Platform == Platform.ModNation)
-                {
-                    room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.ModnationGameroomCountdownTime;
-                    room.LockedForRacerJoinsValue = BombdConfig.Instance.ModnationGameroomRacerLockTime;
-                    room.LockedTimerValue = BombdConfig.Instance.ModnationGameroomTimerLockTime;   
-                }
-                else
-                {
-                    room.LoadEventTime = TimeHelper.LocalTime + BombdConfig.Instance.KartingGameroomCountdownTime;
-                    room.LockedForRacerJoinsValue = BombdConfig.Instance.KartingGameroomTimerLock;
-                    room.LockedTimerValue = BombdConfig.Instance.KartingGameroomTimerLock;
-                }
+                room.LoadEventTime = TimeHelper.LocalTime + _raceConstants.GameRoomCountdownTime;
+                room.LockedForRacerJoinsValue = _raceConstants.GameRoomTimerRacerLock;
+                room.LockedTimerValue = _raceConstants.GameRoomTimerLock;   
 
                 // Restore the old timer state pre-pause
                 if (oldState == RoomState.CountingDownPaused)
@@ -930,7 +927,7 @@ public class GameSimulation
                 // Make sure we're still within the threshold of being able to stop the timer
                 var room = _gameroomState.Value;
                 float timeRemaining = (room.LoadEventTime - TimeHelper.LocalTime);
-                if (timeRemaining > BombdConfig.Instance.ModnationGameroomTimerLockTime)
+                if (timeRemaining > _raceConstants.GameRoomTimerRacerLock)
                 {
                     SetCurrentGameroomState(RoomState.Ready);
                 }
@@ -1314,7 +1311,7 @@ public class GameSimulation
             case RoomState.CountingDown:
             {
                 float timeRemaining = (room.LoadEventTime - TimeHelper.LocalTime);
-                if (timeRemaining > BombdConfig.Instance.ModnationGameroomRacerLockTime)
+                if (timeRemaining > _raceConstants.GameRoomTimerRacerLock)
                 {
                     // If someone has joined the gameroom before the racer lock, we should pause the countdown until
                     // they're finished connecting.
@@ -1363,7 +1360,7 @@ public class GameSimulation
                 
                     if (_waitingForPlayerStartEvents && racers.All(x => (x.State.Flags & PlayerStateFlags.ReadyForEvent) != 0))
                     {
-                        int countdown = TimeHelper.LocalTime + BombdConfig.Instance.EventCountdownTime;
+                        int countdown = TimeHelper.LocalTime + RaceConfig.Instance.EventCountdownTime;
                         BroadcastGenericIntMessage(countdown, NetMessageType.EventStart, PacketType.ReliableGameData);
                         _waitingForPlayerStartEvents = false;
                     }
@@ -1380,11 +1377,8 @@ public class GameSimulation
                         string destination = IsModNation ? "destKartPark" : "destPod";
                         if (_raceSettings!.Value.AutoReset)
                             destination = "destGameroom";
-                    
-                        int postRaceDelay = IsKarting
-                            ? BombdConfig.Instance.KartingPostRaceTime
-                            : BombdConfig.Instance.ModNationPostRaceTime;
                         
+                        int postRaceDelay = _raceConstants.PostRaceTime;
                         BroadcastMessage(new NetMessageEventResults
                         {
                             SenderNameUid = NetworkMessages.SimServerUID,

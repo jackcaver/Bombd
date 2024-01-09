@@ -56,8 +56,11 @@ public abstract class BombdService
         string address = BombdConfig.Instance.ListenIP;
         if (Protocol == ProtocolType.TCP)
         {
-            _server = new SslServer(address, Port,
-                new X509Certificate(File.ReadAllBytes("Data/Certificate.pfx"), "1234"), this);
+            var cert = new X509Certificate(
+                BombdConfig.Instance.PfxCertificate,
+                BombdConfig.Instance.PfxKey
+            );
+            _server = new SslServer(address, Port, cert, this);
         }
         else
             _server = new RudpServer(address, Port, this);
@@ -125,7 +128,17 @@ public abstract class BombdService
             response.Error = "TicketParseFail";
             return false;
         }
-
+        
+        Platform platform = PlatformHelper.FromTitleId(ticket.ServiceId[7..^3]);
+        if (platform == Platform.Unknown)
+        {
+            response.Error = "UnknownGameServiceId";
+            return false;
+        }
+        
+        if (platform == Platform.Karting && !BombdConfig.Instance.AllowKarting) return false;
+        if (platform == Platform.ModNation && !BombdConfig.Instance.AllowModNation) return false;
+        
         int userId = CryptoHelper.StringHash32Upper(ticket.OnlineId + ticket.IssuerId);
         // if (UserInfo.ContainsKey(userId))
         // {
@@ -157,13 +170,6 @@ public abstract class BombdService
 
             sessionKeyBytes.ReadInt32BE(0, out int sessionKey);
             connection.SessionId = sessionKey;
-        }
-
-        Platform platform = PlatformHelper.FromTitleId(ticket.ServiceId[7..^3]);
-        if (platform == Platform.Unknown)
-        {
-            response.Error = "UnknownGameServiceId";
-            return false;
         }
 
         connection.Username = ticket.OnlineId;
