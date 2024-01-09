@@ -20,18 +20,19 @@ public class AiInfo : INetworkWritable
             DataSet[i] = new NetAiData();
     }
     
-    public AiInfo(Platform platform, string owner, int startingAiCount = MaxDataSize)
+    public AiInfo(Platform platform, IReadOnlyList<string> players, int count = MaxDataSize)
     {
         Platform = platform;
-        Count = startingAiCount;
+        Count = count;
         
-        List<AiDefinition> definitions = AiDefinition.GetRandomDefinitions(platform, startingAiCount);
-        for (int i = 0; i < DataSet.Length; ++i)
+        List<AiDefinition> definitions = AiDefinition.GetRandomDefinitions(platform, count);
+        
+        for (int i = 0, player = 0; i < DataSet.Length; ++i, player++)
         {
             var ai = new NetAiData();
-            if (startingAiCount > i)
+            if (count > i)
             {
-                ai.OwnerName = owner;
+                ai.OwnerName = players[player % players.Count];
                 ai.UidName = "online_ai_" + i;
                 ai.AiName = definitions[i].Name;
                 ai.AiProfile = definitions[i].Profile;

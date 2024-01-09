@@ -518,16 +518,16 @@ public class GameSimulation
                 _startingGrid.Value.Add(new GridPositionData(player.Guest.NameUid, true));
         }
         
-        var owner = _players.Find(x => x.UserId == Owner);
-        string username = owner?.Username ?? string.Empty;
-
         int maxAi = _aiInfo.Value.DataSet.Length;
         int maxHumans = _raceSettings.Value.MaxHumans;
         int numAi = Math.Min(maxAi, maxHumans - _startingGrid.Value.Count);
         if (numAi <= 0) numAi = 0;
         
+        // AI are owned by players, if one player disconnects, their AI is destroyed,
+        // so distribute them between all players
+        List<string> playerNames = _players.Select(player => player.Username).ToList();
         _aiInfo.Value = _raceSettings.Value.AiEnabled ? 
-            new AiInfo(Platform, username, numAi) : new AiInfo(Platform);
+            new AiInfo(Platform, playerNames, numAi) : new AiInfo(Platform);
 
         for (int i = 0; i < _aiInfo.Value.Count; ++i)
         {
