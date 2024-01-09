@@ -100,7 +100,11 @@ public class WebApiManager
             return;
         }
         
-        string xml = MakeRequest($"{BombdConfig.Instance.ApiURL}/resources/content_update.latest.xml");
+        // Strip the trailing slash from the URL if someone left it in
+        string url = BombdConfig.Instance.ApiURL.TrimEnd('/');
+        BombdConfig.Instance.ApiURL = url;
+        
+        string xml = MakeRequest($"{url}/resources/content_update.latest.xml");
         if (string.IsNullOrEmpty(xml))
         {
             Logger.LogWarning<WebApiManager>("Content updates XML was empty!");
