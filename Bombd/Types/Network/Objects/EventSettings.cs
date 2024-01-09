@@ -58,19 +58,19 @@ public class EventSettings : INetworkReadable, INetworkWritable
         {
             TrackName = reader.ReadString(0x40);
             CreationId = reader.ReadInt32();
-            reader.Offset += 4;
-            reader.Offset += 4;
+            reader.Offset += 4; // Always 1?
+            reader.Offset += 4; // Always 1?
             NumLaps = reader.ReadInt32();
             KartSpeed = (SpeedClass)reader.ReadInt32();
             RaceType = (RaceType)reader.ReadInt32();
-            reader.Offset += 4;
+            reader.Offset += 4; // Always 0?
             AiEnabled = reader.ReadInt32() == 1;
-            reader.Offset += 4;
+            reader.Offset += 4; // Always 1?
             OwnerNetcodeUserId = reader.ReadInt32();
             IsRanked = reader.ReadInt32() == 1;
             Private = reader.ReadInt32() == 1;
-            SeriesEventIndex = reader.ReadInt32();
             CareerEventIndex = reader.ReadInt32();
+            SeriesEventIndex = reader.ReadInt32();
             reader.Offset += 4;
 
             MinHumans = reader.ReadInt32();
@@ -116,8 +116,8 @@ public class EventSettings : INetworkReadable, INetworkWritable
 
             writer.Write(IsRanked ? 1 : 0); // 0x68
             writer.Write(Private ? 1 : 0); // 0x6c
-            writer.Write(SeriesEventIndex);
             writer.Write(CareerEventIndex);
+            writer.Write(SeriesEventIndex);
             writer.Write(0); // 0x78 // Top tracks
             writer.Write(MinHumans); // 0x7c 
             writer.Write(MaxHumans); // 0x80
