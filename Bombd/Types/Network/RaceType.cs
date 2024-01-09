@@ -42,7 +42,7 @@ public enum RaceType : int
 {
     Pure,
     Action,
-    LastKart,
+    Battle,
     TimeTrial,
     HotSeat,
     ThugRace,

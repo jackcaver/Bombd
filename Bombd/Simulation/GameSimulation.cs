@@ -64,8 +64,6 @@ public class GameSimulation
             _raceInfo = CreateSystemSyncObject(new SpectatorInfo(Platform), NetObjectType.SpectatorInfo);
             _aiInfo = CreateSystemSyncObject(new AiInfo(Platform), NetObjectType.AiInfo);
             _startingGrid = CreateSystemSyncObject(new StartingGrid(Platform), NetObjectType.StartingGrid);
-            
-            AddFakePlayer("Onizuka");
         }
     }
 
@@ -1089,6 +1087,13 @@ public class GameSimulation
                     player.Disconnect();
                     break;
                 }
+
+                // Can't limit to less people than we actually have
+                if (settings.MaxHumans < _players.Count)
+                    break;
+
+                // Since we got new settings, we should update the room attributes for matchmaking
+                Room.UpdateAttributes(settings);
                 
                 if (_raceSettings != null) _raceSettings.Value = settings;
                 else _raceSettings = CreateSystemSyncObject(settings, NetObjectType.RaceSettings);

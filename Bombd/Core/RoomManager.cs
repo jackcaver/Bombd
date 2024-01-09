@@ -96,29 +96,24 @@ public class RoomManager
         // sent by the game for whatever reason.
         request.Attributes.TryAdd("__JOIN_MODE", "OPEN");
         request.Attributes.TryAdd("__MM_MODE_G", "OPEN");
-        request.Attributes.TryAdd("__MAX_PLAYERS", "8");
+        // Player matchmaking doesn't seem to actually exist in either game?
+        // Leave it closed regardless
+        request.Attributes.TryAdd("__MM_MODE_P", "CLOSED");
         request.Attributes.TryAdd("SERVER_TYPE", "kartPark");
-
+        
         var type = ServerType.KartPark;
         if (request.Attributes["SERVER_TYPE"] == "competitive")
             type = ServerType.Competitive;
         else if (request.Platform == Platform.Karting)
             type = ServerType.Pod;
         
-        int maxSlots;
-        // If we're in a pod, override max players to 4
-        if (type == ServerType.Pod)
-        {
-            maxSlots = 4;
-            request.Attributes["__MAX_PLAYERS"] = "4";
-        }
-        // Otherwise, if we can't parse the number of players, just default to 8
-        else if (!int.TryParse(request.Attributes["__MAX_PLAYERS"], out maxSlots))
-        {
-            maxSlots = 8;
-            request.Attributes["__MAX_PLAYERS"] = maxSlots.ToString();
-        }
-
+        // The game generally doesn't tell us how many slots we need, so we'll just default to 8,
+        // and then update it again when we receive the event settings from the host
+        int maxPlayers = 8;
+        // The pod in LBPK should only be allowed to have 4 people when online
+        if (type == ServerType.Pod) maxPlayers = 4;
+        request.Attributes["__MAX_PLAYERS"] = maxPlayers.ToString();
+        
         bool isUserOwnedGame = (type == ServerType.Competitive && !request.IsRanked) || (type == ServerType.Pod);
         lock (_roomLock)
         {
@@ -140,7 +135,7 @@ public class RoomManager
                 },
                 Type = type,
                 Platform = request.Platform,
-                MaxPlayers = maxSlots,
+                MaxPlayers = maxPlayers,
                 OwnerUserId = isUserOwnedGame ? request.OwnerUserId : -1
             });
         
@@ -208,6 +203,9 @@ public class RoomManager
     {
         List<GameRoom> rooms = GetRooms().Where(room =>
         {
+            // Don't bother checking anything if the room is full
+            if (room.IsFull) return false;
+            
             // Don't allow searching for other people's pod instances
             if (room.Simulation.Type == ServerType.Pod) return false;
             

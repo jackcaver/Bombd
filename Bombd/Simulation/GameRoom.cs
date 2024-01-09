@@ -2,6 +2,7 @@
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
 using Bombd.Types.Network;
+using Bombd.Types.Network.Objects;
 using Bombd.Types.Requests;
 
 namespace Bombd.Simulation;
@@ -41,6 +42,59 @@ public class GameRoom
         _slotGuestCounts = Enumerable.Repeat(0, MaxSlots).ToList();
         MaxPlayers = request.MaxPlayers;
         UsedSlots = 0;
+    }
+
+    public void UpdateAttributes(EventSettings settings)
+    {
+        var attr = Game.Attributes;
+
+        string visibility = settings.Private ? "CLOSED" : "OPEN";
+        attr["__MM_MODE_G"] = visibility;
+        attr["__JOIN_MODE"] = visibility;
+
+        MaxPlayers = settings.MaxHumans;
+        attr["__MAX_PLAYERS"] = MaxPlayers.ToString();
+        
+        // TODO: Adjust player counts on Karting?
+        // Switching tracks doesn't work yet, so it's not important right now
+        
+        attr["TRACK_CREATIONID"] = settings.CreationId.ToString();
+        if (settings.CreationId >= NetCreationIdRange.MinOnlineCreationId)
+            attr.Remove("TRACK_GROUP");
+        else attr["TRACK_GROUP"] = "official";
+        
+        attr["SERIES_TYPE"] = "single";
+        switch (settings.KartSpeed)
+        {
+            case SpeedClass.Fast:
+                attr["SPEED_CLASS"] = "fast";
+                break;
+            case SpeedClass.Faster:
+                attr["SPEED_CLASS"] = "faster";
+                break;
+            case SpeedClass.Fastest:
+                attr["SPEED_CLASS"] = "fastest";
+                break;
+            default:
+                attr.Remove("SPEED_CLASS");
+                break;
+        }
+
+        switch (settings.RaceType)
+        {
+            case RaceType.Pure:
+                attr["MODE_TYPE"] = "pure";
+                break;
+            case RaceType.Action:
+                attr["MODE_TYPE"] = "action";
+                break;
+            case RaceType.Battle:
+                attr["MODE_TYPE"] = "battle";
+                break;
+            default:
+                attr.Remove("MODE_TYPE");
+                break;
+        }
     }
     
     public GamePlayer? TryJoin(string username, int userId, List<string>? guests = null)
