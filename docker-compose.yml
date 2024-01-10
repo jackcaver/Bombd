@@ -15,3 +15,5 @@ services:
       - 50002:50002/udp
     environment:
       OPENSSL_CONF: /bombd/ssl.cnf
+    volumes:
+      - "./data:/bombd/data"

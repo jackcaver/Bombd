@@ -36,6 +36,7 @@ RUN rm -rf /openssl-${OPENSSL_VERSION}
 RUN groupadd -g 1001 bombd
 RUN useradd -m --home /bombd -u 1001 -g bombd bombd
 RUN mkdir -p /bombd/app
+RUN mkdir -p /bombd/data
 
 # Finalize distribution
 COPY --from=build /build/publish /bombd/app

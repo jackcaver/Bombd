@@ -4,8 +4,14 @@
 LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH}
 export LD_LIBRARY_PATH
 
-# Make sure we're in the root folder so we can load assets
-cd /bombd/app
+# Make sure we own the data directory
+chown -R bombd:bombd /bombd/data
+cd /bombd/data
+
+# If our static files aren't in the data folder, move them
+if [ -d "/bombd/app/Data" ]; then
+	mv -f /bombd/app/Data /bombd/data
+fi
 
 # Start the server
 exec gosu bombd /bombd/app/Bombd
