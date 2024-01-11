@@ -1259,9 +1259,9 @@ public class GameSimulation
             {
                 Logger.LogWarning<GameSimulation>("Unhandled network message type: " + type);
 
-                byte[] b = new byte[data.Count];
-                data.CopyTo(b, 0);
-                File.WriteAllBytes(type.ToString(), b);
+                // byte[] b = new byte[data.Count];
+                // data.CopyTo(b, 0);
+                // File.WriteAllBytes(type.ToString(), b);
 
                 break;
             }
