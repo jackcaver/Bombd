@@ -9,6 +9,14 @@ public class CoiInfo : INetworkWritable
     public CoiSingleEvent DLC = new("DLC Demo", 3);
     public CoiSeriesEvent Showcase = new("Showcase", 0);
     public CoiSeriesEvent Themed = new("Special Event", 1);
+
+    public void Fixup()
+    {
+        Hotseat.Event.CareerEventIndex = Hotseat.Index;
+        DLC.Event.CareerEventIndex = DLC.Index;
+        Showcase.Fixup();
+        Themed.Fixup();
+    }
     
     public void Write(NetworkWriter writer)
     {
@@ -32,6 +40,16 @@ public class CoiSeriesEvent : INetworkWritable
     public int Index;
     public List<EventSettings> Events = new();
 
+    public void Fixup()
+    {
+        for (int i = 0; i < Events.Count; ++i)
+        {
+            EventSettings evt = Events[i];
+            evt.SeriesEventIndex = i;
+            evt.CareerEventIndex = Index;
+        }
+    }
+    
     public void Write(NetworkWriter writer)
     {
         writer.Write(Name, 0x40);

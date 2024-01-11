@@ -79,7 +79,7 @@ public class WebApiManager
 
     public static CoiInfo GetCircleOfInfluence()
     {
-        return new CoiInfo
+        var coi = new CoiInfo
         {
             Hotseat =
             {
@@ -90,6 +90,10 @@ public class WebApiManager
                 Events = GetSeriesEvent("THEMED_EVENTS")
             }
         };
+
+        coi.Fixup();
+
+        return coi;
     }
     
     public static void Initialize()
