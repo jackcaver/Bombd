@@ -1,4 +1,4 @@
-﻿using Bombd.Helpers;
+using Bombd.Helpers;
 using Bombd.Protocols;
 using Bombd.Serialization;
 using Bombd.Types.Network;
@@ -26,11 +26,11 @@ public class GamePlayer
     // Karting has multiple guests in the pod so we have to keep it in a list,
     // even though racing and ModNation only have a single guest
     public readonly List<GameGuest> Guests = new();
-    
+
+    public LeaveReason LeaveReason = LeaveReason.Generic;
     public bool IsFakePlayer;
     public bool IsSpectator;
     public bool HasSentRaceResults;
-    public bool HasSentLeaveReason;
     public bool ListeningForGameEvents;
 
     public GamePlayer(GameRoom room, string username, int userId, int playerId)
