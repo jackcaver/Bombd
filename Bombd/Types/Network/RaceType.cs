@@ -1,5 +1,22 @@
 namespace Bombd.Types.Network;
 
+// LevelType
+//  0 = COOPERATIVE
+//  1 = VERSUS
+
+// ScoreboardType
+    // 0 = SCORE
+    // 1 = TIME
+
+// LevelResultType
+    // 0 = SCORE LIMIT
+    // 1 = TIME LIMIT
+    // 2 = HITS LIMIT
+
+// Scoreboard
+//  0 = ?
+//  1 = GLOBAL
+//  2 = FRIENDS
 
 // karting
 // Difficulty

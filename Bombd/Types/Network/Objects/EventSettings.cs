@@ -1,4 +1,6 @@
-﻿using Bombd.Helpers;
+﻿using System.Reflection;
+using Bombd.Helpers;
+using Bombd.Logging;
 using Bombd.Serialization;
 
 namespace Bombd.Types.Network.Objects;
@@ -18,25 +20,24 @@ public class EventSettings : INetworkReadable, INetworkWritable
     public int MaxHumans = 8;
     public bool AiEnabled = true;
     public int CareerEventIndex = -1;
+    public EventUpdateReason UpdateReason = EventUpdateReason.AdvanceTimer;
     
     // Karting
-    public int MaxPlayers = 8;
+    public int MaxPlayers = 12;
     public int NumHoard;
-    
-    // 2 = Leader Changed
-    public int UpdateReason;
-    public int LevelType;
-    public int ScoreboardType;
+    public LevelType LevelType = LevelType.Cooperative;
+    public ScoreboardType ScoreboardType = ScoreboardType.Score;
     public bool TeamEnabled;
-    public int StoryDifficulty;
+    public Difficulty StoryDifficulty = Difficulty.Normal;
     
     // Modnation
     public bool AutoReset = false;
     public bool IsRanked;
-    public string StartNis = string.Empty;
+    public string StartNis = "T1_ModCircuit";
     public SpeedClass KartSpeed = SpeedClass.Fastest;
     public int NumLaps = 3;
-    public string TrackName = "Mod Circuit";
+    public string KartParkHome = string.Empty;
+    public string TrackName = "T1_ModCircuit";
 
     public EventSettings(Platform platform)
     {
@@ -50,6 +51,15 @@ public class EventSettings : INetworkReadable, INetworkWritable
         using var reader = NetworkReaderPool.Get(data);
         settings.Read(reader);
         return settings;
+    }
+
+    public void Print()
+    {
+        Logger.LogDebug<EventSettings>("EventSettingsUpdate");
+        Type type = typeof(EventSettings);
+        FieldInfo[] fields = type.GetFields();
+        foreach (var field in fields)
+            Logger.LogDebug<EventSettings>($"\t{field.Name} = {field.GetValue(this)}");
     }
     
     public void Read(NetworkReader reader)
@@ -72,10 +82,13 @@ public class EventSettings : INetworkReadable, INetworkWritable
             CareerEventIndex = reader.ReadInt32();
             SeriesEventIndex = reader.ReadInt32();
             reader.Offset += 4;
-
             MinHumans = reader.ReadInt32();
             MaxHumans = reader.ReadInt32();
-
+            reader.Offset += 4;
+            UpdateReason = (EventUpdateReason)reader.ReadInt32();
+            KartParkHome = reader.ReadString(0x40);
+            StartNis = reader.ReadString(0x80);
+            
             return;
         }
 
@@ -90,12 +103,12 @@ public class EventSettings : INetworkReadable, INetworkWritable
         MaxHumans = reader.ReadInt32();
         NumHoard = reader.ReadInt32();
         AiEnabled = reader.ReadInt32() == 1;
-        UpdateReason = reader.ReadInt32();
+        UpdateReason = (EventUpdateReason)reader.ReadInt32();
         CareerEventIndex = reader.ReadInt32();
-        LevelType = reader.ReadInt32();
-        ScoreboardType = reader.ReadInt32();
+        LevelType = (LevelType)reader.ReadInt32();
+        ScoreboardType = (ScoreboardType)reader.ReadInt32();
         TeamEnabled = reader.ReadInt32() == 1;
-        StoryDifficulty = reader.ReadInt32();
+        StoryDifficulty = (Difficulty)reader.ReadInt32();
     }
 
     public void Write(NetworkWriter writer)
@@ -103,29 +116,29 @@ public class EventSettings : INetworkReadable, INetworkWritable
         if (Platform == Platform.ModNation)
         {
             writer.Write(TrackName, 0x40);
-            writer.Write(CreationId);
-            writer.Write(1); // - PlayerCount or something?
-            writer.Write(1); // - Unknown
-            writer.Write(NumLaps);
-            writer.Write((int)KartSpeed);
-            writer.Write((int)RaceType);
-            writer.Write(0); // - Unknown
-            writer.Write(AiEnabled ? 1 : 0);
-            writer.Write(1); // - Unknown
-            writer.Write(OwnerNetcodeUserId);
+            writer.Write(CreationId); // 0x40
+            writer.Write(1); // - PlayerCount or something? 0x44
+            writer.Write(1); // - Unknown 0x48
+            writer.Write(NumLaps); // 0x4c
+            writer.Write((int)KartSpeed); // 0x50
+            writer.Write((int)RaceType); // 0x54
+            writer.Write(0); // - Unknown // 0x58
+            writer.Write(AiEnabled ? 1 : 0); // 0x5v
+            writer.Write(1); // - Unknown (0x60)
+            writer.Write(OwnerNetcodeUserId); // (0x64)
 
             writer.Write(IsRanked ? 1 : 0); // 0x68
-            writer.Write(Private ? 1 : 0); // 0x6c
-            writer.Write(CareerEventIndex);
-            writer.Write(SeriesEventIndex);
-            writer.Write(0); // 0x78 // Top tracks
-            writer.Write(MinHumans); // 0x7c 
+            writer.Write(Private ? 1 : 0); // 0x6v
+            writer.Write(CareerEventIndex); // 0x70
+            writer.Write(SeriesEventIndex); // 0x74
+            writer.Write(0); // 0x78
+            writer.Write(MinHumans); // 0x7c
             writer.Write(MaxHumans); // 0x80
             writer.Write(0); // 0x84 - Padding?
-            writer.Write(0); // 0x88
+            writer.Write((int)UpdateReason); // 0x88
         
-            writer.Write(string.Empty, 0x40);
-            writer.Write(StartNis, 0x80);
+            writer.Write(KartParkHome, 0x40); // 0x8c
+            writer.Write(StartNis, 0x80); // 0xcc
 
             return;
         }
@@ -141,12 +154,12 @@ public class EventSettings : INetworkReadable, INetworkWritable
         writer.Write(MaxHumans);
         writer.Write(NumHoard);
         writer.Write(AiEnabled ? 1 : 0);
-        writer.Write(UpdateReason);
+        writer.Write((int)UpdateReason);
         writer.Write(CareerEventIndex);
-        writer.Write(LevelType);
-        writer.Write(ScoreboardType);
+        writer.Write((int)LevelType);
+        writer.Write((int)ScoreboardType);
         writer.Write(TeamEnabled ? 1 : 0);
-        writer.Write(StoryDifficulty);
+        writer.Write((int)StoryDifficulty);
     }
     
 }
