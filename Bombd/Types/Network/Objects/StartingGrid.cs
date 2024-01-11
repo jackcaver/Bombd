@@ -35,12 +35,12 @@ public class StartingGrid : List<GridPositionData>, INetworkWritable
 
 public struct GridPositionData
 {
-    public GridPositionData(int uid, bool isGuest)
+    public GridPositionData(uint uid, bool isGuest)
     {
         NameUid = uid;
         IsGuestPosition = isGuest;
     }
     
-    public int NameUid;
+    public uint NameUid;
     public bool IsGuestPosition;
 }

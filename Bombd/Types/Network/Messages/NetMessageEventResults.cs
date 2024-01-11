@@ -8,7 +8,7 @@ public struct NetMessageEventResults : INetworkMessage
     public NetMessageType Type => NetMessageType.EventResultsFinal;
     public required Platform Platform;
 
-    public int SenderNameUid;
+    public uint SenderNameUid;
     public string ResultsXml;
     public string Destination;
     public int PostEventDelayTime; // 614885743

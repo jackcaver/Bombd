@@ -1,4 +1,4 @@
-using Bombd.Helpers;
+﻿using Bombd.Helpers;
 using Bombd.Protocols;
 using Bombd.Serialization;
 using Bombd.Types.Network;
@@ -50,7 +50,7 @@ public class GamePlayer
         return Guests.FirstOrDefault(x => x.GuestName == username);
     }
     
-    public void OnNetworkMessage(NetMessageType type, int sender, ArraySegment<byte> data)
+    public void OnNetworkMessage(NetMessageType type, uint sender, ArraySegment<byte> data)
     {
         Room.Simulation.OnNetworkMessage(this, sender, type, data);
     }

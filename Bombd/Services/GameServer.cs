@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Bombd.Attributes;
 using Bombd.Core;
 using Bombd.Helpers;
@@ -449,7 +449,7 @@ public class GameServer : BombdService
         if (player == null) return;
         
         using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
-        if (!NetworkMessages.Unpack(reader, connection.Platform, out NetMessageType type, out int sender, out ArraySegment<byte> message))
+        if (!NetworkMessages.Unpack(reader, connection.Platform, out NetMessageType type, out uint sender, out ArraySegment<byte> message))
         {
             Logger.LogError<GameServer>($"{player.Username} sent an invalid network message, disconnecting them from their current session!");
             player.Disconnect();

@@ -9,7 +9,7 @@ public class PlayerInfo : INetworkWritable, INetworkReadable
     public int NetcodeUserId;
     public int NetcodeGamePlayerId;
     public int PlayerConnectId;
-    public int GuestOfPlayerNameUid;
+    public uint GuestOfPlayerNameUid;
     public bool IsGroupLeader;
     public int PlayerGroupId;
     public string NameUid = string.Empty;
@@ -36,7 +36,7 @@ public class PlayerInfo : INetworkWritable, INetworkReadable
         NetcodeUserId = reader.ReadInt32();
         NetcodeGamePlayerId = reader.ReadInt32();
         PlayerConnectId = reader.ReadInt32();
-        GuestOfPlayerNameUid = reader.ReadInt32();
+        GuestOfPlayerNameUid = reader.ReadUInt32();
         IsGroupLeader = reader.ReadInt8() == 1;
         PlayerGroupId = reader.ReadInt32();
         NameUid = reader.ReadString();

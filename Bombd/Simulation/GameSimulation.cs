@@ -76,7 +76,7 @@ public class GameSimulation
     private void AddFakePlayer(string username)
     {
         string openuid = CryptoHelper.GetRandomSecret().ToString("x") + username;
-        int nameUid = CryptoHelper.StringHash32(openuid);
+        uint nameUid = CryptoHelper.StringHashU32(openuid);
         
         int userId = CryptoHelper.GetRandomSecret();
         int playerId = CryptoHelper.GetRandomSecret();
@@ -89,7 +89,7 @@ public class GameSimulation
         player.State.Update(new PlayerState
         {
             PlayerConnectId = userId,
-            NameUid = (uint)nameUid,
+            NameUid = nameUid,
             KartId = 0x1324,
             CharacterId = 0x132c,
             KartSpeedAccel = 0x0
@@ -101,7 +101,7 @@ public class GameSimulation
             NetcodeUserId = userId,
             NetcodeGamePlayerId = playerId,
             PlayerConnectId = userId,
-            GuestOfPlayerNameUid = CryptoHelper.GetRandomSecret(),
+            GuestOfPlayerNameUid = (uint)CryptoHelper.GetRandomSecret(),
             IsGroupLeader = false,
             PlayerGroupId = CryptoHelper.GetRandomSecret(),
             NameUid = openuid,
@@ -510,7 +510,7 @@ public class GameSimulation
         foreach (GamePlayer player in _players)
         {
             if (!player.State.HasNameUid) continue;
-            _startingGrid.Value.Add(new GridPositionData((int)player.State.NameUid, false));
+            _startingGrid.Value.Add(new GridPositionData(player.State.NameUid, false));
             if (player.Guest != null)
                 _startingGrid.Value.Add(new GridPositionData(player.Guest.NameUid, true));
         }
@@ -529,7 +529,7 @@ public class GameSimulation
         for (int i = 0; i < _aiInfo.Value.Count; ++i)
         {
             _startingGrid.Value.Add(new GridPositionData(
-                CryptoHelper.StringHash32(_aiInfo.Value.DataSet[i].UidName),
+                CryptoHelper.StringHashU32(_aiInfo.Value.DataSet[i].UidName),
                 false
             ));
         }   
@@ -634,11 +634,12 @@ public class GameSimulation
 
                 // On Karting, we already got the NameUid from the PlayerInfoCreate message
                 if (IsModNation)
-                    guest.NameUid = CryptoHelper.StringHash32(config.UidName);
+                    guest.NameUid = CryptoHelper.StringHashU32(config.UidName);
             }
             else if (config.Type == 0)
             {
-                if (config.NetcodeUserId != player.UserId)
+                uint nameUid = CryptoHelper.StringHashU32(config.UidName);
+                if (config.NetcodeUserId != player.UserId || nameUid != player.State.NameUid)
                 {
                     Logger.LogWarning<GameSimulation>(
                         $"PlayerConfig doesn't belong to {player.Username}, this shouldn't happen, disconnecting!");
@@ -695,7 +696,7 @@ public class GameSimulation
         return true;
     }
     
-    public void OnNetworkMessage(GamePlayer player, int senderNameUid, NetMessageType type, ArraySegment<byte> data)
+    public void OnNetworkMessage(GamePlayer player, uint senderNameUid, NetMessageType type, ArraySegment<byte> data)
     {
         if (
             type != NetMessageType.VoipPacket && 
@@ -705,6 +706,14 @@ public class GameSimulation
             type != NetMessageType.Gameplay)
         {
             Logger.LogTrace<GameSimulation>($"Received NetMessage {type} from {player.Username} ({(uint)player.UserId}:{(uint)player.PlayerId})");   
+        }
+
+        // The name UID should match the one we've received from the player state update
+        if (player.State.HasNameUid && senderNameUid != player.State.NameUid)
+        {
+            Logger.LogWarning<GameSimulation>($"NameUID for {player.Username} doesn't match as expected! Disconnecting! ({player.State.NameUid} != {senderNameUid}");
+            player.Disconnect();
+            return;
         }
         
         switch (type)
@@ -833,7 +842,7 @@ public class GameSimulation
                     }
                     
                     // Cache the name uid for the starting grid
-                    guest.NameUid = CryptoHelper.StringHash32(guestInfo.NameUid);
+                    guest.NameUid = CryptoHelper.StringHashU32(guestInfo.NameUid);
                     
                     guestInfo.Operation = status;
                     guest.Info = guestInfo;
@@ -1049,12 +1058,35 @@ public class GameSimulation
                 _eventResults.AddRange(results);
                 break;
             }
+            case NetMessageType.TextChatMsg:
+            {
+                try
+                {
+                    NetChatMessage message = NetChatMessage.LoadXml(data);
+                    // Basic spoofing prevention, don't allow sender name mismatches
+                    if (message.Sender != player.Username)
+                    {
+                        Logger.LogWarning<GameSimulation>($"TextChatMsg from {player.Username} has mis-matching sender name {message.Sender}, disconnecting them from the session.");
+                        player.Disconnect();
+                        break;
+                    }
+                }
+                catch
+                {
+                    Logger.LogWarning<GameSimulation>($"Failed to parse TextChatMsg from {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+                
+                BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
+                break;
+            }
+            
             case NetMessageType.GroupLeaderMatchmakingStatus:
             case NetMessageType.GenericGameplay:
             case NetMessageType.PlayerFinishedEvent:
             case NetMessageType.Gameplay:
             case NetMessageType.WandererUpdate:
-            case NetMessageType.TextChatMsg:
             case NetMessageType.InviteChallengeMessageModnation:
             case NetMessageType.InviteSessionJoinDataModnation:
             case NetMessageType.InviteRequestJoin:
@@ -1130,6 +1162,26 @@ public class GameSimulation
                     Logger.LogWarning<GameSimulation>($"Invalid PlayerStateUpdate received from {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
+                }
+
+                if (state.NameUid != senderNameUid)
+                {
+                    Logger.LogWarning<GameSimulation>($"PlayerStateUpdate NameUid doesn't match SenderNameUid! Disconnecting player!");
+                    player.Disconnect();
+                    break;
+                }
+                
+                // If we're still connecting, then this is the first player state update before we're actually in-game,
+                // so check if anybody else has our name UID first, this will only happen if someone is exploiting or if
+                // somebody on RPCS3 doesn't have their Console ID set
+                if (!player.State.HasNameUid)
+                {
+                    if (_players.Any(p => p.State.NameUid == state.NameUid))
+                    {
+                        Logger.LogWarning<GameSimulation>($"Disconnecting {player.Username} from game since another user already has the same UID!");
+                        player.Disconnect();
+                        break;
+                    }
                 }
 
                 // Patch our existing player state with the new message
@@ -1375,7 +1427,7 @@ public class GameSimulation
                         int postRaceDelay = _raceConstants.PostRaceTime;
                         BroadcastMessage(new NetMessageEventResults
                         {
-                            SenderNameUid = NetworkMessages.SimServerUID,
+                            SenderNameUid = NetworkMessages.SimServerUid,
                             Platform = Platform,
                             ResultsXml = results,
                             Destination = destination,

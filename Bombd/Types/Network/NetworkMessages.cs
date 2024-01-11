@@ -8,15 +8,15 @@ public class NetworkMessages
 {
     public const string SimServerName = "SimServer";
     private const int HeaderSize = 0x8;
-    public static readonly int SimServerUID = CryptoHelper.StringHash32(SimServerName);
-
+    public static readonly uint SimServerUid = CryptoHelper.StringHashU32(SimServerName);
+    
     public static ArraySegment<byte> Pack(NetworkWriter writer, INetworkMessage message)
     {
         writer.Reset();
 
         writer.Write((byte)message.Type);
         writer.Offset += 3;
-        writer.Write(SimServerUID);
+        writer.Write(SimServerUid);
         writer.Write(message);
 
         ArraySegment<byte> payload = writer.ToArraySegment();
@@ -33,7 +33,7 @@ public class NetworkMessages
 
         writer.Write((byte)type);
         writer.Offset += 3;
-        writer.Write(SimServerUID);
+        writer.Write(SimServerUid);
         writer.Write(message);
 
         ArraySegment<byte> payload = writer.ToArraySegment();
@@ -50,7 +50,7 @@ public class NetworkMessages
 
         writer.Write((byte)type);
         writer.Offset += 3;
-        writer.Write(SimServerUID);
+        writer.Write(SimServerUid);
         writer.Write(value);
         
         ArraySegment<byte> payload = writer.ToArraySegment();
@@ -61,7 +61,7 @@ public class NetworkMessages
         return payload;
     }
     
-    public static bool Unpack(NetworkReader reader, Platform platform, out NetMessageType type, out int sender, out ArraySegment<byte> message)
+    public static bool Unpack(NetworkReader reader, Platform platform, out NetMessageType type, out uint sender, out ArraySegment<byte> message)
     {
         message = default;
         type = 0;
@@ -78,7 +78,7 @@ public class NetworkMessages
         if (platform == Platform.Karting)
             size |= (extraSize << 0x10);
         
-        sender = reader.ReadInt32();
+        sender = reader.ReadUInt32();
 
         // Size includes the header bytes
         size -= HeaderSize;

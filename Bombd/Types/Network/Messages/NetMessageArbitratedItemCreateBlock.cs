@@ -14,7 +14,7 @@ public class NetMessageArbitratedItemCreateBlock : INetworkMessage
     
     public struct ItemBlock
     {
-        public int PlayerNameUid;
+        public uint PlayerNameUid;
         public int ItemId;
     }
     

@@ -9,7 +9,7 @@ public struct NetMessagePlayerSessionInfo : INetworkMessage
     public GameSessionStatus JoinStatus;
     public int UserId;
     public int PlayerId;
-    public int NameUid;
+    public uint NameUid;
 
     public void Write(NetworkWriter writer)
     {

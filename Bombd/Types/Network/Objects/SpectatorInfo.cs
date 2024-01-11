@@ -7,13 +7,13 @@ public class SpectatorInfo : INetworkWritable, INetworkReadable
 {
     public readonly Platform Platform;
     
-    public int LeaderNameUid
+    public uint LeaderNameUid
     {
         get => LeaderboardNameUids[0];
         set => LeaderboardNameUids[0] = value;
     }
     
-    public readonly int[] LeaderboardNameUids = new int[8];
+    public readonly uint[] LeaderboardNameUids = new uint[8];
     public int PostRaceServerTime;
     public int RaceEndServerTime;
     public int RaceLeaderLapNumber;
@@ -37,7 +37,7 @@ public class SpectatorInfo : INetworkWritable, INetworkReadable
     public void Read(NetworkReader reader)
     {
         RaceState = (RaceState)reader.ReadInt32();
-        if (Platform == Platform.ModNation) LeaderNameUid = reader.ReadInt32();
+        if (Platform == Platform.ModNation) LeaderNameUid = reader.ReadUInt32();
         RaceLeaderLapNumber = reader.ReadInt32();
         TotalLapNumber = reader.ReadInt32();
         RaceEndServerTime = reader.ReadInt32();
@@ -45,7 +45,7 @@ public class SpectatorInfo : INetworkWritable, INetworkReadable
         if (Platform == Platform.Karting)
         {
             for (int i = 0; i < 8; ++i)
-                LeaderboardNameUids[i] = reader.ReadInt32();
+                LeaderboardNameUids[i] = reader.ReadUInt32();
         }
     }
     

@@ -61,14 +61,16 @@ public static class CryptoHelper
         0xA6322BDF, 0xA2F33668, 0xBCB4666D, 0xB8757BDA, 0xB5365D03,
         0xB1F740B4
     };
-
+    
     public static int StringHash32(string str)
     {
         int crc = -1;
         for (int i = 0; i < str.Length; ++i) crc = (crc << 8) ^ (int)CrcTable32[((crc >> 0x18) ^ str[i]) & 0xff];
         return crc;
     }
-
+    
+    public static uint StringHashU32(string str) => (uint)StringHash32(str);
+    
     public static int StringHash32Upper(string str) => StringHash32(str.ToUpper());
 
     public static byte[] GetMD5(byte[] data) => MD5.Create().ComputeHash(data);
