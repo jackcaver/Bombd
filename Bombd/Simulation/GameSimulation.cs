@@ -1068,7 +1068,7 @@ public class GameSimulation
             {
                 try
                 {
-                    NetChatMessage message = NetChatMessage.LoadXml(data);
+                    NetChatMessage message = NetChatMessage.LoadXml(data, Platform);
                     // Basic spoofing prevention, don't allow sender name mismatches
                     if (message.Sender != player.Username)
                     {
