@@ -3,6 +3,7 @@ using System.Xml;
 using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Types.Network.Objects;
+using Bombd.Types.Network.Races;
 
 namespace Bombd.Core;
 
@@ -65,7 +66,6 @@ public class WebApiManager
                     TrackName = attributes["name"].Value,
                     CreationId = int.Parse(attributes["id"].Value),
                     NumLaps = int.Parse(attributes["laps"].Value),
-                    StartNis = attributes["description"].Value
                 });   
             }
         }
@@ -77,25 +77,59 @@ public class WebApiManager
         return events;
     }
 
+    public static List<EventSettings> GetTopTracks()
+    {
+        var events = GetSeriesEvent("THEMED_EVENTS");
+        for (int i = 0; i < events.Count; ++i)
+        {
+            var settings = events[i];
+            settings.CareerEventIndex = CoiInfo.SPHERE_INDEX_TOP_TRACKS;
+            settings.SeriesEventIndex = i;
+            settings.AiEnabled = false;
+        }
+
+        return events;
+    }
+
+    public static EventSettings GetHotSeat()
+    {
+        var settings = GetSingleEvent("HOT_SEAT_PLAYLIST");
+        settings.CareerEventIndex = CoiInfo.SPHERE_INDEX_HOTSEAT;
+        settings.RaceType = RaceType.HotSeat;
+        return settings;
+    }
+
     public static CoiInfo GetCircleOfInfluence()
     {
         var coi = new CoiInfo
         {
             Hotseat =
             {
-                Event = GetSingleEvent("HOT_SEAT_PLAYLIST")
+                Event = GetHotSeat()
             },
             Themed =
             {
-                Events = GetSeriesEvent("THEMED_EVENTS")
+                Events = GetTopTracks()
             }
         };
-
-        coi.Fixup();
 
         return coi;
     }
     
+    public static SeriesInfo GetTopTrackSeries(int owner, string kartParkHome)
+    {
+        var info = new SeriesInfo(Platform.ModNation);
+        var events = GetTopTracks();
+        foreach (var settings in events)
+        {
+            settings.OwnerNetcodeUserId = owner;
+            settings.KartParkHome = kartParkHome;
+            info.Events.Add(settings);
+        }
+        
+        return info;
+    }
+
     public static void Initialize()
     {
         if (string.IsNullOrEmpty(BombdConfig.Instance.ApiURL))

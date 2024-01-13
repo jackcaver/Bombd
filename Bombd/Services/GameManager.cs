@@ -1,7 +1,6 @@
 ﻿using Bombd.Attributes;
 using Bombd.Core;
 using Bombd.Helpers;
-using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
 using Bombd.Serialization.Wrappers;
@@ -9,7 +8,7 @@ using Bombd.Simulation;
 using Bombd.Types.Events;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
-using Bombd.Types.Network;
+using Bombd.Types.Network.Room;
 using Bombd.Types.Requests;
 using Bombd.Types.Services;
 
@@ -18,8 +17,6 @@ namespace Bombd.Services;
 [Service("gamemanager", 10505, ProtocolType.TCP)]
 public class GameManager : BombdService
 {
-    private string KartParkName = string.Empty;
-    
     public GameManager()
     {
         Bombd.GameServer.OnPlayerJoined += OnPlayerJoin;

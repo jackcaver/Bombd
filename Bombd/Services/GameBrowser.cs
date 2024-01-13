@@ -1,6 +1,7 @@
 ﻿using Bombd.Attributes;
 using Bombd.Core;
 using Bombd.Helpers;
+using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
 using Bombd.Simulation;
@@ -41,12 +42,28 @@ public class GameBrowser : BombdService
         GamePlayer? player = Bombd.RoomManager.GetPlayerInRoom(context.Connection.UserId);
         if (player == null)
         {
-            context.Response.Error = "NotInKartPark";
+            context.Response.Error = "notInGame";
+            return null;
+        }
+
+        // The game provides a list of search attributes, but we only really want KART_PARK_HOME
+        var attributes = NetworkReader.Deserialize<GameSearchAttributes>(context.Request["searchAttribs"]);
+        if (!attributes.TryGetValue("KART_PARK_HOME", out string? kartPark))
+        {
+            context.Response.Error = "invalidSearchAttribs";
+            return null;
+        }
+        
+        // We should only be subscribing to events in the kart park that we're currently in
+        if (kartPark != player.Room.Game.GameName)
+        {
+            context.Response.Error = "notInKartPark";
             return null;
         }
         
         player.ListeningForGameEvents = true;
-        return CreateServerGameList(new List<GameBrowserGame> { player.Room.GetGameBrowserInfo() });
+        List<GameBrowserGame> games = Bombd.RoomManager.GetKartParkSubMatches(kartPark, context.Connection.Platform);
+        return CreateServerGameList(games);
     }
     
     [Transaction("unSubscribeGameEvents")]

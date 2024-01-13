@@ -1,5 +1,6 @@
 ﻿using Bombd.Helpers;
 using Bombd.Serialization;
+using Bombd.Types.Network.Races;
 
 namespace Bombd.Types.Network.Objects;
 

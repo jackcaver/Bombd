@@ -1,0 +1,143 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CareerData>
+    <Platform>ModNation</Platform>
+    <Tracks>
+        <Track name="T1_ModCircuit" id="288" class="fast" />
+        <Track name="T1_ParkCircuit" id="335" class="fast" />
+        <Track name="T1_VillageJumps" id="336" class="fast" />
+        <Track name="T1_MountainJumps" id="289" class="fast" />
+        <Track name="T2_MinersRift" id="331" class="faster" />
+        <Track name="T3_Boardwalk" id="316" class="faster" />
+        <Track name="T4_MotoIsland" id="294" class="faster" />
+        <Track name="T1_FlamingJumps" id="299" class="faster" />
+        <Track name="T1_RuralFarm" id="291" class="faster" />
+        <Track name="T2_MarketRun" id="339" class="faster" />
+        <Track name="T3_CraggyHills" id="314" class="faster" />
+        <Track name="T4_RicketyBridge" id="306" class="faster" />
+        <Track name="T1_DriftParadise" id="309" class="faster" />
+        <Track name="T1_Modobahn" id="311" class="faster" />
+        <Track name="T2_Sandstorm" id="341" class="fastest" />
+        <Track name="T3_VistaPoint" id="315" class="fastest" />
+        <Track name="T4_TempleOfTiki" id="292" class="fastest" />
+        <Track name="T2_Sinkhole" id="304" class="fastest" />
+        <Track name="T3_Marina" id="305" class="fastest" />
+        <Track name="T4_RumbleIsland" id="297" class="fastest" />
+        <Track name="T1_SpeedSprings" id="312" class="fastest" />
+        <Track name="T2_DireCliff" id="298" class="fastest" />
+        <Track name="T3_OldDistrict" id="307" class="fastest" />
+        <Track name="T4_SpeedJungle" id="293" class="fastest" />
+        <Track name="T3_OceanCliff" id="296" class="fastest" />
+        <Track name="T2_Upheaval" id="310" class="fastest" />
+        <Track name="T4_OverVolcano" id="303" class="fastest" />
+        <Track name="T1_ModFinale" id="302" class="fastest" />
+        <Track name="T4_MotoIsland" id="294" class="fastest" />
+        <Track name="T4_TempleOfTiki" id="292" class="fastest" />
+        <Track name="T4_RumbleIsland" id="297" class="fastest" />
+        <Track name="T5_GREATWALL" id="628" class="faster" />
+        <Track name="T5_HIDDENFOREST" id="629" class="faster" />
+        <Track name="T5_CHINATOWN" id="627" class="faster" />
+        <Track name="T5_TERRACEDDROP" id="626" class="faster" />
+        <Track name="T5_FORTRESS" id="631" class="faster" />
+        <Track name="T6_SNOWSTORMCITY" id="602" class="faster" />
+        <Track name="T6_DOWNHILLPEAK" id="597" class="faster" />
+        <Track name="T6_ICEBERGEDGE" id="624" class="fastest" />
+        <Track name="T6_PENGUINPALACE" id="610" class="fastest" />
+        <Track name="T6_ICEBREAKER" id="595" class="fastest" />
+        <Track name="T7_TOURISTTRAP" id="635" class="fastest" />
+        <Track name="T7_SUBWAYMAYHEM" id="634" class="fastest" />
+        <Track name="T7_GRIDLOCKRIVER" id="633" class="fastest" />
+        <Track name="T7_HOMERUNCIRCUIT" id="637" class="fastest" />
+        <Track name="T7_SKYSCRAPERHOP" id="636" class="fastest" />
+    </Tracks>
+    <AiDefinitions>
+        <Ai name="Shadow" profile="SHADOWonVISTAPOINT" />
+        <Ai name="Fade" profile="FADEonMARKETRUN" />
+        <Ai name="Dolor" profile="DOLORonRUMBLEISLAND" />
+        <Ai name="Nato" profile="NATOonSINKHOLE" />
+        <Ai name="Drillbit" profile="DrillbitonMINERSRIFT" />
+        <Ai name="Iceman" profile="ICEMANonCRAGGYHILLS" />
+        <Ai name="Skidplate" profile="SKIDPLATEonBOARDWALK" />
+        <Ai name="Wildcard" profile="WILDCARDonMOTOCROSSISLAND" />
+        <Ai name="Hale" profile="HALEonFLAMINGJUMPS" />
+        <Ai name="Scout" profile="SCOUTonRICKETYBRIDGE" />
+        <Ai name="Slick" profile="SLICKonSANDSTORM" />
+        <Ai name="Aloha" profile="ALOHAonTEMPLEOFTIKI" />
+        <Ai name="Dyno" profile="DYNOonMARINA" />
+        <Ai name="Espresso" profile="MAX" />
+        <Ai name="Diablo" profile="DIABLOonSPEEDWAYSPRINGS" />
+        <Ai name="A-Mach" profile="MID" />
+        <Ai name="Lolley" profile="MID" />
+        <Ai name="Cosmo" profile="MID" />
+        <Ai name="Parka" profile="MID" />
+        <Ai name="Emao III" profile="MID" />
+        <Ai name="JZee" profile="MID" />
+        <Ai name="Shotz" profile="MID" />
+        <Ai name="S to the Eth" profile="MID" />
+        <Ai name="Gunder" profile="MID" />
+        <Ai name="Tobias Roy" profile="MID" />
+        <Ai name="Radu" profile="MID" />
+        <Ai name="Lubker" profile="MID" />
+        <Ai name="Spence-O-Matic" profile="MID" />
+        <Ai name="The Soch" profile="MID" />
+        <Ai name="Kozak" profile="MID" />
+        <Ai name="E Man" profile="MID" />
+        <Ai name="Vlad" profile="MID" />
+        <Ai name="Prime Time" profile="MID" />
+        <Ai name="Joesiv" profile="MID" />
+        <Ai name="Oz" profile="MID" />
+        <Ai name="Gedski" profile="MID" />
+        <Ai name="Chainsaw" profile="MID" />
+        <Ai name="Bruzer" profile="MID" />
+        <Ai name="Granny" profile="MID" />
+        <Ai name="T-Rask" profile="MID" />
+        <Ai name="Griller" profile="MID" />
+        <Ai name="The MC" profile="MID" />
+        <Ai name="Pip Cork" profile="MID" />
+        <Ai name="Hooleyman" profile="MID" />
+        <Ai name="Kibbler" profile="MID" />
+        <Ai name="Skye" profile="MID" />
+        <Ai name="Lish" profile="MID" />
+        <Ai name="Mic" profile="MID" />
+        <Ai name="Harry" profile="MID" />
+        <Ai name="Astro Kitty" profile="MID" />
+        <Ai name="PJ" profile="MID" />
+        <Ai name="Captain Venus" profile="MID" />
+        <Ai name="Gill" profile="MID" />
+        <Ai name="Shaman" profile="MID" />
+        <Ai name="Bionic" profile="MID" />
+        <Ai name="A.N.T." profile="MID" />
+        <Ai name="Gargles" profile="MID" />
+        <Ai name="Nails" profile="MID" />
+        <Ai name="Abranda" profile="MID" />
+        <Ai name="Marvin" profile="THUG" />
+        <Ai name="Robbie" profile="THUG" />
+        <Ai name="Max" profile="THUG" />
+        <Ai name="Hal" profile="THUG" />
+        <Ai name="Sven" profile="THUG" />
+        <Ai name="Bjorn" profile="THUG" />
+        <Ai name="Gustav" profile="THUG" />
+        <Ai name="Erik" profile="THUG" />
+        <Ai name="Kristoffer" profile="THUG" />
+        <Ai name="Clyde" profile="THUG" />
+        <Ai name="Robin" profile="THUG" />
+        <Ai name="Jesse" profile="THUG" />
+        <Ai name="Carmen" profile="THUG" />
+        <Ai name="Butch" profile="THUG" />
+        <Ai name="Flynn" profile="THUG" />
+        <Ai name="Ricky" profile="THUG" />
+        <Ai name="Danny" profile="THUG" />
+        <Ai name="Billy" profile="THUG" />
+        <Ai name="Bobby" profile="THUG" />
+        <Ai name="Johnny" profile="THUG" />
+        <Ai name="Andy" profile="THUG" />
+        <Ai name="Timmy" profile="THUG" />
+        <Ai name="Beezel" profile="THUG" />
+        <Ai name="Deezel" profile="THUG" />
+        <Ai name="Weezel" profile="THUG" />
+        <Ai name="Meezel" profile="THUG" />
+        <Ai name="Teezel" profile="THUG" />
+        <Ai name="Zeezel" profile="THUG" />
+        <Ai name="Neezel" profile="THUG" />
+        <Ai name="Reezel" profile="THUG" />
+    </AiDefinitions>
+</CareerData>

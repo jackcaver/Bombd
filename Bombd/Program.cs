@@ -1,9 +1,7 @@
-﻿using Bombd.Core;
-using Bombd.Helpers;
+using Bombd.Core;
 using Bombd.Logging;
 using Bombd.Services;
 using Directory = Bombd.Services.Directory;
-
 
 string certificate = BombdConfig.Instance.PfxCertificate;
 if (string.IsNullOrEmpty(certificate))

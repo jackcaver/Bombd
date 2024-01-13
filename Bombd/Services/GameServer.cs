@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using Bombd.Attributes;
 using Bombd.Core;
 using Bombd.Helpers;
@@ -9,6 +9,7 @@ using Bombd.Serialization.Wrappers;
 using Bombd.Simulation;
 using Bombd.Types.Events;
 using Bombd.Types.Network;
+using Bombd.Types.Network.Room;
 using Bombd.Types.Requests;
 using Bombd.Types.Services;
 
@@ -26,7 +27,8 @@ public class GameServer : BombdService
     private readonly List<MigrationGroup> _playerMigrationGroups = new();
     public event EventHandler<PlayerJoinEventArgs>? OnPlayerJoined;
     public event EventHandler<PlayerLeaveEventArgs>? OnPlayerLeft;
-
+    public event EventHandler<GameEventArgs>? OnGameEvent;
+    
     public void UpdateGuestStatuses(GamePlayer player, GuestStatusBlock block)
     {
         _playerLock.Wait();

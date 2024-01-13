@@ -110,7 +110,7 @@ public class VotePackage : INetworkWritable
         }
     }
     
-    public void FinishVote()
+    public int FinishVote()
     {
         _state = 2;
 
@@ -122,6 +122,8 @@ public class VotePackage : INetworkWritable
         }
 
         _finalizedVotedTrack = finalizedVotableTrack.TrackId;
+
+        return _finalizedVotedTrack;
     }
     
     public void Write(NetworkWriter writer)

@@ -96,9 +96,7 @@ public class RoomManager
         // sent by the game for whatever reason.
         request.Attributes.TryAdd("__JOIN_MODE", "OPEN");
         request.Attributes.TryAdd("__MM_MODE_G", "OPEN");
-        // Player matchmaking doesn't seem to actually exist in either game?
-        // Leave it closed regardless
-        request.Attributes.TryAdd("__MM_MODE_P", "CLOSED");
+        request.Attributes.TryAdd("__MM_MODE_P", "OPEN");
         request.Attributes.TryAdd("SERVER_TYPE", "kartPark");
         
         var type = ServerType.KartPark;
@@ -114,15 +112,18 @@ public class RoomManager
         if (type == ServerType.Pod) maxPlayers = 4;
         request.Attributes["__MAX_PLAYERS"] = maxPlayers.ToString();
         
-        bool isUserOwnedGame = (type == ServerType.Competitive && !request.IsRanked) || (type == ServerType.Pod);
+        bool isSeries = false;
+        if (request.Attributes.TryGetValue("SERIES_TYPE", out string? seriesType))
+            isSeries = seriesType == "series";
+        
+        bool isUserOwnedGame = type is ServerType.Competitive or ServerType.Pod;
         lock (_roomLock)
         {
             int id = ++_nextGameId;
-            
-            string name = $"gm_{request.Attributes["SERVER_TYPE"].ToLower()}_{id}";
-            if (type == ServerType.KartPark)
-                request.Attributes["KART_PARK_HOME"] = name;
-            
+
+            string name = request.Attributes["SERVER_TYPE"].ToLower();
+            if (request.IsRanked) name = "ranked";
+            name = $"gm_{name}_{id}{(uint)TimeHelper.LocalTime}";
             var room = new GameRoom(new RoomCreationInfo
             {
                 Game = new GameManagerGame
@@ -136,7 +137,9 @@ public class RoomManager
                 Type = type,
                 Platform = request.Platform,
                 MaxPlayers = maxPlayers,
-                OwnerUserId = isUserOwnedGame ? request.OwnerUserId : -1
+                OwnerUserId = isUserOwnedGame ? request.OwnerUserId : -1,
+                IsRanked = request.IsRanked,
+                IsSeries = isSeries
             });
         
             _rooms[name] = room;
@@ -197,6 +200,19 @@ public class RoomManager
             if (_creationPlayerCounts.TryGetValue(creationId, out int playerCount))
                 _creationPlayerCounts[creationId] = playerCount - 1;   
         }
+    }
+
+    public List<GameBrowserGame> GetKartParkSubMatches(string kartPark, Platform platform)
+    {
+        IEnumerable<GameRoom> rooms = GetRooms().Where(room =>
+        {
+            if (room.Platform != platform) return false;
+            if (room.Game.Attributes.TryGetValue("KART_PARK_HOME", out string? value))
+                return value == kartPark;
+            return false;
+        });
+        
+        return rooms.Select(room => room.GetGameBrowserInfo()).ToList();
     }
     
     public List<GameBrowserGame> SearchRooms(GameAttributes attributes, Platform id, int freeSlotsRequired, bool createIfNoneExist = true)

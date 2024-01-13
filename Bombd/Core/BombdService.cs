@@ -202,7 +202,7 @@ public abstract class BombdService
         // Only the GameManager needs to be sent the matchmaking configuration.
         if (this is GameManager)
         {
-            byte[] config = File.ReadAllBytes("Data/MatchmakingConfiguration.xml");
+            byte[] config = File.ReadAllBytes($"Data/Matchmaking/{platform}.xml");
             response["MMConfigFile"] = Convert.ToBase64String(config);
             response["MMConfigFileSize"] = config.Length.ToString();
         }

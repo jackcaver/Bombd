@@ -1,4 +1,5 @@
 ﻿using Bombd.Serialization;
+using Bombd.Types.Network.Room;
 
 namespace Bombd.Types.Network.Messages;
 

@@ -1,6 +1,4 @@
-﻿using System.Numerics;
-
-namespace Bombd.Types.Network.V2;
+﻿namespace Bombd.Types.Network.Arbitration;
 
 public class NetArbitrationServer
 {

@@ -1,23 +1,21 @@
 ﻿using Bombd.Helpers;
 using Bombd.Serialization;
+using Bombd.Types.Network.Races;
 
 namespace Bombd.Types.Network.Objects;
 
 public class CoiInfo : INetworkWritable
 {
-    public CoiSingleEvent Hotseat = new("Hotseat", 2);
-    public CoiSingleEvent DLC = new("DLC Demo", 3);
-    public CoiSeriesEvent Showcase = new("Showcase", 0);
-    public CoiSeriesEvent Themed = new("Special Event", 1);
-
-    public void Fixup()
-    {
-        Hotseat.Event.CareerEventIndex = Hotseat.Index;
-        DLC.Event.CareerEventIndex = DLC.Index;
-        Showcase.Fixup();
-        Themed.Fixup();
-    }
+    public const int SPHERE_INDEX_SHOWCASE = 0;
+    public const int SPHERE_INDEX_TOP_TRACKS = 1;
+    public const int SPHERE_INDEX_HOTSEAT = 2;
+    public const int SPHERE_INDEX_DLC_DEMO = 3;
     
+    public CoiSingleEvent Hotseat = new("Hotseat", SPHERE_INDEX_HOTSEAT);
+    public CoiSingleEvent DLC = new("DLC Demo", SPHERE_INDEX_DLC_DEMO);
+    public CoiSeriesEvent Showcase = new("Showcase", SPHERE_INDEX_SHOWCASE);
+    public CoiSeriesEvent Themed = new("Special Event", SPHERE_INDEX_TOP_TRACKS);
+
     public void Write(NetworkWriter writer)
     {
         writer.Write(Hotseat);
@@ -39,17 +37,7 @@ public class CoiSeriesEvent : INetworkWritable
     public string Url = "http://www.modnation.com";
     public int Index;
     public List<EventSettings> Events = new();
-
-    public void Fixup()
-    {
-        for (int i = 0; i < Events.Count; ++i)
-        {
-            EventSettings evt = Events[i];
-            evt.SeriesEventIndex = i;
-            evt.CareerEventIndex = Index;
-        }
-    }
-    
+        
     public void Write(NetworkWriter writer)
     {
         writer.Write(Name, 0x40);

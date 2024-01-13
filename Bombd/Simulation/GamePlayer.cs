@@ -3,6 +3,7 @@ using Bombd.Protocols;
 using Bombd.Serialization;
 using Bombd.Types.Network;
 using Bombd.Types.Network.Messages;
+using Bombd.Types.Network.Room;
 
 namespace Bombd.Simulation;
 
@@ -28,7 +29,6 @@ public class GamePlayer
     public readonly List<GameGuest> Guests = new();
 
     public LeaveReason LeaveReason = LeaveReason.Generic;
-    public bool IsFakePlayer;
     public bool IsSpectator;
     public bool HasSentRaceResults;
     public bool ListeningForGameEvents;

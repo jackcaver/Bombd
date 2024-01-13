@@ -1,5 +1,7 @@
-﻿using Bombd.Helpers;
+﻿using Bombd.Globals;
+using Bombd.Helpers;
 using Bombd.Serialization;
+using Bombd.Types.Story;
 
 namespace Bombd.Types.Network.Objects;
 
@@ -25,8 +27,8 @@ public class AiInfo : INetworkWritable
         Platform = platform;
         Count = count;
         
-        List<AiDefinition> definitions = AiDefinition.GetRandomDefinitions(platform, count);
-        
+        CareerData career = platform == Platform.ModNation ? Career.ModNation : Career.Karting;
+        List<AiDefinition> definitions = career.GetRandomAi(count);
         for (int i = 0, player = 0; i < DataSet.Length; ++i, player++)
         {
             var ai = new NetAiData();

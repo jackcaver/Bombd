@@ -12,7 +12,7 @@ public class GameAttributes : Dictionary<string, string>, INetworkReadable, INet
     {
     }
 
-    public void Read(NetworkReader reader)
+    public virtual void Read(NetworkReader reader)
     {
         // When this structure is being read/written from memory,
         // it's directly memcpy'd into the structure, so there's padding

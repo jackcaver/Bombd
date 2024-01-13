@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CareerData>
+    <Platform>Karting</Platform>
+    <Tracks>
+        <Track name="TUTORIALLOOP" id="845" type="action" minplayers="1" maxplayers="1" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="gardengrip" id="576" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="TutorialDrift" id="753" type="pure" minplayers="1" maxplayers="1" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="gardengrip_versus" id="612" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="THEWEDDING" id="734" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="tutorialweapons" id="861" type="action" minplayers="1" maxplayers="1" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="THEWEDDING_versus" id="510" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="Serpentshrine" id="755" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="tutorialshield" id="758" type="action" minplayers="1" maxplayers="1" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="Serpentshrine_VERSUS" id="657" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="TheMines" id="930" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="SackRallyKenya" id="951" type="action" minplayers="1" maxplayers="1" scoreboard="time" leveltype="cooperative" votable="false" />
+        <Track name="TheMines_versus" id="610" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="King's Castle" id="777" type="battle" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="offroadtest" id="689" type="action" minplayers="2" maxplayers="4" scoreboard="time" leveltype="versus" votable="false" />
+        <Track name="Sackboy GP" id="814" type="action" minplayers="1" maxplayers="1" scoreboard="time" leveltype="cooperative" votable="false" />
+        <Track name="KINGSCASTLE_VERSUS" id="501" type="battle" minplayers="2" maxplayers="8" scoreboard="score" leveltype="versus" votable="true" />
+        <Track name="TurtleIsland" id="869" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="TurtleIsland_versus" id="729" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="islandhopping" id="596" type="battle" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="islandhopping_VERSUS" id="760" type="battle" minplayers="2" maxplayers="4" scoreboard="time" leveltype="versus" votable="false" />
+        <Track name="stuntofzen" id="699" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="Eggarena" id="609" type="battle" minplayers="1" maxplayers="1" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="HUGEMONSTERRALLY_VERSUS" id="705" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="dinopark" id="939" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="dinopark_VERSUS" id="903" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="dinofight" id="647" type="battle" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="dinofight_VERSUS" id="915" type="battle" minplayers="2" maxplayers="8" scoreboard="score" leveltype="versus" votable="true" />
+        <Track name="StarFishin" id="529" type="battle" minplayers="2" maxplayers="4" scoreboard="score" leveltype="versus" votable="false" />
+        <Track name="SUGARRUSH" id="684" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="DontBakeMyKart" id="849" type="custom" minplayers="1" maxplayers="1" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="SugarRush_VERSUS" id="582" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="currentevents" id="790" type="battle" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="currentevents_VERSUS" id="857" type="battle" minplayers="2" maxplayers="8" scoreboard="score" leveltype="versus" votable="true" />
+        <Track name="chewchouxtrain" id="715" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="ChewChouxTrain_VERSUS" id="738" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="SKYLOOPS" id="625" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="SKYLOOPS_VERSUS" id="959" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="Airships" id="998" type="battle" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="Airships_versus" id="520" type="battle" minplayers="2" maxplayers="8" scoreboard="score" leveltype="versus" votable="true" />
+        <Track name="treasurehunt" id="881" type="battle" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="CLIFFJAM" id="712" type="action" minplayers="1" maxplayers="1" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="treasurehunt_VERSUS" id="828" type="battle" minplayers="2" maxplayers="8" scoreboard="score" leveltype="versus" votable="true" />
+        <Track name="CARNIVALAFFAIRS" id="840" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="CARNIVALAFFAIRS_VERSUS" id="624" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="Best Before Date" id="811" type="battle" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="TankBattle" id="918" type="battle" minplayers="2" maxplayers="4" scoreboard="score" leveltype="versus" votable="false" />
+        <Track name="CSRSCALE" id="823" type="battle" minplayers="1" maxplayers="1" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="Best Before Date_Versus" id="614" type="battle" minplayers="2" maxplayers="4" scoreboard="time" leveltype="versus" votable="false" />
+        <Track name="treehouse" id="1049" type="battle" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="treehouse_VERSUS" id="821" type="battle" minplayers="2" maxplayers="8" scoreboard="score" leveltype="versus" votable="true" />
+        <Track name="Firebugcircuit" id="702" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="evesoffroad" id="766" type="action" minplayers="2" maxplayers="4" scoreboard="time" leveltype="versus" votable="false" />
+        <Track name="FIREBUGCIRCUIT_VERSUS" id="913" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="Firebugboss" id="606" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="Wipeout" id="550" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="Wipeout_VERSUS" id="708" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="JUGGERTEST" id="648" type="battle" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="juggertest_VERSUS" id="772" type="battle" minplayers="2" maxplayers="8" scoreboard="score" leveltype="versus" votable="true" />
+        <Track name="HugeSpaceship" id="688" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="CTFGolf" id="539" type="battle" minplayers="2" maxplayers="8" scoreboard="score" leveltype="versus" votable="true" />
+        <Track name="HugeSpaceship_VERSUS" id="579" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="circuitcircuit" id="698" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="RideScroller" id="763" type="battle" minplayers="1" maxplayers="1" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="CIRCUITCIRCUIT_VERSUS" id="759" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="Drum Smash" id="941" type="action" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="DrumSmash_VERSUS" id="630" type="action" minplayers="2" maxplayers="8" scoreboard="time" leveltype="versus" votable="true" />
+        <Track name="FUNKHOLE" id="697" type="battle" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="pinball" id="1023" type="battle" minplayers="1" maxplayers="1" scoreboard="score" leveltype="cooperative" votable="false" />
+        <Track name="FUNKHOLE_VERSUS" id="808" type="battle" minplayers="2" maxplayers="4" scoreboard="time" leveltype="versus" votable="false" />
+        <Track name="EndGameBoss" id="703" type="battle" minplayers="1" maxplayers="4" scoreboard="score" leveltype="cooperative" votable="false" />
+    </Tracks>
+    <AiDefinitions>
+        <Ai name="Hoardsmith" profile="MID" />
+        <Ai name="Hoardymore" profile="MID" />
+        <Ai name="Hoardratio" profile="MID" />
+        <Ai name="Hoardsworth" profile="MID" />
+        <Ai name="Hoardsley" profile="MID" />
+        <Ai name="Hoardriguez" profile="MID" />
+        <Ai name="Hoardoza" profile="MID" />
+        <Ai name="Hoardnandez" profile="MID" />
+        <Ai name="Hoardazar" profile="MID" />
+        <Ai name="Hoardford" profile="MID" />
+        <Ai name="Sir Hoardelot" profile="MID" />
+        <Ai name="Sir Hoardfort" profile="MID" />
+        <Ai name="Sir Hoardbeard" profile="MID" />
+        <Ai name="Sir Hoardamere" profile="MID" />
+        <Ai name="P. Hoarderson" profile="MID" />
+        <Ai name="Hoard-san" profile="MID" />
+        <Ai name="Hoardsama" profile="MID" />
+        <Ai name="Hoardshi" profile="MID" />
+        <Ai name="Hoardsaki" profile="MID" />
+        <Ai name="Hoardyama" profile="MID" />
+        <Ai name="Hoardkun" profile="MID" />
+        <Ai name="Hoardzuki" profile="MID" />
+        <Ai name="Hoardoki" profile="MID" />
+        <Ai name="Hoardfrey" profile="MID" />
+        <Ai name="Hoardinald" profile="MID" />
+        <Ai name="Hoardtrude" profile="MID" />
+        <Ai name="Grace Hoard" profile="MID" />
+        <Ai name="Franklin Hoard" profile="MID" />
+        <Ai name="Susie Hoard" profile="MID" />
+        <Ai name="Grant Hoard" profile="MID" />
+        <Ai name="Captain Hoard" profile="MID" />
+        <Ai name="General Hoard" profile="MID" />
+        <Ai name="Marshal Hoard" profile="MID" />
+        <Ai name="Major Hoard" profile="MID" />
+        <Ai name="Hoardimer" profile="MID" />
+        <Ai name="Hoardette" profile="MID" />
+        <Ai name="Hoardhouse" profile="MID" />
+        <Ai name="Hoardmund" profile="MID" />
+        <Ai name="Hoardprice" profile="MID" />
+        <Ai name="Hoardenstein" profile="MID" />
+        <Ai name="Unhoarded" profile="MID" />
+        <Ai name="Hoardblood" profile="MID" />
+        <Ai name="Hoardberry" profile="MID" />
+        <Ai name="Spatiohoard" profile="MID" />
+        <Ai name="Astrohoard" profile="MID" />
+        <Ai name="Cosmohoard" profile="MID" />
+        <Ai name="Xenohoard" profile="MID" />
+        <Ai name="Hoardotron" profile="MID" />
+        <Ai name="Hoards McGee" profile="MID" />
+        <Ai name="Hoardelle" profile="MID" />
+        <Ai name="Hoardheart" profile="MID" />
+        <Ai name="Hoardington" profile="MID" />
+        <Ai name="Hoardlinger" profile="MID" />
+        <Ai name="Hoardalina" profile="MID" />
+        <Ai name="Hoardacus" profile="MID" />
+        <Ai name="Hoardiana" profile="MID" />
+        <Ai name="Hoardentine" profile="MID" />
+        <Ai name="Hoardemis" profile="MID" />
+        <Ai name="Hoard Emperor" profile="MID" />
+        <Ai name="Hoard Prince" profile="MID" />
+        <Ai name="Baron Hoard" profile="MID" />
+        <Ai name="Rex Hoard" profile="MID" />
+        <Ai name="Duke of Hoard" profile="MID" />
+        <Ai name="Duke Hoardley" profile="MID" />
+        <Ai name="Hoard Tsar" profile="MID" />
+        <Ai name="Hoard Dauphin" profile="MID" />
+        <Ai name="Viscount Hoard" profile="MID" />
+        <Ai name="Hoard Queen" profile="MID" />
+        <Ai name="Hoard Baroness" profile="MID" />
+        <Ai name="Lord Hoard" profile="MID" />
+        <Ai name="Hoard King" profile="MID" />
+        <Ai name="CreateBot 1" profile="MID" />
+        <Ai name="CreateBot 2" profile="MID" />
+        <Ai name="CreateBot 3" profile="MID" />
+        <Ai name="CreateBot 4" profile="MID" />
+        <Ai name="CreateBot 5" profile="MID" />
+        <Ai name="CreateBot 6" profile="MID" />
+        <Ai name="CreateBot 7" profile="MID" />
+        <Ai name="Botsworth" profile="MID" />
+        <Ai name="Sackbuddy" profile="MID" />
+        <Ai name="Robbie-bot" profile="MID" />
+        <Ai name="Speedy-bot" profile="MID" />
+        <Ai name="Cutie-bot" profile="MID" />
+        <Ai name="Sacksmith" profile="MID" />
+        <Ai name="Dannie-bot" profile="MID" />
+        <Ai name="Sackbert" profile="MID" />
+        <Ai name="Sackington" profile="MID" />
+        <Ai name="Mr. Sack" profile="MID" />
+        <Ai name="Sack-o-matic" profile="MID" />
+        <Ai name="Sackbot #6" profile="MID" />
+        <Ai name="Sackie #5" profile="MID" />
+        <Ai name="Sackman" profile="MID" />
+        <Ai name="Sacktron" profile="MID" />
+        <Ai name="Sackalicious" profile="MID" />
+        <Ai name="Sackson" profile="MID" />
+        <Ai name="Sackspeare" profile="MID" />
+        <Ai name="Bunny" profile="MID" />
+        <Ai name="The Bride" profile="MID" />
+        <Ai name="Hoardez" profile="MID" />
+        <Ai name="Hoardelita" profile="MID" />
+        <Ai name="Hoardonso" profile="MID" />
+        <Ai name="Hoardstone" profile="MID" />
+        <Ai name="Hoardmont" profile="MID" />
+        <Ai name="Hoard Dude" profile="MID" />
+        <Ai name="Hoardselhoff" profile="MID" />
+        <Ai name="Hoard Scheider" profile="MID" />
+        <Ai name="Hoardsashi" profile="MID" />
+        <Ai name="Hoardamoto" profile="MID" />
+        <Ai name="Hoardugawa" profile="MID" />
+        <Ai name="Hoardunaga" profile="MID" />
+        <Ai name="Hoardshido" profile="MID" />
+        <Ai name="Hoardosawa" profile="MID" />
+        <Ai name="Hoardira" profile="MID" />
+        <Ai name="Zahoardichi" profile="MID" />
+        <Ai name="Hoardginia" profile="MID" />
+        <Ai name="Nikola Hoardsla" profile="MID" />
+        <Ai name="Alex G. Hoard" profile="MID" />
+        <Ai name="Ben Hoardlin" profile="MID" />
+        <Ai name="Isaac Hoardton" profile="MID" />
+        <Ai name="Hoardini" profile="MID" />
+        <Ai name="Hoardbert" profile="MID" />
+        <Ai name="Hoardothy" profile="MID" />
+        <Ai name="Hoardelia" profile="MID" />
+        <Ai name="Hoardmero" profile="MID" />
+        <Ai name="Hoardodendron" profile="MID" />
+        <Ai name="Hoardenia" profile="MID" />
+        <Ai name="Hoardchard" profile="MID" />
+        <Ai name="Hoardfly" profile="MID" />
+        <Ai name="Hoardsquito" profile="MID" />
+        <Ai name="Hoarderpillar" profile="MID" />
+        <Ai name="Hoardipede" profile="MID" />
+        <Ai name="N. Hoardstrong" profile="MID" />
+        <Ai name="B. Hoardrin" profile="MID" />
+        <Ai name="Hoardentina T." profile="MID" />
+        <Ai name="Y. Hoardarin" profile="MID" />
+        <Ai name="Dr. Hoardbot" profile="MID" />
+        <Ai name="Mecha Hoard" profile="MID" />
+        <Ai name="Henry Hoard" profile="MID" />
+        <Ai name="Prof Hoardard" profile="MID" />
+        <Ai name="Hoard Robinson" profile="MID" />
+        <Ai name="James T. Hoard" profile="MID" />
+        <Ai name="Hoard Rogers" profile="MID" />
+        <Ai name="Freddie Hoardury" profile="MID" />
+        <Ai name="Disco Hoard" profile="MID" />
+        <Ai name="Hoardtown" profile="MID" />
+        <Ai name="Hoardey M." profile="MID" />
+        <Ai name="Hoardie Oakley" profile="MID" />
+        <Ai name="Wyatt Hoard" profile="MID" />
+        <Ai name="Hoard Wayne" profile="MID" />
+        <Ai name="Hoardlie the Kid" profile="MID" />
+        <Ai name="Sofie" profile="MID" />
+        <Ai name="Miles" profile="MID" />
+        <Ai name="Alex" profile="MID" />
+        <Ai name="Chip" profile="MID" />
+        <Ai name="Wannabee" profile="MID" />
+        <Ai name="Baconbeard" profile="MID" />
+        <Ai name="Sebastian" profile="MID" />
+        <Ai name="Alvin" profile="" />
+        <Ai name="Scales" profile="" />
+        <Ai name="Wilber" profile="MID" />
+        <Ai name="Sackbeard" profile="MID" />
+        <Ai name="Hoard Minion 1" profile="MID" />
+        <Ai name="Hoard Minion 2" profile="MID" />
+        <Ai name="Hoard Minion 3" profile="MID" />
+        <Ai name="Hoard Minion 4" profile="MID" />
+    </AiDefinitions>
+</CareerData>

@@ -1,8 +1,11 @@
 ﻿using Bombd.Helpers;
+using Bombd.Logging;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
 using Bombd.Types.Network;
 using Bombd.Types.Network.Objects;
+using Bombd.Types.Network.Races;
+using Bombd.Types.Network.Room;
 using Bombd.Types.Requests;
 
 namespace Bombd.Simulation;
@@ -37,7 +40,7 @@ public class GameRoom
         Game = request.Game;
         Platform = request.Platform;
         Simulation = new GameSimulation(
-            request.Type, this, request.OwnerUserId);
+            request.Type, this, request.OwnerUserId, request.IsRanked, request.IsSeries);
         _slots = Enumerable.Repeat(false, MaxSlots).ToList();
         _slotGuestCounts = Enumerable.Repeat(0, MaxSlots).ToList();
         MaxPlayers = request.MaxPlayers;
@@ -60,10 +63,26 @@ public class GameRoom
         
         attr["TRACK_CREATIONID"] = settings.CreationId.ToString();
         if (settings.CreationId >= NetCreationIdRange.MinOnlineCreationId)
-            attr.Remove("TRACK_GROUP");
+            attr["TRACK_GROUP"] = "userCreated";
         else attr["TRACK_GROUP"] = "official";
         
-        attr["SERIES_TYPE"] = "single";
+        if (!string.IsNullOrEmpty(settings.KartParkHome))
+            attr["KART_PARK_HOME"] = settings.KartParkHome;
+
+        if (settings.CareerEventIndex == -1) attr.Remove("SPHERE_INDEX");
+        else attr["SPHERE_INDEX"] = settings.CareerEventIndex.ToString();
+
+        if (settings.SeriesEventIndex == -1)
+        {
+            attr["SERIES_TYPE"] = "single";
+            attr.Remove("EVENT_INDEX");
+        }
+        else
+        {
+            attr["SERIES_TYPE"] = "series";
+            attr["EVENT_INDEX"] = settings.SeriesEventIndex.ToString();
+        }
+        
         switch (settings.KartSpeed)
         {
             case SpeedClass.Fast:
@@ -94,6 +113,12 @@ public class GameRoom
             default:
                 attr.Remove("MODE_TYPE");
                 break;
+        }
+        
+        Logger.LogDebug<GameRoom>($"Updating ${Game.GameName} attributes:");
+        foreach (var attribute in attr)
+        {
+            Logger.LogDebug<GameRoom>($"\t{attribute.Key} = {attribute.Value}");
         }
     }
     

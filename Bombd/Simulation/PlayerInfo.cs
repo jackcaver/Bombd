@@ -1,5 +1,6 @@
 ﻿using Bombd.Serialization;
 using Bombd.Types.Network;
+using Bombd.Types.Network.Room;
 
 namespace Bombd.Simulation;
 

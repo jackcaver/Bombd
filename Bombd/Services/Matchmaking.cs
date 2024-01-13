@@ -66,13 +66,13 @@ public class Matchmaking : BombdService
 
             NetcodeTransaction transaction;
             // XP races aren't implemented in Modnation, so send back an error for now.
-            if (joiningPlayer.Platform == Platform.ModNation)
-            {
-                transaction = NetcodeTransaction.MakeRequest(Name, "matchmakingError");
-                transaction.Error = "noGamesAvailable";
-                SendTransaction(joiningPlayer.UserId, transaction);
-                continue;
-            }
+            // if (joiningPlayer.Platform == Platform.ModNation)
+            // {
+            //     transaction = NetcodeTransaction.MakeRequest(Name, "matchmakingError");
+            //     transaction.Error = "noGamesAvailable";
+            //     SendTransaction(joiningPlayer.UserId, transaction);
+            //     continue;
+            // }
             
             // Tell the game that we've started matchmaking
             joiningPlayer.StartTime = TimeHelper.LocalTime;
@@ -107,13 +107,16 @@ public class Matchmaking : BombdService
                 attributes[filter.Key] = filter.Value;
             foreach (var filter in player.AdvancedFilters)
                 attributes[filter.Key] = filter.Value;
-            
+
+            // On ModNation matchmaking matches are always ranked
+            bool isRanked = player.Platform == Platform.ModNation;
             var gamemanager = Bombd.GetService<GameManager>();
             var room = Bombd.RoomManager.CreateRoom(new CreateGameRequest
             {
                 OwnerUserId = player.UserId,
                 Platform = player.Platform,
-                Attributes = attributes
+                Attributes = attributes,
+                IsRanked = isRanked
             });
             
             var request = NetcodeTransaction.MakeRequest(Name, "requestJoinGame");

@@ -11,4 +11,6 @@ public struct RoomCreationInfo
     public Platform Platform;
     public int MaxPlayers;
     public int OwnerUserId;
+    public bool IsRanked;
+    public bool IsSeries;
 }

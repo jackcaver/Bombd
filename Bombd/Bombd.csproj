@@ -9,33 +9,21 @@
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     </PropertyGroup>
     <ItemGroup>
-        <None Update="Data\MatchmakingConfiguration.xml">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <None Update="Data\Career\Karting.xml">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
-        <None Update="Data\Blobs\Karting\CharDataBlob">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <None Update="Data\Career\ModNation.xml">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
-        <None Update="Data\Blobs\Karting\FrownyDataBlob">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <None Update="Data\Matchmaking\Karting.xml">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
-        <None Update="Data\Blobs\Karting\KartDataBlob">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="Data\Blobs\Karting\SmileyDataBlob">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="Data\Blobs\ModNation\KartDataBlob">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="Data\Blobs\ModNation\CharDataBlob">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <None Update="Data\Matchmaking\ModNation.xml">
+          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="JetBrains.Annotations" Version="2023.3.0-eap3" />
         <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.5" />
-    </ItemGroup>
-    <ItemGroup>
-      <Folder Include="Data\Blobs\Karting\" />
     </ItemGroup>
 </Project>
