@@ -122,12 +122,8 @@ public class GameManager : BombdService
     public void LeaveCurrentGame(TransactionContext context)
     {
         GamePlayer? player = Bombd.RoomManager.GetPlayerInRoom(context.Connection.UserId);
-        if (player == null)
-        {
-            context.Response.Error = "notInGame";
-            return;
-        }
-
+        if (player == null) return;
+        
         string currentGameName = player.Room.Game.GameName;
         if (!context.Request.TryGet("gamename", out string? gameName))
             gameName = currentGameName;
