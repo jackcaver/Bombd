@@ -38,6 +38,7 @@ public class AiInfo : INetworkWritable
                 ai.UidName = "online_ai_" + i;
                 ai.AiName = definitions[i].Name;
                 ai.AiProfile = definitions[i].Profile;
+                ai.NameUid = CryptoHelper.StringHashU32(ai.UidName);
             }
 
             DataSet[i] = ai;
@@ -74,5 +75,6 @@ public class AiInfo : INetworkWritable
         public string AiProfile = string.Empty;
         public string OwnerName = string.Empty;
         public string UidName = string.Empty;
+        public uint NameUid;
     }
 }

@@ -2,6 +2,8 @@
 
 public class RaceConstants
 {
+    public static readonly int[] SeriesPoints = [50, 40, 30, 20, 15, 10, 1, 1, 1, 1, 1, 1];
+    
     public static readonly RaceConstants ModNation = new()
     {
         EventCountdownTime = 5000,

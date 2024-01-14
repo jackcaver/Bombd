@@ -29,7 +29,7 @@ public class EventSettings : INetworkReadable, INetworkWritable
     public int MaxPlayers = 12;
     public int NumHoard;
     public LevelType LevelType = LevelType.Cooperative;
-    public ScoreboardType ScoreboardType = ScoreboardType.Score;
+    public ScoreboardType ScoreboardType = ScoreboardType.Time;
     public bool TeamEnabled;
     public Difficulty StoryDifficulty = Difficulty.Normal;
     

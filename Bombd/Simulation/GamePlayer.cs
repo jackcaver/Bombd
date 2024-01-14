@@ -29,9 +29,15 @@ public class GamePlayer
     public readonly List<GameGuest> Guests = new();
 
     public LeaveReason LeaveReason = LeaveReason.Generic;
+    
     public bool IsSpectator;
     public bool HasSentRaceResults;
+    public bool HasFinishedRace;
     public bool ListeningForGameEvents;
+
+    public float Score = float.PositiveInfinity;
+    public int Points;
+    public int TotalPoints;
 
     public GamePlayer(GameRoom room, string username, int userId, int playerId)
     {
@@ -44,7 +50,16 @@ public class GamePlayer
         
         State.NetcodeUserId = userId;
     }
-    
+
+    public void SetupNextRaceState()
+    {
+        State.Flags &= ~PlayerStateFlags.RaceLoadFlags;
+        HasSentRaceResults = false;
+        HasFinishedRace = false;
+        Points = 0;
+        Score = float.PositiveInfinity;
+    }
+
     public GameGuest? GetGuestByName(string username)
     {
         return Guests.FirstOrDefault(x => x.GuestName == username);
