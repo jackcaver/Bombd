@@ -13,7 +13,7 @@ public class CareerTrack
     [XmlAttribute("type")] public RaceType Type { get; set; } = RaceType.Action;
     [XmlAttribute("minplayers")] public int MinPlayers { get; set; } = 4;
     [XmlAttribute("maxplayers")] public int MaxPlayers { get; set; } = 12;
-    [XmlAttribute("scoreboard")] public ScoreboardType ScoreboardType { get; set; } = ScoreboardType.Score;
-    [XmlAttribute("leveltype")] public LevelType LevelType { get; set; } = LevelType.Cooperative;
+    [XmlAttribute("scoreboard")] public ScoreboardType ScoreboardType { get; set; } = ScoreboardType.Time;
+    [XmlAttribute("leveltype")] public LevelType LevelType { get; set; } = LevelType.Versus;
     [XmlAttribute("votable")] public bool Votable { get; set; } = true;
 }
