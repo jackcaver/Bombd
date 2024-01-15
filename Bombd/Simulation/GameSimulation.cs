@@ -399,6 +399,8 @@ public class GameSimulation
             case RoomState.RaceInProgress:
             {
                 _waitingForPlayerNisEvents = true;
+                BroadcastKartingPlayerSessionInfo();
+                BroadcastPlayerStates();
                 break;
             }
             case RoomState.Ready:
@@ -807,7 +809,7 @@ public class GameSimulation
                 
                 // Does the player need their status back? If we changed the status maybe, but we should probably
                 // just send it back when their gameroom is ready.
-                BroadcastMessage(message, PacketType.ReliableGameData);
+                BroadcastMessage(player, message, PacketType.ReliableGameData);
                 
                 
                 // Since we have the player info now, we can recalculate the positions in
@@ -877,6 +879,8 @@ public class GameSimulation
             case NetMessageType.GameroomReady:
             {
                 player.State.Flags |= PlayerStateFlags.GameRoomReady;
+                BroadcastPlayerStates();
+                BroadcastKartingPlayerSessionInfo();
                 break;
             }
             case NetMessageType.GameroomStopTimer:
@@ -1254,9 +1258,9 @@ public class GameSimulation
                 if (player.State is { IsConnecting: true, WaitingForPlayerConfig: false })
                 {
                     player.State.IsConnecting = false;
-                    BroadcastKartingPlayerSessionInfo();
                     if (Type == ServerType.Competitive && _gameroomState.Value.State == RoomState.CountingDown)
                         UpdateRaceSetup();
+                    BroadcastKartingPlayerSessionInfo();
                 }
                 
                 BroadcastPlayerStates();
