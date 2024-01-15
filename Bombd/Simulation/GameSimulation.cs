@@ -1391,20 +1391,13 @@ public class GameSimulation
         RaceType mode = _raceSettings!.Value.RaceType;
         ScoreboardType scoreboard = _raceSettings!.Value.ScoreboardType;
 
-        if (IsKarting)
-        {
-            if (mode == RaceType.Battle)
-                _eventResults.Sort((a, z) => z.BattleKills.CompareTo(a.BattleKills));
-            else if (scoreboard == ScoreboardType.Score)
-                _eventResults.Sort((a, z) => z.PointsScored.CompareTo(a.PointsScored));
-            else
-                _eventResults.Sort((a, z) => a.EventScore.CompareTo(z.EventScore));
-        }
-        // ModNation always sorts by time score
+        if (IsKarting && mode == RaceType.Battle) _eventResults.Sort((a, z) => z.BattleKills.CompareTo(a.BattleKills));
         else _eventResults.Sort((a, z) => a.EventScore.CompareTo(z.EventScore));
-
+        
         string xml = EventResult.Serialize(_eventResults);
         _eventResults.Clear();
+
+        Logger.LogDebug<GameSimulation>("Finishing event with XML:\n" + xml);
 
         return xml;
     }
