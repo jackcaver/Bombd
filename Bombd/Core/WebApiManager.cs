@@ -1,9 +1,11 @@
 ﻿using System.Text;
+using System.Text.Json;
 using System.Xml;
 using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Types.Network.Objects;
 using Bombd.Types.Network.Races;
+using Bombd.Types.ServerCommunication;
 
 namespace Bombd.Core;
 
@@ -167,5 +169,43 @@ public class WebApiManager
         {
             Logger.LogError<WebApiManager>("Failed to parse content updates XML!");
         }
+    }
+
+    public static bool CheckSessionStatus(Guid SessionID)
+    {
+        var message = new Message
+        {
+            Type = "CheckPlayerSession",
+            From = BombdServer.Instance.ClusterUuid,
+            To = "API",
+            Content = SessionID.ToString()
+        };
+        ServerCommunication.Send(JsonSerializer.Serialize(message)).Wait();
+        
+        bool Responded = false;
+        PlayerSessionStatus? status = new PlayerSessionStatus();
+        while (!Responded)
+        {
+            var Responses = ServerCommunication.MessageBuffer.Where(match => match.From == "API"
+                && (match.Type == "PlayerSessionStatus" || match.Type == "CheckPlayerSessionError"));
+            foreach (var response in Responses)
+            {
+                if (response.Type == "PlayerSessionStatus")
+                {
+                    status = JsonSerializer.Deserialize<PlayerSessionStatus>(response.Content);
+                    if (status != null && status.SessionID == SessionID)
+                    {
+                        Responded = true;
+                        break;
+                    }
+                }
+                else
+                {
+                    Logger.LogError<ServerCommunication>($"There was an error checking session status: {message.Content}");
+                }
+            }
+        }
+
+        return status != null && status.IsAuthorized;
     }
 }

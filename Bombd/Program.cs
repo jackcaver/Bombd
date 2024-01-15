@@ -26,4 +26,6 @@ server.AddService<PlayGroup>();
 server.AddService<TextComm>();
 server.AddService<Stats>();
 
+ServerCommunication.Initialize().Wait();
+
 server.Start();

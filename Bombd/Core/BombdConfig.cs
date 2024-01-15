@@ -68,4 +68,9 @@ public class BombdConfig
     ///     Whether or not connections from ModNation Racers are allowed.
     /// </summary>
     public bool AllowModNation { get; set; } = true;
+
+    /// <summary>
+    ///     The key used for server communication api.
+    /// </summary>
+    public string ServerCommunicationKey { get; set; } = string.Empty;
 }
