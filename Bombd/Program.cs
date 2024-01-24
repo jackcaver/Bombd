@@ -22,9 +22,6 @@ server.AddService<Directory>();
 server.AddService<Matchmaking>();
 server.AddService<GameManager>();
 server.AddService<GameBrowser>();
-server.AddService<PlayGroup>();
-server.AddService<TextComm>();
-server.AddService<Stats>();
 
 ServerCommunication.Initialize().Wait();
 
