@@ -16,6 +16,7 @@ public class WebApiManager
     private static string MakeRequest(string url)
     {
         var client = new HttpClient();
+        client.DefaultRequestHeaders.Add("server_id", BombdServer.Instance.ClusterUuid);
         var request = new HttpRequestMessage(HttpMethod.Get, url);
         try
         {
@@ -171,41 +172,13 @@ public class WebApiManager
         }
     }
 
-    public static bool CheckSessionStatus(Guid SessionID)
+    public static bool CheckSessionStatus(string SessionID)
     {
-        var message = new Message
-        {
-            Type = "CheckPlayerSession",
-            From = BombdServer.Instance.ClusterUuid,
-            To = "API",
-            Content = SessionID.ToString()
-        };
-        ServerCommunication.Send(JsonSerializer.Serialize(message)).Wait();
-        
-        bool Responded = false;
-        PlayerSessionStatus? status = new PlayerSessionStatus();
-        while (!Responded)
-        {
-            var Responses = ServerCommunication.MessageBuffer.Where(match => match.From == "API"
-                && (match.Type == "PlayerSessionStatus" || match.Type == "CheckPlayerSessionError"));
-            foreach (var response in Responses)
-            {
-                if (response.Type == "PlayerSessionStatus")
-                {
-                    status = JsonSerializer.Deserialize<PlayerSessionStatus>(response.Content);
-                    if (status != null && status.SessionID == SessionID)
-                    {
-                        Responded = true;
-                        break;
-                    }
-                }
-                else
-                {
-                    Logger.LogError<ServerCommunication>($"There was an error checking session status: {message.Content}");
-                }
-            }
-        }
+        string url = BombdConfig.Instance.ApiURL.TrimEnd('/');
 
-        return status != null && status.IsAuthorized;
+        if (bool.TryParse(MakeRequest($"{url}/api/CheckSession/{SessionID}"), out bool Result))
+            return Result;
+
+        return false;
     }
 }
