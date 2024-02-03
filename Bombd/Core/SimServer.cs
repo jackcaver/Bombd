@@ -230,8 +230,9 @@ public class SimServer
             Reason = player.LeaveReason
         }, PacketType.ReliableGameData);
         
+        
         // Tell the PlayerConnect server if the player left in the middle of a race
-        if (Type == ServerType.Competitive && RaceState == RaceState.Racing && !player.IsSpectator)
+        if (IsModNation && Type == ServerType.Competitive && RaceState == RaceState.Racing && !player.IsSpectator)
         {
             BombdServer.Comms.NotifyPlayerQuit(player.State.PlayerConnectId, disconnected);
         }
@@ -610,7 +611,8 @@ public class SimServer
                     return;
                 }
                 
-                BombdServer.Comms.UpdatePlayerData(player.State.PlayerConnectId, config.CharCreationId, config.KartCreationId);
+                if (IsModNation)
+                    BombdServer.Comms.UpdatePlayerData(player.State.PlayerConnectId, config.CharCreationId, config.KartCreationId);
                 player.State.WaitingForPlayerConfig = false;
             }
             else
@@ -1158,7 +1160,7 @@ public class SimServer
                     player.Disconnect();
                     break;
                 }
-
+                
                 // Can't limit to less people than we actually have
                 if (settings.MaxHumans < _players.Count)
                     break;
@@ -1395,25 +1397,29 @@ public class SimServer
 
         if (IsKarting && mode == RaceType.Battle) _eventResults.Sort((a, z) => z.BattleKills.CompareTo(a.BattleKills));
         else _eventResults.Sort((a, z) => a.EventScore.CompareTo(z.EventScore));
-        
-        int rank = 0;
-        List<PlayerEventStats> stats = [];
-        foreach (EventResult result in _eventResults)
+
+        if (IsModNation)
         {
-            rank++;
-            GamePlayer? player = _players.SingleOrDefault(x => x.State.NameUid == result.OwnerUid);
-            if (player == null) continue;
-            stats.Add(new PlayerEventStats
+            int rank = 0;
+            List<PlayerEventStats> stats = [];
+            foreach (EventResult result in _eventResults)
             {
-                BestDrift = result.BestDrift,
-                BestHangTime = result.BestHangTime,
-                Finished = player.HasFinishedRace,
-                PlayerConnectId = player.State.PlayerConnectId,
-                Rank = rank
-            });
+                rank++;
+                GamePlayer? player = _players.SingleOrDefault(x => x.State.NameUid == result.OwnerUid);
+                if (player == null) continue;
+                stats.Add(new PlayerEventStats
+                {
+                    BestDrift = result.BestDrift,
+                    BestHangTime = result.BestHangTime,
+                    Finished = player.HasFinishedRace,
+                    PlayerConnectId = player.State.PlayerConnectId,
+                    Rank = rank
+                });
+            }
+        
+            BombdServer.Comms.NotifyEventFinished(_raceSettings!.Value.CreationId, stats);   
         }
         
-        BombdServer.Comms.NotifyEventFinished(_raceSettings!.Value.CreationId, stats);
         string xml = EventResult.Serialize(_eventResults);
         _eventResults.Clear();
 
@@ -1546,10 +1552,13 @@ public class SimServer
                                 racer.State.Flags &= ~PlayerStateFlags.AllFlags;
                             
                             // Also notify PlayerConnect
-                            int trackId = _raceSettings!.Value.CreationId;
-                            List<int> playerIds = _players.Where(player => !player.IsSpectator)
-                                .Select(player => player.State.PlayerConnectId).ToList();
-                            BombdServer.Comms.NotifyEventStarted(trackId, playerIds);
+                            if (IsModNation)
+                            {
+                                int trackId = _raceSettings!.Value.CreationId;
+                                List<int> playerIds = _players.Where(player => !player.IsSpectator)
+                                    .Select(player => player.State.PlayerConnectId).ToList();
+                                BombdServer.Comms.NotifyEventStarted(trackId, playerIds);   
+                            }
                         }
                         
                         break;
