@@ -1149,8 +1149,6 @@ public class SimServer
                     break;
                 }
 
-                settings.MinHumans = 1;
-
                 // Can't limit to less people than we actually have
                 if (settings.MaxHumans < _players.Count)
                     break;
