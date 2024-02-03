@@ -272,7 +272,6 @@ public class SimServer
             {
                 foreach (var evt in _seriesInfo.Value.Events)
                     evt.OwnerNetcodeUserId = Owner;
-                _seriesInfo.Sync();
             }
         }
     }
@@ -1496,7 +1495,7 @@ public class SimServer
             if (hasMinPlayers && room.State <= RoomState.WaitingMinPlayers)
                 SetCurrentGameroomState(RoomState.Ready);
             else if (isAutoStart && room.State == RoomState.Ready)
-                SetCurrentGameroomState(RoomState.CountingDown);
+                SetCurrentGameroomState(RoomState.DownloadingTracks);
             else if (!hasMinPlayers)
                 SetCurrentGameroomState(RoomState.WaitingMinPlayers);
         }
@@ -1593,6 +1592,7 @@ public class SimServer
                         {
                             string results = FinalizeEventResults();
                             
+                            
                             _destination = Destination.GameRoom;
                             if (_raceSettings != null && _seriesInfo != null)
                             {
@@ -1604,7 +1604,7 @@ public class SimServer
                                     _raceSettings.Value = nextEvent;
                                     Room.UpdateAttributes(nextEvent);
                                     _destination = Destination.NextSeriesRace;
-                                } else _destination = IsRanked ? Destination.KartPark : Destination.PostSeries;
+                                } else _destination = IsRanked ? Destination.KartPark : Destination.GameRoom;
                             }
                             // Single xp races in ModNation just return back to the kart park
                             else if (IsRanked) _destination = Destination.KartPark;
@@ -1618,14 +1618,15 @@ public class SimServer
                                 SenderNameUid = NetworkMessages.SimServerUid,
                                 Platform = Platform,
                                 ResultsXml = results,
-                                Destination = _destination,
+                                Destination = _seriesInfo != null ? Destination.PostSeries : _destination,
                                 PostEventDelayTime = _raceStateEndTime,
                                 PostEventScreenTime = postRaceDelay
                             };
-
+                            
                             BroadcastMessage(message, NetMessageType.EventResultsFinal, PacketType.ReliableGameData);
                             if (_seriesInfo != null)
                             {
+                                message.Destination = _destination;
                                 message.ResultsXml = FinalizeSeriesResults();
                                 BroadcastMessage(message, NetMessageType.SeriesResults, PacketType.ReliableGameData);
                             }
@@ -1652,38 +1653,44 @@ public class SimServer
                             // Clean up state variables for the next race
                             foreach (var racer in racers)
                                 racer.SetupNextRaceState();
-                            
-                            // If we're in a single race, we're going back to the gameroom
-                            if (_seriesInfo == null || _destination != Destination.NextSeriesRace)
+
+                            switch (_destination)
                             {
-                                // If we're not leaving this game room, reset its state
-                                if (_destination != Destination.Pod && _destination != Destination.KartPark)
+                                case Destination.GameRoom:
                                 {
                                     Logger.LogDebug<SimServer>("Resetting GameRoom state for next race!");
+                                    
                                     // Tell spectators that we're connecting back into the lobby
                                     foreach (var racer in racers)
+                                    {
+                                        racer.TotalPoints = 0;
                                         racer.State.IsConnecting = true;
+                                    }
+                                    
                                     BroadcastPlayerStates();
-                                    SetCurrentGameroomState(RoomState.None);   
+                                    SetCurrentGameroomState(RoomState.None);
+                                
+                                    // Reset back to the first series race
+                                    if (_seriesInfo != null && _raceSettings != null)
+                                        _raceSettings.Value = _seriesInfo.Value.Events[0];
+                                    
+                                    // Reset the voting package
+                                    if (IsKarting && Type == ServerType.Competitive)
+                                    {
+                                        _votePackage.Value.Reset();
+                                        _votePackage.Sync();
+                                    }
+                                    
+                                    break;
                                 }
-                                else
-                                {
+                                case Destination.Pod or Destination.KartPark:
                                     RaceState = RaceState.Invalid;
                                     Logger.LogDebug<SimServer>("Not resetting GameRoom state since we're returning to KartPark!");
-                                }
-                            }
-                            // Otherwise, prepare for the next race
-                            else
-                            {
-                                Logger.LogDebug<SimServer>($"Starting next series event!");
-                                StartEvent();
-                            }
-                            
-                            // Reset the voting package
-                            if (IsKarting && Type == ServerType.Competitive)
-                            {
-                                _votePackage.Value.Reset();
-                                _votePackage.Sync();
+                                    break;
+                                case Destination.NextSeriesRace:
+                                    Logger.LogDebug<SimServer>($"Starting next series event!");
+                                    StartEvent();
+                                    break;
                             }
                         }
                 

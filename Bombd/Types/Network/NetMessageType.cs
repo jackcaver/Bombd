@@ -146,6 +146,8 @@ public enum NetMessageType : byte
     EventResultsPreliminary = 0x16, // size = 20
     EventResultsFinal = 0x17, // size = 20
     
+    // 0x1 = GameplayMessageShunt, KartMoverInterface
+    // 0x2 = GameplayMessageStomped, KartStateComponent
     // 0xd = KartTransformerData? (0xfbc in Karting)
     GenericGameplay = 0x18, // size = 12
     PlayerStateUpdate = 0x19, // size = 8
