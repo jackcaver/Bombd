@@ -1,6 +1,6 @@
 ﻿namespace Bombd.Types.Network.Room;
 
-public enum GameSessionStatus
+public enum PlayerSessionOperation
 {
     JoinAsSpectator = 0,
     JoinAsRacer = 1,

@@ -5,7 +5,7 @@ namespace Bombd.Types.Network.Simulation;
 
 public class PlayerInfo : INetworkWritable, INetworkReadable
 {
-    public GameJoinStatus Operation = GameJoinStatus.Pending;
+    public PlayerJoinStatus Operation = PlayerJoinStatus.Pending;
     public int NetcodeUserId;
     public int NetcodeGamePlayerId;
     public int PlayerConnectId;
@@ -32,7 +32,7 @@ public class PlayerInfo : INetworkWritable, INetworkReadable
     
     public void Read(NetworkReader reader)
     {
-        Operation = (GameJoinStatus)reader.ReadInt32();
+        Operation = (PlayerJoinStatus)reader.ReadInt32();
         NetcodeUserId = reader.ReadInt32();
         NetcodeGamePlayerId = reader.ReadInt32();
         PlayerConnectId = reader.ReadInt32();

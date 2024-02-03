@@ -7,23 +7,23 @@ public struct NetMessagePlayerSessionInfo : INetworkMessage
 {
     public NetMessageType Type => NetMessageType.PlayerSessionInfo;
 
-    public GameSessionStatus JoinStatus;
+    public PlayerSessionOperation Operation;
     public int UserId;
     
-    public NetMessagePlayerSessionInfo(GameSessionStatus status)
+    public NetMessagePlayerSessionInfo(PlayerSessionOperation operation)
     {
-        JoinStatus = status;
+        Operation = operation;
     }
 
-    public NetMessagePlayerSessionInfo(GameSessionStatus status, int userId)
+    public NetMessagePlayerSessionInfo(PlayerSessionOperation operation, int userId)
     {
-        JoinStatus = status;
+        Operation = operation;
         UserId = userId;
     }
 
     public void Write(NetworkWriter writer)
     {
-        writer.Write((int)JoinStatus);
+        writer.Write((int)Operation);
         writer.Write(UserId);
         // These two fields are technically PlayerId and NameUid, but ModNation doesn't use them,
         // so I'm not going to bother keeping track of them

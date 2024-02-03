@@ -116,12 +116,12 @@ public class SimServer
         foreach (var player in _players)
             player.IsSpectator = false;
         foreach (var info in _playerInfos)
-            info.Operation = GameJoinStatus.RacerPending;
+            info.Operation = PlayerJoinStatus.RacerPending;
         
         if (IsKarting)
             BroadcastKartingPlayerSessionInfo();
         else
-            BroadcastMessage(new NetMessagePlayerSessionInfo { JoinStatus = GameSessionStatus.SwitchAllToRacer }, PacketType.ReliableGameData);
+            BroadcastMessage(new NetMessagePlayerSessionInfo { Operation = PlayerSessionOperation.SwitchAllToRacer }, PacketType.ReliableGameData);
     }
 
     private void SwitchToSpectator(GamePlayer player)
@@ -132,10 +132,12 @@ public class SimServer
         if (IsKarting) BroadcastKartingPlayerSessionInfo();
         else BroadcastMessage(new NetMessagePlayerSessionInfo
         {
-            JoinStatus = GameSessionStatus.SwitchRacerToSpectator,
+            Operation = PlayerSessionOperation.SwitchRacerToSpectator,
             UserId = player.UserId
         }, PacketType.ReliableGameData);
-        UpdateRaceSetup();
+        
+        if (RaceState == RaceState.GameroomCountdown)
+            UpdateRaceSetup();
     }
 
     private void BroadcastKartingPlayerSessionInfo()
@@ -161,12 +163,12 @@ public class SimServer
             // Tell everybody else about yourself
             foreach (GamePlayer peer in _players)
             {
-                GameSessionStatus status =
-                    player.IsSpectator ? GameSessionStatus.JoinAsSpectator : GameSessionStatus.JoinAsRacer;
+                PlayerSessionOperation operation =
+                    player.IsSpectator ? PlayerSessionOperation.JoinAsSpectator : PlayerSessionOperation.JoinAsRacer;
                 
                 peer.SendReliableMessage(new NetMessagePlayerSessionInfo
                 {
-                    JoinStatus = status,
+                    Operation = operation,
                     UserId = player.UserId
                 });
             }
@@ -175,11 +177,11 @@ public class SimServer
             foreach (GamePlayer peer in _players)
             {
                 if (player == peer) continue;
-                GameSessionStatus status =
-                    peer.IsSpectator ? GameSessionStatus.JoinAsSpectator : GameSessionStatus.JoinAsRacer;
+                PlayerSessionOperation operation =
+                    peer.IsSpectator ? PlayerSessionOperation.JoinAsSpectator : PlayerSessionOperation.JoinAsRacer;
                 player.SendReliableMessage(new NetMessagePlayerSessionInfo
                 {
-                    JoinStatus = status,
+                    Operation = operation,
                     UserId = peer.UserId
                 });
             }
@@ -229,12 +231,15 @@ public class SimServer
             PlayerName = player.Username,
             Reason = player.LeaveReason
         }, PacketType.ReliableGameData);
-        
-        
-        // Tell the PlayerConnect server if the player left in the middle of a race
-        if (IsModNation && Type == ServerType.Competitive && RaceState == RaceState.Racing && !player.IsSpectator)
+
+        if (Type == ServerType.Competitive && !player.IsSpectator)
         {
-            BombdServer.Comms.NotifyPlayerQuit(player.State.PlayerConnectId, disconnected);
+            // Tell the PlayerConnect server if the player left in the middle of a race
+            if (IsModNation && RaceState == RaceState.Racing)
+                BombdServer.Comms.NotifyPlayerQuit(player.State.PlayerConnectId, disconnected);
+            // Remove the player from the starting grid if we're still in the pre-game phase
+            if (RaceState == RaceState.GameroomCountdown)
+                UpdateRaceSetup();
         }
         
         if (_players.Count == 0) return;
@@ -415,6 +420,11 @@ public class SimServer
                 // If the gameroom isn't loaded before it receives the player create info,
                 // it won't ever update the racer state
                 SwitchAllToRacers();
+                break;
+            }
+            case RoomState.CountingDownPaused:
+            {
+                RaceState = RaceState.GameroomCountdown;
                 break;
             }
             case RoomState.CountingDown:
@@ -789,8 +799,8 @@ public class SimServer
                 _playerInfos.RemoveAll(x => x.NetcodeUserId == player.UserId);
                 
                 player.IsSpectator = !CanJoinAsRacer();
-                GameJoinStatus status =
-                    player.IsSpectator ? GameJoinStatus.SpectatorPending : GameJoinStatus.RacerPending;
+                PlayerJoinStatus status =
+                    player.IsSpectator ? PlayerJoinStatus.SpectatorPending : PlayerJoinStatus.RacerPending;
                 
                 // The player create info gets sent to the server with an operation of type none,
                 // send it to the other players telling them we're joining.
@@ -896,6 +906,8 @@ public class SimServer
                 
                 // If the player took too long to load, switch them to spectator
                 if (!CanJoinAsRacer()) SwitchToSpectator(player);
+                else if (RaceState == RaceState.GameroomCountdown)
+                    UpdateRaceSetup();
                 
                 BroadcastPlayerStates();
                 BroadcastKartingPlayerSessionInfo();
@@ -1246,14 +1258,15 @@ public class SimServer
                 // Patch our existing player state with the new message
                 player.State.Update(state);
                 
-                // Wait until we've received the player config and the second player state update
-                // to finish our "connecting" process.
-                if (player.State is { IsConnecting: true, WaitingForPlayerConfig: false })
+                // If we're not in a gameroom, there's no GameroomReady event, so wait until we've received
+                // the player config and the second player state update to finish our "connecting" process.
+                if (Type != ServerType.Competitive)
                 {
-                    player.State.IsConnecting = false;
-                    if (Type == ServerType.Competitive && _gameroomState.Value.State == RoomState.CountingDown)
-                        UpdateRaceSetup();
-                    BroadcastKartingPlayerSessionInfo();
+                    if (player.State is { IsConnecting: true, WaitingForPlayerConfig: false })
+                    {
+                        player.State.IsConnecting = false;
+                        BroadcastKartingPlayerSessionInfo();
+                    }   
                 }
                 
                 BroadcastPlayerStates();
@@ -1572,7 +1585,7 @@ public class SimServer
 
                         if (shouldSendResults)
                         {
-                            string destination = "destGameroom";
+                            string destination = Destination.GameRoom;
                             if (_raceSettings != null && _seriesInfo != null)
                             {
                                 var events = _seriesInfo.Value.Events;
@@ -1582,11 +1595,11 @@ public class SimServer
                                     var nextEvent = events[nextSeriesIndex];
                                     _raceSettings.Value = nextEvent;
                                     Room.UpdateAttributes(nextEvent);
-                                    destination = "destNextSeriesRace";
-                                } else destination = IsRanked ? "destKartPark" : "destPostSeries";
+                                    destination = Destination.NextSeriesRace;
+                                } else destination = IsRanked ? Destination.KartPark : Destination.PostSeries;
                             }
                             // Single xp races in ModNation just return back to the kart park
-                            else if (IsRanked) destination = "destKartPark";
+                            else if (IsRanked) destination = Destination.KartPark;
 
                             Logger.LogInfo<SimServer>($"{Room.Game.GameName} race has been completed, destination is {destination}");
 

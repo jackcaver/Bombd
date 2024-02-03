@@ -1,6 +1,6 @@
 ﻿namespace Bombd.Types.Network.Room;
 
-public enum GameJoinStatus
+public enum PlayerJoinStatus
 {
     Pending,
     SpectatorPending,
