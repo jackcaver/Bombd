@@ -4,6 +4,7 @@ using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
+using Bombd.Types.Gateway;
 using Bombd.Types.Network;
 using Bombd.Types.Network.Arbitration;
 using Bombd.Types.Network.Messages;
@@ -204,7 +205,7 @@ public class SimServer
         }
     }
     
-    public void OnPlayerLeft(GamePlayer player)
+    public void OnPlayerLeft(GamePlayer player, bool disconnected)
     {
         // Destroy cached states
         _playerStates.Remove(player.State);
@@ -228,6 +229,12 @@ public class SimServer
             PlayerName = player.Username,
             Reason = player.LeaveReason
         }, PacketType.ReliableGameData);
+        
+        // Tell the PlayerConnect server if the player left in the middle of a race
+        if (Type == ServerType.Competitive && RaceState == RaceState.Racing && !player.IsSpectator)
+        {
+            BombdServer.Comms.NotifyPlayerQuit(player.State.PlayerConnectId, disconnected);
+        }
         
         if (_players.Count == 0) return;
         
@@ -1045,7 +1052,11 @@ public class SimServer
 
                     isValid = isMyAi || isMe || isGuest;
                     if (!isValid) break;
-                    if (isMe) player.Score = result.EventScore;
+                    if (isMe)
+                    {
+                        player.HasFinishedRace = result.PercentComplete >= 1.0f;
+                        player.Score = result.EventScore;
+                    }
                 }
 
                 if (!isValid)
@@ -1119,7 +1130,6 @@ public class SimServer
                     _raceStateEndTime = TimeHelper.LocalTime + 30_000;
                 }
                 
-                player.HasFinishedRace = true;
                 BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
                 break;
             }
@@ -1386,6 +1396,24 @@ public class SimServer
         if (IsKarting && mode == RaceType.Battle) _eventResults.Sort((a, z) => z.BattleKills.CompareTo(a.BattleKills));
         else _eventResults.Sort((a, z) => a.EventScore.CompareTo(z.EventScore));
         
+        int rank = 0;
+        List<PlayerEventStats> stats = [];
+        foreach (EventResult result in _eventResults)
+        {
+            rank++;
+            GamePlayer? player = _players.SingleOrDefault(x => x.State.NameUid == result.OwnerUid);
+            if (player == null) continue;
+            stats.Add(new PlayerEventStats
+            {
+                BestDrift = result.BestDrift,
+                BestHangTime = result.BestHangTime,
+                Finished = player.HasFinishedRace,
+                PlayerConnectId = player.State.PlayerConnectId,
+                Rank = rank
+            });
+        }
+        
+        BombdServer.Comms.NotifyEventFinished(_raceSettings!.Value.CreationId, stats);
         string xml = EventResult.Serialize(_eventResults);
         _eventResults.Clear();
 
@@ -1512,9 +1540,16 @@ public class SimServer
                             int countdown = TimeHelper.LocalTime + _raceConstants.EventCountdownTime;
                             BroadcastGenericIntMessage(countdown, NetMessageType.EventStart, PacketType.ReliableGameData);
                             RaceState = RaceState.Racing;
+                            
                             // Since the race has started, clear all the race load flags for next time
                             foreach (var racer in racers) 
                                 racer.State.Flags &= ~PlayerStateFlags.AllFlags;
+                            
+                            // Also notify PlayerConnect
+                            int trackId = _raceSettings!.Value.CreationId;
+                            List<int> playerIds = _players.Where(player => !player.IsSpectator)
+                                .Select(player => player.State.PlayerConnectId).ToList();
+                            BombdServer.Comms.NotifyEventStarted(trackId, playerIds);
                         }
                         
                         break;

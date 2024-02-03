@@ -40,6 +40,33 @@ public sealed class ServerComm : IDisposable
             _aes.Key = Encoding.UTF8.GetBytes(key);
         }
     }
+
+    public void NotifyEventStarted(int trackId, List<int> playerIds)
+    {
+        DispatchEvent(GatewayEvents.EventStarted, new EventStartedEvent
+        {
+            PlayerIds = playerIds,
+            TrackId = trackId
+        });
+    }
+
+    public void NotifyEventFinished(int trackId, List<PlayerEventStats> stats)
+    {
+        DispatchEvent(GatewayEvents.EventFinished, new EventFinishedEvent
+        {
+            Stats = stats,
+            TrackId = trackId
+        });
+    }
+
+    public void NotifyPlayerQuit(int pcId, bool disconnect)
+    {
+        DispatchEvent(GatewayEvents.PlayerQuit, new PlayerQuitEvent
+        {
+            Disconnected = disconnect,
+            PlayerConnectId = pcId
+        });
+    }
     
     public void UpdatePlayerCount(int playerCount)
     {
@@ -118,6 +145,9 @@ public sealed class ServerComm : IDisposable
                 string json = JsonSerializer.Serialize(message);
                 if (!string.IsNullOrEmpty(BombdConfig.Instance.ServerCommunicationKey))
                     json = Encrypt(json);
+
+                Logger.LogDebug<ServerComm>("SEND: " + message.Type);
+                Logger.LogDebug<ServerComm>("DATA: " + message.Content);
                 
                 int len = Encoding.UTF8.GetBytes(json, 0, json.Length, buffer, 0);
                 var payload = new ArraySegment<byte>(buffer, 0, len);

@@ -243,7 +243,7 @@ public class GameServer : BombdService
         if (Bombd.RoomManager.TryLeaveCurrentRoom(userId))
         {
             Logger.LogInfo<GameServer>($"{username} left {room.Game.GameName}.");
-            player.Room.Simulation.OnPlayerLeft(player);
+            player.Room.Simulation.OnPlayerLeft(player, reason == "disconnected");
             OnPlayerLeft?.Invoke(this, new PlayerLeaveEventArgs
             {
                 Room = room,
@@ -483,7 +483,7 @@ public class GameServer : BombdService
         UserInfo.TryRemove(connection.UserId, out _);
 
         if (Bombd.RoomManager.GetPlayerInRoom(connection.UserId) != null)
-            AddPlayerToLeaveQueue(connection.UserId, connection.Username, "Disconnected");
+            AddPlayerToLeaveQueue(connection.UserId, connection.Username, "disconnected");
 
         Logger.LogInfo<GameServer>($"{connection.Username} has been disconnected.");
     }
