@@ -236,7 +236,7 @@ public class SimServer
         if (Type == ServerType.Competitive && !player.IsSpectator)
         {
             // Tell the PlayerConnect server if the player left in the middle of a race
-            if (IsModNation && RaceState == RaceState.Racing)
+            if (IsModNation && RaceState is >= RaceState.LoadingIntoRace and < RaceState.PostRace)
                 BombdServer.Comms.NotifyPlayerQuit(player.State.PlayerConnectId, disconnected);
             // Remove the player from the starting grid if we're still in the pre-game phase
             if (RaceState == RaceState.GameroomCountdown)
