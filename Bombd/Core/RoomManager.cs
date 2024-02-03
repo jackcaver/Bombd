@@ -2,6 +2,7 @@
 using Bombd.Helpers;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
+using Bombd.Types.Network.Races;
 using Bombd.Types.Network.Simulation;
 using Bombd.Types.Requests;
 
@@ -232,10 +233,17 @@ public class RoomManager
             // or they just haven't connected yet, so wait for that.
             if (!room.IsOwnerInGame()) return false;
 
-            // If it's a user hosted race, wait until the host has uploaded their race settings
-            // before letting people into the session.
-            if (room.Simulation is { Type: ServerType.Competitive, HasRaceSettings: false })
-                return false;
+            if (room.Simulation.Type == ServerType.Competitive)
+            {
+                // If it's a user hosted race, wait until the host has uploaded their race settings
+                // before advertising the session.
+                if (!room.Simulation.HasRaceSettings)
+                    return false;
+                
+                // If the race is already in progress, don't advertise the session
+                if (room.Simulation.RaceState >= RaceState.LoadingIntoRace || !room.Simulation.CanJoinAsRacer())
+                    return false;
+            }
             
             foreach (KeyValuePair<string, string> attribute in attributes)
             {

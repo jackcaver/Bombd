@@ -51,20 +51,6 @@ public class GameManager : BombdService
     [Transaction("hostGame")]
     public void HostGame(TransactionContext context)
     {
-
-        // GameRoom room;
-        // if (string.IsNullOrEmpty(KartParkName) || Bombd.RoomManager.GetRoomByName(KartParkName) == null)
-        // {
-        //     room = Bombd.RoomManager.CreateRoom(new CreateGameRequest { 
-        //         Platform = context.Connection.Platform, 
-        //         Attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]), 
-        //         OwnerUserId = context.Connection.UserId 
-        //     });
-        //
-        //     KartParkName = room.Game.GameName;
-        // }
-        // else room = Bombd.RoomManager.GetRoomByName(KartParkName)!;
-        
         GameRoom room = Bombd.RoomManager.CreateRoom(new CreateGameRequest { 
             Platform = context.Connection.Platform, 
             Attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]), 

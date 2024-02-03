@@ -32,29 +32,26 @@ public class SimServer
     public readonly Platform Platform;
     public readonly ServerType Type;
     public readonly bool IsRanked;
-    public bool EventStarted { get; private set; }
+    public RaceState RaceState { get; private set; } = RaceState.Invalid;
     public bool IsKarting => Platform == Platform.Karting;
     public bool IsModNation => Platform == Platform.ModNation;
     public bool HasRaceSettings => _raceSettings != null;
     public bool HasSeriesSetting => _seriesInfo != null;
-
+    
     private RaceConstants _raceConstants;
-
+    private int _raceStateEndTime;
+    private float _pausedTimeRemaining;
+    
     private GenericSyncObject<CoiInfo> _coiInfo;
     private GenericSyncObject<VotePackage> _votePackage;
     private GenericSyncObject<GameroomState> _gameroomState;
     private GenericSyncObject<AiInfo> _aiInfo;
-    private GenericSyncObject<SpectatorInfo> _raceInfo;
+    private GenericSyncObject<SpectatorInfo> _spectatorInfo;
     private GenericSyncObject<StartingGrid> _startingGrid;
     private GenericSyncObject<EventSettings>? _raceSettings;
     private GenericSyncObject<SeriesInfo>? _seriesInfo;
     private List<EventResult> _eventResults = new();
-
-    private bool _waitingForPlayerNisEvents;
-    private bool _waitingForPlayerStartEvents;
-    private bool _hasSentEventResults;
-    private float _pausedTimeRemaining;
-
+    
     public SimServer(ServerType type, GameRoom room, int owner, bool isRanked, bool isSeries)
     {
         Room = room;
@@ -68,7 +65,7 @@ public class SimServer
             _raceConstants = isRanked ? RaceConstants.Ranked : RaceConstants.ModNation;
         else _raceConstants = RaceConstants.Karting;
         
-        Logger.LogInfo<SimServer>($"Starting Game Simulation ({Type}:{Platform}, IsRanked = {isRanked}, IsSeries = {isSeries})");
+        Logger.LogInfo<SimServer>($"Starting SimServer ({Type}:{Platform}, IsRanked = {isRanked}, IsSeries = {isSeries})");
         
         if (Type == ServerType.KartPark)
         {
@@ -80,10 +77,10 @@ public class SimServer
             if (IsKarting)
                 _votePackage = CreateSystemSyncObject(new VotePackage(), NetObjectType.VotePackage);
             _gameroomState = CreateSystemSyncObject(new GameroomState(Platform), NetObjectType.GameroomState);
-            _raceInfo = CreateSystemSyncObject(new SpectatorInfo(Platform), NetObjectType.SpectatorInfo);
+            _spectatorInfo = CreateSystemSyncObject(new SpectatorInfo(Platform), NetObjectType.SpectatorInfo);
             _aiInfo = CreateSystemSyncObject(new AiInfo(Platform), NetObjectType.AiInfo);
             _startingGrid = CreateSystemSyncObject(new StartingGrid(Platform), NetObjectType.StartingGrid);
-
+            
             if (!isRanked) return;
 
             EventSettings raceSettings;
@@ -124,6 +121,20 @@ public class SimServer
             BroadcastKartingPlayerSessionInfo();
         else
             BroadcastMessage(new NetMessagePlayerSessionInfo { JoinStatus = GameSessionStatus.SwitchAllToRacer }, PacketType.ReliableGameData);
+    }
+
+    private void SwitchToSpectator(GamePlayer player)
+    {
+        if (player.IsSpectator) return;
+        
+        player.IsSpectator = true;
+        if (IsKarting) BroadcastKartingPlayerSessionInfo();
+        else BroadcastMessage(new NetMessagePlayerSessionInfo
+        {
+            JoinStatus = GameSessionStatus.SwitchRacerToSpectator,
+            UserId = player.UserId
+        }, PacketType.ReliableGameData);
+        UpdateRaceSetup();
     }
 
     private void BroadcastKartingPlayerSessionInfo()
@@ -368,51 +379,27 @@ public class SimServer
         room.LockedTimerValue = 0.0f;
         room.LockedForRacerJoinsValue = 0.0f;
         
-        if (state <= RoomState.Ready || state == RoomState.RaceInProgress)
+        // Reset the race loading flags for each player
+        if (state <= RoomState.Ready)
         {
-            // Reset the race loading flags for each player
             foreach (var player in _players)
-            {
-                player.SetupNextRaceState();
-                player.State.Flags &= ~PlayerStateFlags.DownloadedTracks;
-            }
-
-            // Reset the voting package
-            if (IsKarting && Type == ServerType.Competitive)
-            {
-                _votePackage.Value.Reset();
-                _votePackage.Sync();
-            }
+                player.State.Flags &= ~PlayerStateFlags.RaceLoadFlags;
         }
         
+        RaceState = RaceState.Invalid;
         switch (state)
         {
             case RoomState.None:
             { 
-                foreach (var player in _players)
-                {
-                    // We only need to reset the flags for people who are currently racing
-                    if (player.IsSpectator) continue;
-                    player.State.Flags = PlayerStateFlags.None;
-                    
-                    // Set the state back to connecting so people in lobby can see whether you're
-                    // back or not yet
-                    player.State.IsConnecting = true;
-                    player.State.WaitingForPlayerConfig = true;
-                }
                 BroadcastPlayerStates();
                 SwitchAllToRacers();
                 break;
             }
             case RoomState.RaceInProgress:
             {
-                _waitingForPlayerNisEvents = true;
+                RaceState = RaceState.LoadingIntoRace;
                 BroadcastKartingPlayerSessionInfo();
                 BroadcastPlayerStates();
-                
-                
-                
-                
                 break;
             }
             case RoomState.Ready:
@@ -435,6 +422,9 @@ public class SimServer
                 {
                     room.LoadEventTime = TimeHelper.LocalTime + (int)_pausedTimeRemaining;
                 }
+                
+                RaceState = RaceState.GameroomCountdown;
+                _raceStateEndTime = room.LoadEventTime;
                 
                 break;
             }
@@ -476,7 +466,7 @@ public class SimServer
     
     private void UpdateRaceSetup()
     {
-        if (_raceSettings == null) return;
+        if (_raceSettings == null || Type != ServerType.Competitive) return;
         
         _startingGrid.Value.Clear();
         foreach (GamePlayer player in _players)
@@ -509,7 +499,7 @@ public class SimServer
         _startingGrid.Sync();
     }
     
-    private bool CanJoinAsRacer()
+    public bool CanJoinAsRacer()
     {
         if (Type != ServerType.Competitive) return true;
         var room = _gameroomState.Value;
@@ -893,8 +883,14 @@ public class SimServer
             case NetMessageType.GameroomReady:
             {
                 player.State.Flags |= PlayerStateFlags.GameRoomReady;
+                player.State.IsConnecting = false;
+                
+                // If the player took too long to load, switch them to spectator
+                if (!CanJoinAsRacer()) SwitchToSpectator(player);
+                
                 BroadcastPlayerStates();
                 BroadcastKartingPlayerSessionInfo();
+                
                 break;
             }
             case NetMessageType.GameroomStopTimer:
@@ -977,31 +973,7 @@ public class SimServer
                 
                 try
                 {
-
-                    RaceState oldState = _raceInfo.Value.RaceState;
-                    _raceInfo.Value = SpectatorInfo.ReadVersioned(data, Platform);
-                    RaceState newState = _raceInfo.Value.RaceState;
-
-                    if (oldState != newState)
-                    {
-                        Logger.LogDebug<SimServer>("RaceState: " + _raceInfo.Value.RaceState);
-                        Logger.LogDebug<SimServer>("RaceEndServerTime: " + _raceInfo.Value.RaceEndServerTime);
-                        Logger.LogDebug<SimServer>("PostRaceServerTime: " + _raceInfo.Value.PostRaceServerTime);
-
-                        // The current race has been completed
-                        if (oldState == RaceState.PostRace)
-                        {
-                            // Reset the flags for the next race
-                            foreach (var racer in _players) racer.SetupNextRaceState();
-                            EventStarted = false;
-                            _waitingForPlayerNisEvents = true;
-                            _waitingForPlayerStartEvents = false; 
-                            _hasSentEventResults = false;
-                            if (_seriesInfo == null)
-                                SetCurrentGameroomState(RoomState.None);
-
-                        }
-                    }
+                    _spectatorInfo.Value = SpectatorInfo.ReadVersioned(data, Platform);
                 }
                 catch (Exception)
                 {
@@ -1018,15 +990,7 @@ public class SimServer
             }
             case NetMessageType.GameroomDownloadTracksFailed:
             {
-                player.IsSpectator = true;
-                if (IsKarting) BroadcastKartingPlayerSessionInfo();
-                else BroadcastMessage(new NetMessagePlayerSessionInfo
-                {
-                    JoinStatus = GameSessionStatus.SwitchRacerToSpectator,
-                    UserId = player.UserId
-                }, PacketType.ReliableGameData);
-                UpdateRaceSetup();
-                
+                SwitchToSpectator(player);
                 break;
             }
             case NetMessageType.ReadyForEventStart:
@@ -1042,7 +1006,7 @@ public class SimServer
             case NetMessageType.GameroomRequestStartEvent:
             {
                 // Only the host should be allowed to start the event I'm fairly sure
-                if (player.UserId != Owner) break;
+                if (player.UserId != Owner || RaceState != RaceState.Invalid) break;
                 SetCurrentGameroomState(RoomState.DownloadingTracks);
                 break;
             }
@@ -1149,6 +1113,12 @@ public class SimServer
 
             case NetMessageType.PlayerFinishedEvent:
             {
+                if (RaceState != RaceState.WaitingForRaceEnd)
+                {
+                    RaceState = RaceState.WaitingForRaceEnd;
+                    _raceStateEndTime = TimeHelper.LocalTime + 30_000;
+                }
+                
                 player.HasFinishedRace = true;
                 BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
                 break;
@@ -1178,6 +1148,8 @@ public class SimServer
                     player.Disconnect();
                     break;
                 }
+
+                settings.MinHumans = 1;
 
                 // Can't limit to less people than we actually have
                 if (settings.MaxHumans < _players.Count)
@@ -1448,7 +1420,6 @@ public class SimServer
     private void SimUpdate()
     {
         var room = _gameroomState.Value;
-        var raceInfo = _raceInfo.Value;
         
         // If the race hasn't started update the gameroom's state based on 
         // the current players in the lobby.
@@ -1477,17 +1448,23 @@ public class SimServer
                 // Since the countdown auto-starts after minimum players is reached?
                 if (IsRanked)
                 {
-                    float timeRemaining = room.LoadEventTime - TimeHelper.LocalTime;
-                    if (timeRemaining > _raceConstants.GameRoomTimerRacerLock)
+                    // In ranked events, we should pause the timer if someone is still trying to connect since the host
+                    // doesn't have the option to back out of the timer
+                    if (_players.Any(x => (x.State.Flags & PlayerStateFlags.GameRoomReady) == 0))
                     {
-                        // If someone has joined the gameroom before the racer lock, we should pause the countdown until
-                        // they're finished connecting.
-                        if (_players.Any(x => (x.State.Flags & PlayerStateFlags.GameRoomReady) == 0))
-                        {
-                            SetCurrentGameroomState(RoomState.CountingDownPaused);
-                            break;
-                        }
-                    }   
+                        SetCurrentGameroomState(RoomState.CountingDownPaused);
+                        break;
+                    }
+                }
+                else
+                {
+                    // If anybody is still loading past the racer lock, switch them all to spectators
+                    var loadingPlayers = _players.Where(x => (x.State.Flags & PlayerStateFlags.GameRoomReady) == 0).ToList();
+                    if (loadingPlayers.Count != 0 && !CanJoinAsRacer())
+                    {
+                        foreach (GamePlayer racer in loadingPlayers)
+                            SwitchToSpectator(racer);
+                    }
                 }
                 
                 // Wait until the timer has finished counting down, then broadcast to everyone that the race is in progress
@@ -1509,90 +1486,141 @@ public class SimServer
             }
             case RoomState.DownloadingTracks:
             {
-                if (_players.All(x => (x.State.Flags & PlayerStateFlags.DownloadedTracks) != 0))
+                List<GamePlayer> racers = _players.Where(player => !player.IsSpectator).ToList();
+                if (racers.All(x => (x.State.Flags & PlayerStateFlags.DownloadedTracks) != 0))
                     SetCurrentGameroomState(RoomState.CountingDown);
                 break;
             }
             case RoomState.RaceInProgress:
             {
-                if (!EventStarted)
+                switch (RaceState)
                 {
-                    if (_waitingForPlayerNisEvents || _waitingForPlayerStartEvents)
+                    case RaceState.LoadingIntoRace:
                     {
-                        var racers = _players.Where(player => !player.IsSpectator).ToList();
-                        
-                        if (_waitingForPlayerNisEvents && racers.All(x => (x.State.Flags & PlayerStateFlags.ReadyForNis) != 0))
+                        List<GamePlayer> racers = _players.Where(player => !player.IsSpectator).ToList();
+                        if (racers.All(racer => (racer.State.Flags & PlayerStateFlags.ReadyForNis) != 0))
                         {
-                            _waitingForPlayerNisEvents = false;
                             BroadcastGenericIntMessage(TimeHelper.LocalTime, NetMessageType.NisStart, PacketType.ReliableGameData);
-                            _waitingForPlayerStartEvents = true;
+                            RaceState = RaceState.Nis;
                         }
-                    
-                        if (_waitingForPlayerStartEvents && racers.All(x => (x.State.Flags & PlayerStateFlags.ReadyForEvent) != 0))
+                        
+                        break;
+                    }
+                    case RaceState.Nis:
+                    {
+                        List<GamePlayer> racers = _players.Where(player => !player.IsSpectator).ToList();
+                        if (racers.All(x => (x.State.Flags & PlayerStateFlags.ReadyForEvent) != 0))
                         {
                             int countdown = TimeHelper.LocalTime + _raceConstants.EventCountdownTime;
                             BroadcastGenericIntMessage(countdown, NetMessageType.EventStart, PacketType.ReliableGameData);
-                            _waitingForPlayerStartEvents = false;
-                            EventStarted = true;
+                            RaceState = RaceState.Racing;
+                            // Since the race has started, clear all the race load flags for next time
+                            foreach (var racer in racers) 
+                                racer.State.Flags &= ~PlayerStateFlags.AllFlags;
                         }
+                        
+                        break;
                     }
-
-                    break;
-                }
-
-                bool shouldSendResults = 
-                    (raceInfo.RaceState == RaceState.WaitingForRaceEnd && TimeHelper.LocalTime >= raceInfo.RaceEndServerTime) ||
-                    _players.All(player => player.IsSpectator || player.HasSentRaceResults);
-
-                if (shouldSendResults && !_hasSentEventResults)
-                {
-                    string destination = "destGameroom";
-                    if (_raceSettings != null && _seriesInfo != null)
+                    case RaceState.Racing:
+                    case RaceState.WaitingForRaceEnd:
                     {
-                        var events = _seriesInfo.Value.Events;
-                        int nextSeriesIndex = _raceSettings.Value.SeriesEventIndex + 1;
-                        if (nextSeriesIndex < events.Count)
+                        bool shouldSendResults = 
+                            (RaceState == RaceState.WaitingForRaceEnd && TimeHelper.LocalTime >= _raceStateEndTime) ||
+                            _players.All(player => player.IsSpectator || player.HasSentRaceResults);
+
+                        if (shouldSendResults)
                         {
-                            var nextEvent = events[nextSeriesIndex];
-                            _raceSettings.Value = nextEvent;
-                            Room.UpdateAttributes(nextEvent);
-                            destination = "destNextSeriesRace";
-                        } else destination = IsRanked ? "destKartPark" : "destPostSeries";
+                            string destination = "destGameroom";
+                            if (_raceSettings != null && _seriesInfo != null)
+                            {
+                                var events = _seriesInfo.Value.Events;
+                                int nextSeriesIndex = _raceSettings.Value.SeriesEventIndex + 1;
+                                if (nextSeriesIndex < events.Count)
+                                {
+                                    var nextEvent = events[nextSeriesIndex];
+                                    _raceSettings.Value = nextEvent;
+                                    Room.UpdateAttributes(nextEvent);
+                                    destination = "destNextSeriesRace";
+                                } else destination = IsRanked ? "destKartPark" : "destPostSeries";
+                            }
+                            // Single xp races in ModNation just return back to the kart park
+                            else if (IsRanked) destination = "destKartPark";
+
+                            Logger.LogInfo<SimServer>($"{Room.Game.GameName} race has been completed, destination is {destination}");
+
+                            int postRaceDelay = _raceConstants.PostRaceTime;
+                            RaceState = RaceState.PostRace;
+                            _raceStateEndTime = TimeHelper.LocalTime + postRaceDelay;
+                            var message = new NetMessageEventResults
+                            {
+                                SenderNameUid = NetworkMessages.SimServerUid,
+                                Platform = Platform,
+                                ResultsXml = FinalizeEventResults(),
+                                Destination = destination,
+                                PostEventDelayTime = _raceStateEndTime,
+                                PostEventScreenTime = postRaceDelay
+                            };
+
+                            BroadcastMessage(message, NetMessageType.EventResultsFinal, PacketType.ReliableGameData);
+                            if (_seriesInfo != null)
+                            {
+                                message.ResultsXml = FinalizeSeriesResults();
+                                BroadcastMessage(message, NetMessageType.SeriesResults, PacketType.ReliableGameData);
+                            }
+                            
+                            if (IsKarting) UpdateVotePackage();
+
+                            // Broadcast new seed for the next race
+                            _seed = CryptoHelper.GetRandomSecret();
+                            BroadcastMessage(new NetMessageRandomSeed(_seed), PacketType.ReliableGameData);
+  
+                        }
+                        
+                        break;
                     }
-                    // Single xp races in ModNation just return back to the kart park
-                    else if (IsRanked) destination = "destKartPark";
-
-                    Logger.LogInfo<SimServer>($"{Room.Game.GameName} race has been completed, destination is {destination}");
-
-                    int postRaceDelay = _raceConstants.PostRaceTime;
-                    var message = new NetMessageEventResults
+                    case RaceState.PostRace:
                     {
-                        SenderNameUid = NetworkMessages.SimServerUid,
-                        Platform = Platform,
-                        ResultsXml = FinalizeEventResults(),
-                        Destination = destination,
-                        PostEventDelayTime = TimeHelper.LocalTime + postRaceDelay,
-                        PostEventScreenTime = postRaceDelay
-                    };
-
-                    BroadcastMessage(message, NetMessageType.EventResultsFinal, PacketType.ReliableGameData);
-                    if (_seriesInfo != null)
-                    {
-                        message.ResultsXml = FinalizeSeriesResults();
-                        BroadcastMessage(message, NetMessageType.SeriesResults, PacketType.ReliableGameData);
+                        // After the race has officially ended, reset the gameroom state
+                        if (TimeHelper.LocalTime >= _raceStateEndTime)
+                        {
+                            List<GamePlayer> racers = _players.Where(player => !player.IsSpectator).ToList();
+                            
+                            // Destroy the AI
+                            _aiInfo.Value = new AiInfo(Platform);
+                            
+                            // Clean up state variables for the next race
+                            foreach (var racer in racers)
+                                racer.SetupNextRaceState();
+                            
+                            // If we're in a single race, we're going back to the gameroom
+                            if (_seriesInfo == null)
+                            {
+                                // Tell spectators that we're connecting back into the lobby
+                                foreach (var racer in racers)
+                                    racer.State.IsConnecting = true;
+                                BroadcastPlayerStates();                                
+                                SetCurrentGameroomState(RoomState.None);
+                            }
+                            // Otherwise, prepare for the next race
+                            else
+                            {
+                                RaceState = RaceState.LoadingIntoRace;
+                            }
+                            
+                            // Reset the voting package
+                            if (IsKarting && Type == ServerType.Competitive)
+                            {
+                                _votePackage.Value.Reset();
+                                _votePackage.Sync();
+                            }
+                        }
+                
+                        // Finalize the results for Karting before the post race section ends
+                        if ((uint)TimeHelper.LocalTime >= (uint)_raceStateEndTime - 1500u)
+                            FinalizeVote();
+                        break;
                     }
-                    
-                    if (IsKarting) UpdateVotePackage();
-
-                    // Broadcast new seed for the next race
-                    _seed = CryptoHelper.GetRandomSecret();
-                    BroadcastMessage(new NetMessageRandomSeed { Seed = _seed }, PacketType.ReliableGameData);
-                    _hasSentEventResults = true;
                 }
-
-                // Finalize the results for Karting before the post race section ends
-                if (raceInfo.RaceState == RaceState.PostRace && (uint)TimeHelper.LocalTime >= (uint)raceInfo.PostRaceServerTime - 1500u)
-                    FinalizeVote();
                 
                 break;
             }

@@ -52,7 +52,6 @@ public class GamePlayer
 
     public void SetupNextRaceState()
     {
-        State.Flags &= ~PlayerStateFlags.RaceLoadFlags;
         HasSentRaceResults = false;
         HasFinishedRace = false;
         Points = 0;

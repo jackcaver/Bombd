@@ -42,9 +42,4 @@ public static class GatewayEvents
     /// Receive: A player has been disconnected from the Web API.
     /// </summary>
     public const string PlayerSessionDestroyed = "PLAYER_SESSION_DESTROYED";
-    
-    /// <summary>
-    /// Receive: Vote package received from the Web API for a specific game room
-    /// </summary>
-    public const string VotePackage = "VOTE_PACKAGE";
 }
