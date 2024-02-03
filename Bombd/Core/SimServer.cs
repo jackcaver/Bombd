@@ -1016,6 +1016,19 @@ public class SimServer
                 player.State.Flags |= PlayerStateFlags.DownloadedTracks;
                 break;
             }
+            case NetMessageType.GameroomDownloadTracksFailed:
+            {
+                player.IsSpectator = true;
+                if (IsKarting) BroadcastKartingPlayerSessionInfo();
+                else BroadcastMessage(new NetMessagePlayerSessionInfo
+                {
+                    JoinStatus = GameSessionStatus.SwitchRacerToSpectator,
+                    UserId = player.UserId
+                }, PacketType.ReliableGameData);
+                UpdateRaceSetup();
+                
+                break;
+            }
             case NetMessageType.ReadyForEventStart:
             {
                 player.State.Flags |= PlayerStateFlags.ReadyForEvent;
@@ -1237,7 +1250,7 @@ public class SimServer
                 
                 // If we're still connecting, then this is the first player state update before we're actually in-game,
                 // so check if anybody else has our name UID first, this will only happen if someone is exploiting or if
-                // somebody on RPCS3 doesn't have their Console ID set
+                // somebody on RPCS3 doesn't have their PSID set
                 if (!player.State.HasNameUid)
                 {
                     if (_players.Any(p => p.State.NameUid == state.NameUid))
