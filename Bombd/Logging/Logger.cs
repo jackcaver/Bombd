@@ -5,7 +5,7 @@ namespace Bombd.Logging;
 
 public class Logger
 {
-    private const LogLevel MaxLevel = LogLevel.Trace;
+    private const LogLevel MaxLevel = LogLevel.Info;
     private static readonly ConcurrentQueue<LogEntry> LogQueue = new();
 
     static Logger()
