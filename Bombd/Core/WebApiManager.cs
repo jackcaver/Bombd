@@ -1,11 +1,11 @@
 ﻿using System.Text;
 using System.Text.Json;
 using System.Xml;
+using Bombd.Globals;
 using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Types.Network.Objects;
 using Bombd.Types.Network.Races;
-using Bombd.Types.ServerCommunication;
 
 namespace Bombd.Core;
 
@@ -117,6 +117,25 @@ public class WebApiManager
         };
 
         return coi;
+    }
+
+    public static List<int> GetRandomTracks(int currentTrackId)
+    {
+        string json = MakeRequest($"{BombdConfig.Instance.ApiURL}/api/VotePackage?trackId={currentTrackId}");
+        if (string.IsNullOrEmpty(json)) return Career.Karting.GetVotePackage(currentTrackId);
+        
+        try
+        {
+            var tracks = JsonSerializer.Deserialize<List<int>>(json);
+            if (tracks != null)
+                return tracks;
+        }
+        catch (Exception)
+        {
+            Logger.LogError<WebApiManager>("Failed to parse VotePackage from Web API");
+        }
+        
+        return Career.Karting.GetVotePackage(currentTrackId);
     }
     
     public static SeriesInfo GetTopTrackSeries(int owner, string kartParkHome)

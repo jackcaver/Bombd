@@ -17,8 +17,8 @@ public class EventResult
         Indent = false,
         NamespaceHandling = NamespaceHandling.OmitDuplicates
     };
-    private static XmlSerializerNamespaces _xmlNamespaces = new(new[] { XmlQualifiedName.Empty });
-
+    private static XmlSerializerNamespaces _xmlNamespaces = new([XmlQualifiedName.Empty]);
+    
     [XmlAttribute("ownerUID")] public uint OwnerUid;
     [XmlAttribute("bestDrift")] public float BestDrift;
     [XmlAttribute("scoreSortOrder")] public string ScoreSortOrder = "ascending";

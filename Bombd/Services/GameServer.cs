@@ -6,10 +6,10 @@ using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
 using Bombd.Serialization.Wrappers;
-using Bombd.Simulation;
 using Bombd.Types.Events;
 using Bombd.Types.Network;
 using Bombd.Types.Network.Room;
+using Bombd.Types.Network.Simulation;
 using Bombd.Types.Requests;
 using Bombd.Types.Services;
 
@@ -23,11 +23,10 @@ public class GameServer : BombdService
     private readonly Dictionary<string, ReservationGroup> _reservationGroups = new();
     private readonly List<PlayerJoinRequest> _playerJoinQueue = new();
     private readonly List<PlayerLeaveRequest> _playerLeaveQueue = new();
-    private readonly SemaphoreSlim _playerLock = new(1);
+    private readonly SemaphoreSlim _playerLock = new(1, 1);
     private readonly List<MigrationGroup> _playerMigrationGroups = new();
     public event EventHandler<PlayerJoinEventArgs>? OnPlayerJoined;
     public event EventHandler<PlayerLeaveEventArgs>? OnPlayerLeft;
-    public event EventHandler<GameEventArgs>? OnGameEvent;
     
     public void UpdateGuestStatuses(GamePlayer player, GuestStatusBlock block)
     {
@@ -481,7 +480,6 @@ public class GameServer : BombdService
 
     public override void OnDisconnected(ConnectionBase connection)
     {
-        Bombd.SessionManager.UnregisterSession(connection);
         UserInfo.TryRemove(connection.UserId, out _);
 
         if (Bombd.RoomManager.GetPlayerInRoom(connection.UserId) != null)

@@ -1,4 +1,6 @@
-﻿using Bombd.Serialization;
+﻿using Bombd.Core;
+using Bombd.Globals;
+using Bombd.Serialization;
 
 namespace Bombd.Types.Network.Objects;
 
@@ -94,20 +96,17 @@ public class VotePackage : INetworkWritable
     {
         _finalizedVotedTrack = -1;
         _state = 1;
-        
-        HashSet<int> selected = new();
-        var random = new Random();
+
         int trackIndex = 0;
-        
         _tracks[trackIndex++].Set(replayCreationId);
-        while (trackIndex != MaxTrackSize)
-        {
-            int index = random.Next(0, VotableTracks.Length);
-            if (selected.Contains(index)) continue;
-            int creationId = VotableTracks[index];
-            selected.Add(index);
-            _tracks[trackIndex++].Set(creationId);
-        }
+        
+        List<int> randomTracks = 
+            replayCreationId > NetCreationIdRange.MinOnlineCreationId 
+            ? WebApiManager.GetRandomTracks(replayCreationId) 
+            : Career.Karting.GetVotePackage(replayCreationId);
+        
+        foreach (int track in randomTracks)
+            _tracks[trackIndex++].Set(track);
     }
     
     public int FinishVote()

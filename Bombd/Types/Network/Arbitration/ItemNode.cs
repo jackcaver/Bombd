@@ -6,5 +6,5 @@ public class ItemNode
     public AcquireBehavior AcquireBehavior;
     public int Uid;
     public int OwnerUid;
-    public List<ItemAcquirerNode> Acquirers;
+    public List<ItemAcquirerNode> Acquirers = new();
 }

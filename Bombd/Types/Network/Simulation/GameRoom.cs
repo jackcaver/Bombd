@@ -1,14 +1,14 @@
-﻿using Bombd.Helpers;
+﻿using Bombd.Core;
+using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
-using Bombd.Types.Network;
 using Bombd.Types.Network.Objects;
 using Bombd.Types.Network.Races;
 using Bombd.Types.Network.Room;
 using Bombd.Types.Requests;
 
-namespace Bombd.Simulation;
+namespace Bombd.Types.Network.Simulation;
 
 public class GameRoom
 {
@@ -20,7 +20,7 @@ public class GameRoom
     private readonly Dictionary<int, GamePlayer> _userIdLookup = new();
     
     public readonly GameManagerGame Game;
-    public readonly GameSimulation Simulation;
+    public readonly SimServer Simulation;
     
     public int Owner => Simulation.Owner;
     
@@ -39,7 +39,7 @@ public class GameRoom
     {
         Game = request.Game;
         Platform = request.Platform;
-        Simulation = new GameSimulation(
+        Simulation = new SimServer(
             request.Type, this, request.OwnerUserId, request.IsRanked, request.IsSeries);
         _slots = Enumerable.Repeat(false, MaxSlots).ToList();
         _slotGuestCounts = Enumerable.Repeat(0, MaxSlots).ToList();
@@ -50,6 +50,8 @@ public class GameRoom
     public void UpdateAttributes(EventSettings settings)
     {
         var attr = Game.Attributes;
+
+        settings.Print();
 
         string visibility = settings.Private ? "CLOSED" : "OPEN";
         attr["__MM_MODE_G"] = visibility;
@@ -262,7 +264,7 @@ public class GameRoom
     public bool IsReadyToJoin(int userId)
     {
         if (userId == Owner || Owner == -1) return true;
-        return Simulation.IsHostReady();
+        return Simulation.IsRoomReady();
     }
     
     public GamePlayer GetUser(int userId) => _userIdLookup[userId];

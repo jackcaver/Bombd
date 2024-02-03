@@ -1,7 +1,6 @@
-﻿using Bombd.Helpers;
-using Bombd.Serialization;
+﻿using Bombd.Serialization;
 
-namespace Bombd.Simulation;
+namespace Bombd.Types.Network.Simulation;
 
 public class GenericSyncObject<T> : SyncObject where T : INetworkWritable
 {

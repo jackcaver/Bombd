@@ -2,6 +2,7 @@
 using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Protocols;
+using Bombd.Types.Gateway.Events;
 using Bombd.Types.Services;
 
 namespace Bombd.Core;
@@ -11,67 +12,55 @@ public class SessionManager
     private readonly object _sessionLock = new();
     private readonly Dictionary<int, Session> _sessions = new();
     
-    public Session? GetSession(ConnectionBase connection)
+    public Session? Get(ConnectionBase connection)
     {
         lock (_sessionLock)
         {
             return _sessions.GetValueOrDefault(connection.SessionId);
         }
     }
-
-    public void RegisterSession(ConnectionBase connection)
+    
+    public static int GetSessionKey(string sessionUuid)
     {
-        lock (_sessionLock)
-        {
-            int sessionId = connection.SessionId;
-            if (!_sessions.TryGetValue(sessionId, out Session? session))
-            {
-                sessionId = CryptoHelper.GetRandomSecret();
-                uint hashSalt = (uint)CryptoHelper.GetRandomSecret();
-                session = new Session
-                {
-                    GameName = string.Empty,
-                    HashSalt = hashSalt
-                };
-
-                connection.SessionId = sessionId;
-                _sessions[sessionId] = session;
-
-                Logger.LogInfo<SessionManager>($"Registered new session for {connection.Username}.");
-            }
-
-            connection.HashSalt = session.HashSalt;
-            if (connection.Service.Name != "directory")
-            {
-                session.ConnectedServices.Add(connection.Service.Name);
-                Logger.LogInfo<SessionManager>(
-                    $"Added {connection.Service.Name} to {connection.Username}'s registered services.");
-            }    
-        }
+        if (!int.TryParse(sessionUuid, out int sessionKey))
+            sessionKey = CryptoHelper.StringHash32(sessionUuid);
+        return sessionKey;
     }
 
-    public void UnregisterSession(ConnectionBase connection)
+    public void Clear()
     {
         lock (_sessionLock)
         {
-            if (!_sessions.TryGetValue(connection.SessionId, out Session? session))
+            _sessions.Clear();
+        }
+    }
+    
+    public void Register(PlayerSessionCreatedEvent evt)
+    {
+        lock (_sessionLock)
+        {
+            Logger.LogInfo<SessionManager>($"Syncing session from Web API for {evt.Username}");
+            int sessionId = GetSessionKey(evt.SessionUuid);
+            _sessions[sessionId] = new Session
             {
-                Logger.LogWarning<SessionManager>(
-                    $"Tried to unregister session for {connection.Username}, but they didn't have one!");
-                return;
+                PlayerConnectUuid = evt.SessionUuid,
+                PlayerConnectId = evt.PlayerConnectId,
+                Username = evt.Username,
+                Issuer = evt.Issuer,
+                HashSalt = (uint)CryptoHelper.GetRandomSecret()
+            };
+        }
+    }
+    
+    public void Unregister(PlayerSessionDestroyedEvent evt)
+    {
+        lock (_sessionLock)
+        {
+            int sessionId = GetSessionKey(evt.SessionUuid);
+            if (_sessions.Remove(sessionId, out Session? session))
+            {
+                Logger.LogInfo<SessionManager>($"Destroying session for {session.Username}");
             }
-
-            session.ConnectedServices.Remove(connection.Service.Name);
-
-            Logger.LogInfo<SessionManager>(
-                $"Removed {connection.Service.Name} from {connection.Username}'s registered services.");
-
-            if (session.ConnectedServices.Count == 0)
-            {
-                Logger.LogInfo<SessionManager>(
-                    $"Destroying session for {connection.Username} since all services have been disconnected.");
-                _sessions.Remove(connection.SessionId);
-            }   
         }
     }
 }

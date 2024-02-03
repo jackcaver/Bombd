@@ -1,4 +1,4 @@
-﻿namespace Bombd.Simulation;
+﻿namespace Bombd.Types.Network.Simulation;
 
 public enum ServerType
 {

@@ -1,11 +1,10 @@
 ﻿using Bombd.Serialization;
-using Bombd.Simulation;
 
 namespace Bombd.Types.Network.Messages;
 
 public struct NetMessageWorldObjectCreate : INetworkMessage, INetworkReadable
 {
-    public NetMessageType Type => NetMessageType.WorldobjectCreate;
+    public NetMessageType Type => NetMessageType.WorldObjectCreate;
 
     public int MessageType;
     public int EmitterUid;

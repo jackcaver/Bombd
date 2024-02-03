@@ -1,6 +1,6 @@
 ﻿using Bombd.Helpers;
 using Bombd.Serialization;
-using Bombd.Simulation;
+using Bombd.Types.Network.Simulation;
 
 namespace Bombd.Types.GameManager;
 

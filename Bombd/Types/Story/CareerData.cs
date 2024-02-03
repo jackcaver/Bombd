@@ -12,12 +12,15 @@ public class CareerData
     public Platform Platform;
     public List<CareerTrack> Tracks = new();
     public List<AiDefinition> AiDefinitions = new();
+    [XmlIgnore] public List<CareerTrack> VotableTracks = new();
 
     public static CareerData Load(string file)
     {
         string data = File.ReadAllText(file);
         using var reader = new StringReader(data);
-        return (CareerData)CareerSerializer.Deserialize(reader)!;
+        var career = (CareerData) CareerSerializer.Deserialize(reader)!;
+        career.VotableTracks = career.Tracks.Where(track => track.Votable).ToList();
+        return career;
     }
 
     public EventSettings GetRankedEvent(int owner, int previousTrackId = -1)
@@ -57,6 +60,26 @@ public class CareerData
         }
         
         return info;
+    }
+
+    public List<int> GetVotePackage(int previousTrackId)
+    {
+        HashSet<int> selected =
+        [
+            previousTrackId
+        ];
+        List<int> tracks = new(3);
+        
+        var random = new Random();
+        while (tracks.Count != 3)
+        {
+            int trackId = VotableTracks[random.Next(0, VotableTracks.Count)].Id;
+            if (selected.Contains(trackId)) continue;
+            tracks.Add(trackId);
+            selected.Add(trackId);
+        }
+
+        return tracks;
     }
 
     public List<AiDefinition> GetRandomAi(int count)

@@ -15,6 +15,10 @@ using Bombd.Services;
 using Bombd.Types.Authentication;
 using Bombd.Types.Services;
 using JetBrains.Annotations;
+using NPTicket;
+using NPTicket.Types;
+using NPTicket.Verification;
+using NPTicket.Verification.Keys;
 
 namespace Bombd.Core;
 
@@ -77,24 +81,19 @@ public abstract class BombdService
 
     public void Start()
     {
-        var thread = new Thread(() =>
+        _server.Start();
+        Task.Run(async () =>
         {
-            _server.Start();
-            Task.Run(async () =>
+            long step = 1000 / BombdConfig.Instance.TickRate;
+            using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(step));
+            while (_server.IsActive)
             {
-                long step = 1000 / BombdConfig.Instance.TickRate;
-                using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(step));
-                while (_server.IsActive)
+                while (await timer.WaitForNextTickAsync())
                 {
-                    while (await timer.WaitForNextTickAsync())
-                    {
-                        _server.Tick();
-                    }
+                    _server.Tick();
                 }
-            });
+            }
         });
-        
-        thread.Start();
     }
 
     public void Stop()
@@ -117,36 +116,60 @@ public abstract class BombdService
     public bool Login(ConnectionBase connection, NetcodeTransaction request, NetcodeTransaction response)
     {
         Ticket ticket;
+        byte[] ticketData;
         try
         {
-            string encodedPsnTicket = request["NPTicket"];
-            // TODO: Verify that ticket is actually valid / not expired
-            ticket = NetworkReader.Deserialize<Ticket>(encodedPsnTicket);
+            string encodedPsnTicket = request["NPTicket"]; 
+            ticketData = Convert.FromBase64String(encodedPsnTicket);
+            ticket = Ticket.ReadFromBytes(ticketData);
         }
         catch (Exception)
         {
-            response.Error = "TicketParseFail";
+            response.Error = "ticketParseFail";
+            return false;
+        }
+
+        TicketVerifier verifier;
+        switch (ticket.IssuerId)
+        {
+            case 0x100:
+                verifier = new TicketVerifier(ticketData, ticket, UfgSigningKey.Instance);
+                break;
+            case 0x33333333:
+                verifier = new TicketVerifier(ticketData, ticket, RpcnSigningKey.Instance);
+                break;
+            default:
+                response.Error = "invalidTickerIssuerId";
+                return false;
+        }
+
+        if (!verifier.IsTicketValid())
+        {
+            response.Error = "invalidTicket";
             return false;
         }
         
         Platform platform = PlatformHelper.FromTitleId(ticket.ServiceId[7..^3]);
-        if (platform == Platform.Unknown)
+        switch (platform)
         {
-            response.Error = "UnknownGameServiceId";
+            case Platform.Unknown:
+                response.Error = "unknownGameServiceId";
+                return false;
+            case Platform.Karting when !BombdConfig.Instance.AllowKarting:
+            case Platform.ModNation when !BombdConfig.Instance.AllowModNation:
+                return false;
+        }
+        
+        int userId = CryptoHelper.StringHash32Upper(ticket.Username + ticket.IssuerId);
+        if (UserInfo.ContainsKey(userId))
+        {
+            response.Error = "alreadyLoggedIn";
             return false;
         }
         
-        if (platform == Platform.Karting && !BombdConfig.Instance.AllowKarting) return false;
-        if (platform == Platform.ModNation && !BombdConfig.Instance.AllowModNation) return false;
-        
-        int userId = CryptoHelper.StringHash32Upper(ticket.OnlineId + ticket.IssuerId);
-        // if (UserInfo.ContainsKey(userId))
-        // {
-        //     response.Error = "AlreadyLoggedIn";
-        //     return false;
-        // }
-        
-        if (request.TryGet("SessionKey", out string? encodedSessionKey))
+        if (request.TryGet("SessionUUID", out string? sessionUuid))
+            connection.SessionId = SessionManager.GetSessionKey(sessionUuid);
+        else if (request.TryGet("SessionKey", out string? encodedSessionKey))
         {
             // The login requests add the SessionKey param twice, so just take the first one.
             encodedSessionKey = encodedSessionKey.Split(",")[0];
@@ -158,13 +181,13 @@ public abstract class BombdService
             }
             catch (Exception)
             {
-                response.Error = "InvalidSessionKey";
+                response.Error = "invalidSessionKey";
                 return false;
             }
 
             if (sessionKeyBytes.Length != 4)
             {
-                response.Error = "InvalidSessionKey";
+                response.Error = "invalidSessionKey";
                 return false;
             }
 
@@ -172,11 +195,25 @@ public abstract class BombdService
             connection.SessionId = sessionKey;
         }
 
-        connection.Username = ticket.OnlineId;
+        connection.Username = ticket.Username;
         connection.UserId = userId;
         connection.Platform = platform;
-        Bombd.SessionManager.RegisterSession(connection);
-
+        
+        // Make sure the user logging in has a session on PlayerConnect.
+        Session? session = Bombd.SessionManager.Get(connection);
+        if (session == null)
+        {
+            response.Error = "notLoggedIn";
+            return false;
+        }
+        
+        // Check if the ticket matches the session on the PlayerConnect server
+        if (session.Username != ticket.Username || session.Issuer != ticket.IssuerId)
+        {
+            response.Error = "ticketMismatch";
+            return false;
+        }
+        
         // Used so other players can communicate with this player
         // without having access to user-specific session data.
         UserInfo[connection.UserId] = connection;
@@ -196,7 +233,7 @@ public abstract class BombdService
         response["bombd_ServerPort"] = Port.ToString();
         response["serveruuid"] = Uuid;
         response["clusteruuid"] = Bombd.ClusterUuid;
-        response["username"] = ticket.OnlineId;
+        response["username"] = ticket.Username;
         response["userid"] = connection.UserId.ToString();
 
         // Only the GameManager needs to be sent the matchmaking configuration.
@@ -207,6 +244,9 @@ public abstract class BombdService
             response["MMConfigFileSize"] = config.Length.ToString();
         }
         
+        // Connection in the context of a BombdService is after authentication,
+        // we don't care about any connections being connected until they've
+        // actually verified their identity
         OnConnected(connection);
         
         return true;
@@ -228,10 +268,10 @@ public abstract class BombdService
         {
             try
             {
-                Session? session = Bombd.SessionManager.GetSession(connection);
+                Session? session = Bombd.SessionManager.Get(connection);
                 if (session == null)
                 {
-                    response.Error = "NotLoggedIn";
+                    response.Error = "notLoggedIn";
                     return null;
                 }
                 
@@ -243,20 +283,20 @@ public abstract class BombdService
                     Response = response
                 };
 
-                return method.Invoke(service, new object?[] { context });
+                return method.Invoke(service, [context]);
             }
             catch (Exception e)
             {
                 Logger.LogError(_type,
                     $"HandleServiceTransaction: An error occurred while processing transaction {request.MethodName}");
                 Logger.LogError(_type, e.ToString());
-                response.Error = "InternalServerError";
+                response.Error = "internalServerError";
             }
         }
         else
         {
             Logger.LogInfo(_type, $"HandleServiceTransaction: Got unregistered method {request.MethodName}");
-            response.Error = "MethodNotFound";
+            response.Error = "methodNotFound";
         }
 
         return null;
@@ -298,7 +338,7 @@ public abstract class BombdService
         else
         {
             Logger.LogInfo(_type, $"OnNetcodeData: Got invalid transaction service {request.ServiceName}");
-            response.Error = "ServiceMismatch";
+            response.Error = "serviceMismatch";
         }
 
         if (value != null && string.IsNullOrEmpty(response.Error)) response.SetObject(value);
@@ -361,10 +401,6 @@ public abstract class BombdService
 
     public virtual void OnDisconnected(ConnectionBase connection)
     {
-        // The directory server is only used to tell the game about other servers, don't destroy our
-        // session yet just because it got disconnected.
-        if (Name != "directory") Bombd.SessionManager.UnregisterSession(connection);
-
         UserInfo.TryRemove(connection.UserId, out _);
         Logger.LogInfo(_type, $"{connection.Username} has been disconnected.");
     }

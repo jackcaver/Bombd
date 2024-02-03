@@ -20,9 +20,17 @@ public class BombdConfig
         {
             config = new BombdConfig();
             path = Path.Combine(Environment.CurrentDirectory, "bombd.example.json");
-            Logger.LogInfo<BombdConfig>($"Bombd config doesn't exist! Example configuration is being created at {path}");
-            string data = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(path, data);
+            if (!File.Exists(path))
+            {
+                Logger.LogInfo<BombdConfig>($"Bombd config doesn't exist! Example configuration is being created at {path}");
+                string data = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(path, data);   
+            }
+            else
+            {
+                Logger.LogInfo<BombdConfig>($"Bombd config doesn't exist! Example configuration is located at {path}");
+            }
+            
             Environment.Exit(0);
         }
 

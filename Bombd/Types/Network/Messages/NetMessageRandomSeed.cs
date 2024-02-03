@@ -8,6 +8,8 @@ public struct NetMessageRandomSeed : INetworkMessage
 
     public int Seed;
 
+    public NetMessageRandomSeed(int seed) => Seed = seed;
+
     public void Write(NetworkWriter writer)
     {
         writer.Write(Seed);

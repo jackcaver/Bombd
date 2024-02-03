@@ -34,6 +34,7 @@ public class SslConnection : ConnectionBase
         Id = CryptoHelper.GetRandomSecret();
         State = ConnectionState.WaitingForConnection;
         _server = server;
+        _server.Connections.TryAdd(Id, this);
     }
 
     public int Id { get; }
@@ -43,18 +44,17 @@ public class SslConnection : ConnectionBase
     public void Connect(Socket socket)
     {
         _socket = socket;
-        
         try
         {
             _sslStream = new SslStream(new NetworkStream(_socket, false), false);
-            _sslStream.AuthenticateAsServer(_server.Certificate, false, SslProtocols.Ssl3 | SslProtocols.Tls, false);
-
+            _sslStream.AuthenticateAsServer(_server.Certificate, false, SslProtocols.Ssl3, false);
+            
             _keepAliveTimer = new Timer(KeepAliveFrequency);
             _keepAliveTimer.Elapsed += OnKeepAliveTimerElapsed;
             _keepAliveTimer.AutoReset = false;
             _keepAliveTimer.Enabled = true;
             
-            StartReceive();
+            Task.Run(async () => await Block());
         }
         catch (Exception)
         {
@@ -142,67 +142,69 @@ public class SslConnection : ConnectionBase
             }
             catch (Exception)
             {
-                Logger.LogWarning<SslConnection>("An error occurred during send. Closing connection.");
+                Logger.LogError<SslConnection>("An error occurred during send. Closing connection.");
                 Disconnect();
             }
         }
     }
 
-    private async void StartReceive()
+    private async Task Block()
     {
-        if (State == ConnectionState.Disconnected) return;
-
-        int payloadSize;
-        PacketType type;
-        try
+        while (State != ConnectionState.Disconnected)
         {
-            int len = await _sslStream.ReadAsync(_recv, 0, MessageHeaderSize);
-            if (len != MessageHeaderSize)
+            int payloadSize;
+            PacketType type;
+            try
             {
-                Disconnect();
-                return;
-            }
-
-            payloadSize = ((_recv[0] << 24) | (_recv[1] << 16) | (_recv[2] << 8) | _recv[3]) -
-                          (MessageHeaderSize - 4);
-            if (payloadSize < 0 || payloadSize > MaxMessageSize)
-            {
-                Disconnect();
-                return;
-            }
-
-            type = (PacketType)_recv[20];
-            if (payloadSize != 0)
-            {
-                int offset = 0;
-                do
+                int len = await _sslStream.ReadAsync(_recv.AsMemory(0, MessageHeaderSize));
+                if (len != MessageHeaderSize)
                 {
-                    len = await _sslStream.ReadAsync(_recv, offset, payloadSize - offset);
-                    if (len == 0)
+                    Logger.LogError<SslConnection>("Received message with invalid header. Closing connection.");
+                    Disconnect();
+                    return;
+                }
+
+                payloadSize = ((_recv[0] << 24) | (_recv[1] << 16) | (_recv[2] << 8) | _recv[3]) -
+                              (MessageHeaderSize - 4);
+                if (payloadSize is < 0 or > MaxMessageSize)
+                {
+                    Logger.LogError<SslConnection>("Received message with invalid size. Closing connection.");
+                    Disconnect();
+                    return;
+                }
+
+                type = (PacketType)_recv[20];
+                if (payloadSize != 0)
+                {
+                    int offset = 0;
+                    do
                     {
-                        Disconnect();
-                        return;
-                    }
+                        len = await _sslStream.ReadAsync(_recv.AsMemory(offset, payloadSize - offset));
+                        if (len == 0)
+                        {
+                            Disconnect();
+                            return;
+                        }
 
-                    offset += len;
-                } while (offset < payloadSize);
+                        offset += len;
+                    } while (offset < payloadSize);
+                }
             }
-        }
-        catch (Exception)
-        {
-            Disconnect();
-            return;
-        }
+            catch (Exception)
+            {
+                Logger.LogError<SslConnection>("An error occurred while reading from socket. Closing connection.");
+                Disconnect();
+                return;
+            }
 
-        if (type == PacketType.KeepAlive) _keepAliveTimer!.Start();
-        else
-        {
-            var data = new ArraySegment<byte>(_recv, 0, payloadSize);
-            if (State == ConnectionState.WaitingForConnection) HandleStartConnect(data);
-            else if (State == ConnectionState.WaitingForTimeSync) HandleTimeSync(data);
-            else Service.OnData(this, data, type);
+            if (type == PacketType.KeepAlive) _keepAliveTimer!.Start();
+            else
+            {
+                var data = new ArraySegment<byte>(_recv, 0, payloadSize);
+                if (State == ConnectionState.WaitingForConnection) HandleStartConnect(data);
+                else if (State == ConnectionState.WaitingForTimeSync) HandleTimeSync(data);
+                else Service.OnData(this, data, type);
+            }   
         }
-
-        StartReceive();
     }
 }

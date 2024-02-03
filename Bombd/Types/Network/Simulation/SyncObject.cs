@@ -1,8 +1,7 @@
 ﻿using Bombd.Helpers;
-using Bombd.Types.Network;
 using Bombd.Types.Network.Messages;
 
-namespace Bombd.Simulation;
+namespace Bombd.Types.Network.Simulation;
 
 public class SyncObject
 {

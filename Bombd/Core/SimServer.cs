@@ -1,18 +1,20 @@
-using Bombd.Core;
+using Bombd.Extensions;
 using Bombd.Globals;
 using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
 using Bombd.Types.Network;
+using Bombd.Types.Network.Arbitration;
 using Bombd.Types.Network.Messages;
 using Bombd.Types.Network.Objects;
 using Bombd.Types.Network.Races;
 using Bombd.Types.Network.Room;
+using Bombd.Types.Network.Simulation;
 
-namespace Bombd.Simulation;
+namespace Bombd.Core;
 
-public class GameSimulation
+public class SimServer
 {
     public int Owner;
 
@@ -20,6 +22,7 @@ public class GameSimulation
     private readonly List<PlayerInfo> _playerInfos = new();
     private readonly List<PlayerState> _playerStates = new();
     private readonly Dictionary<int, GamePlayer> _playerLookup = new();
+    private readonly Dictionary<int, ItemNode> _itemNodes = new();
     
     private int _seed = CryptoHelper.GetRandomSecret();
     private int _lastStateTime = TimeHelper.LocalTime;
@@ -52,7 +55,7 @@ public class GameSimulation
     private bool _hasSentEventResults;
     private float _pausedTimeRemaining;
 
-    public GameSimulation(ServerType type, GameRoom room, int owner, bool isRanked, bool isSeries)
+    public SimServer(ServerType type, GameRoom room, int owner, bool isRanked, bool isSeries)
     {
         Room = room;
         Type = type;
@@ -65,7 +68,7 @@ public class GameSimulation
             _raceConstants = isRanked ? RaceConstants.Ranked : RaceConstants.ModNation;
         else _raceConstants = RaceConstants.Karting;
         
-        Logger.LogInfo<GameSimulation>($"Starting Game Simulation ({Type}:{Platform}, IsRanked = {isRanked}, IsSeries = {isSeries})");
+        Logger.LogInfo<SimServer>($"Starting Game Simulation ({Type}:{Platform}, IsRanked = {isRanked}, IsSeries = {isSeries})");
         
         if (Type == ServerType.KartPark)
         {
@@ -100,7 +103,7 @@ public class GameSimulation
         }
     }
 
-    public bool IsHostReady()
+    public bool IsRoomReady()
     {
         if (Owner == -1) return true;
         if (!_playerLookup.TryGetValue(Owner, out GamePlayer? player)) return false;
@@ -152,7 +155,6 @@ public class GameSimulation
                 peer.SendReliableMessage(new NetMessagePlayerSessionInfo
                 {
                     JoinStatus = status,
-                    PlayerId = player.PlayerId,
                     UserId = player.UserId
                 });
             }
@@ -166,7 +168,6 @@ public class GameSimulation
                 player.SendReliableMessage(new NetMessagePlayerSessionInfo
                 {
                     JoinStatus = status,
-                    PlayerId = peer.PlayerId,
                     UserId = peer.UserId
                 });
             }
@@ -354,7 +355,7 @@ public class GameSimulation
         var oldState = room.State;
         if (state == oldState) return;
         
-        Logger.LogInfo<GameSimulation>($"Setting GameRoomState to {state}");
+        Logger.LogInfo<SimServer>($"Setting GameRoomState to {state}");
 
         // Make sure we cache how much time is remaining when we paused the countdown
         if (state == RoomState.CountingDownPaused)
@@ -374,6 +375,13 @@ public class GameSimulation
             {
                 player.SetupNextRaceState();
                 player.State.Flags &= ~PlayerStateFlags.DownloadedTracks;
+            }
+
+            // Reset the voting package
+            if (IsKarting && Type == ServerType.Competitive)
+            {
+                _votePackage.Value.Reset();
+                _votePackage.Sync();
             }
         }
         
@@ -401,6 +409,10 @@ public class GameSimulation
                 _waitingForPlayerNisEvents = true;
                 BroadcastKartingPlayerSessionInfo();
                 BroadcastPlayerStates();
+                
+                
+                
+                
                 break;
             }
             case RoomState.Ready:
@@ -457,7 +469,7 @@ public class GameSimulation
             BroadcastMessage(MakeUpdateSyncObjectMessage(syncObject), PacketType.ReliableGameData);
         }
         
-        Logger.LogInfo<GameSimulation>($"{syncObject} has been created by the system.");
+        Logger.LogInfo<SimServer>($"{syncObject} has been created by the system.");
         
         return syncObject;
     }
@@ -474,7 +486,7 @@ public class GameSimulation
             if (player.Guest != null)
                 _startingGrid.Value.Add(new GridPositionData(player.Guest.NameUid, true));
         }
-        
+
         int maxAi = _aiInfo.Value.DataSet.Length;
         int maxHumans = _raceSettings.Value.MaxHumans;
         int numAi = Math.Min(maxAi, maxHumans - _startingGrid.Value.Count);
@@ -516,13 +528,13 @@ public class GameSimulation
     {
         if (!_syncObjects.TryGetValue(guid, out SyncObject? syncObject))
         {
-            Logger.LogWarning<GameSimulation>($"{player.Username} tried to perform an operation on a SyncObject that doesn't exist! ({guid})");
+            Logger.LogWarning<SimServer>($"{player.Username} tried to perform an operation on a SyncObject that doesn't exist! ({guid})");
             return null;
         }
         
         if (syncObject.OwnerUserId != player.UserId)
         {
-            Logger.LogWarning<GameSimulation>($"{player.Username} tried to perform an operation on a SyncObject that they don't own!");
+            Logger.LogWarning<SimServer>($"{player.Username} tried to perform an operation on a SyncObject that they don't own!");
             return null;
         }
 
@@ -557,11 +569,11 @@ public class GameSimulation
     {
         if (_syncObjects.ContainsKey(syncObject.Guid))
         {
-            Logger.LogWarning<GameSimulation>($"{player.Username} tried to create a SyncObject with a GUID that already exists!");
+            Logger.LogWarning<SimServer>($"{player.Username} tried to create a SyncObject with a GUID that already exists!");
             return false;
         }
         
-        Logger.LogInfo<GameSimulation>(
+        Logger.LogInfo<SimServer>(
             $"Creating SyncObject({syncObject}) with type {syncObject.Type} and owner {syncObject.OwnerName}");
         _syncObjects[syncObject.Guid] = syncObject;
         return true;
@@ -580,7 +592,7 @@ public class GameSimulation
                 if (guest == null || (IsKarting && config.NetcodeUserId != -1) ||
                     (IsModNation && config.NetcodeUserId != player.UserId))
                 {
-                    Logger.LogWarning<GameSimulation>(
+                    Logger.LogWarning<SimServer>(
                         $"Guest doesn't belong to {player.Username}, this shouldn't happen, disconnecting!");
                     player.Disconnect();
                     return;
@@ -595,24 +607,25 @@ public class GameSimulation
                 uint nameUid = CryptoHelper.StringHashU32(config.UidName);
                 if (config.NetcodeUserId != player.UserId || nameUid != player.State.NameUid)
                 {
-                    Logger.LogWarning<GameSimulation>(
+                    Logger.LogWarning<SimServer>(
                         $"PlayerConfig doesn't belong to {player.Username}, this shouldn't happen, disconnecting!");
                     player.Disconnect();
                     return;
                 }
-
+                
+                BombdServer.Comms.UpdatePlayerData(player.State.PlayerConnectId, config.CharCreationId, config.KartCreationId);
                 player.State.WaitingForPlayerConfig = false;
             }
             else
             {
-                Logger.LogWarning<GameSimulation>(
+                Logger.LogWarning<SimServer>(
                     $"PlayerConfig for {player.Username} has invalid type! Disconnecting!");
                 player.Disconnect();
             }
         }
         catch (Exception)
         {
-            Logger.LogError<GameSimulation>(
+            Logger.LogError<SimServer>(
                 $"Failed to parse PlayerConfig for {player.Username}'s guest, disconnecting them from the game session.");
             player.Disconnect();
         }
@@ -623,7 +636,7 @@ public class GameSimulation
         SyncObject? syncObject = GetOwnedSyncObject(guid, player);
         if (syncObject == null) return false;
         
-        Logger.LogInfo<GameSimulation>($"Updating SyncObject({syncObject})");
+        Logger.LogInfo<SimServer>($"Updating SyncObject({syncObject})");
         
         byte[] array = new byte[data.Count];
         data.CopyTo(array);
@@ -645,7 +658,7 @@ public class GameSimulation
         SyncObject? syncObject = GetOwnedSyncObject(guid, player);
         if (syncObject == null) return false;
         
-        Logger.LogInfo<GameSimulation>($"Removing SyncObject({syncObject})");
+        Logger.LogInfo<SimServer>($"Removing SyncObject({syncObject})");
         _syncObjects.Remove(guid);
         return true;
     }
@@ -659,15 +672,16 @@ public class GameSimulation
             type != NetMessageType.MessageReliableBlock &&
             type != NetMessageType.WandererUpdate &&
             type != NetMessageType.GenericGameplay &&
-            type != NetMessageType.Gameplay)
+            type != NetMessageType.WorldObjectStateChange
+            )
         {
-            Logger.LogTrace<GameSimulation>($"Received NetMessage {type} from {player.Username} ({(uint)player.UserId}:{player.State.NameUid}:{(uint)player.PlayerId})");   
+            Logger.LogTrace<SimServer>($"Received NetMessage {type} from {player.Username} ({(uint)player.UserId}:{player.State.NameUid}:{(uint)player.PlayerId})");   
         }
-
+        
         // The name UID should match the one we've received from the player state update
         if (player.State.HasNameUid && senderNameUid != player.State.NameUid)
         {
-            Logger.LogWarning<GameSimulation>($"NameUID for {player.Username} doesn't match as expected! Disconnecting! ({player.State.NameUid} != {senderNameUid}");
+            Logger.LogWarning<SimServer>($"NameUID for {player.Username} doesn't match as expected! Disconnecting! ({player.State.NameUid} != {senderNameUid}");
             player.Disconnect();
             return;
         }
@@ -683,7 +697,7 @@ public class GameSimulation
                 }
                 catch (Exception)
                 {
-                    Logger.LogWarning<GameSimulation>($"Failed to parse PlayerDetachGuestInfo for {player.Username}, disconnecting them from the session.");
+                    Logger.LogWarning<SimServer>($"Failed to parse PlayerDetachGuestInfo for {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
@@ -704,7 +718,7 @@ public class GameSimulation
                 
                 break;
             }
-            case NetMessageType.ItemMessage_0x10:
+            case NetMessageType.ItemCreate:
             case NetMessageType.ItemDestroy:
             case NetMessageType.ItemHitPlayer:
             case NetMessageType.ItemHitConfirm:
@@ -751,14 +765,14 @@ public class GameSimulation
                 }
                 catch (Exception)
                 {
-                    Logger.LogWarning<GameSimulation>($"Failed to parse PlayerCreateInfo for {player.Username}, disconnecting them from the session.");
+                    Logger.LogWarning<SimServer>($"Failed to parse PlayerCreateInfo for {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
 
                 if (message.Data.Count != player.Guests.Count + 1)
                 {
-                    Logger.LogWarning<GameSimulation>($"PlayerCreateInfo from {player.Username} doesn't contain correct number of infos! Disconnecting them from the session.");
+                    Logger.LogWarning<SimServer>($"PlayerCreateInfo from {player.Username} doesn't contain correct number of infos! Disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
@@ -767,7 +781,7 @@ public class GameSimulation
 
                 if (info.NetcodeUserId != player.UserId || info.NetcodeGamePlayerId != player.PlayerId)
                 {
-                    Logger.LogWarning<GameSimulation>($"PlayerCreateInfo from {player.Username} doesn't match their connection details! Disconnecting them from the session.");
+                    Logger.LogWarning<SimServer>($"PlayerCreateInfo from {player.Username} doesn't match their connection details! Disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
@@ -794,7 +808,7 @@ public class GameSimulation
                     var guest = player.GetGuestByName(guestInfo.PlayerName);
                     if (guest == null || guestInfo.NetcodeUserId != player.UserId || guestInfo.NetcodeGamePlayerId != player.PlayerId)
                     {
-                        Logger.LogWarning<GameSimulation>($"PlayerCreateInfo from {player.Username} contains invalid guest info! Disconnecting them from the session.");
+                        Logger.LogWarning<SimServer>($"PlayerCreateInfo from {player.Username} contains invalid guest info! Disconnecting them from the session.");
                         player.Disconnect();
                         break;
                     }
@@ -819,9 +833,9 @@ public class GameSimulation
                 
                 break;
             }
-            case NetMessageType.WorldobjectCreate:
+            case NetMessageType.WorldObjectCreate:
             {
-                BroadcastGenericMessage(data, NetMessageType.WorldobjectCreate, PacketType.ReliableGameData);
+                BroadcastGenericMessage(data, NetMessageType.WorldObjectCreate, PacketType.ReliableGameData);
                 break;
             }
             case NetMessageType.LeaderChangeRequest:
@@ -834,7 +848,7 @@ public class GameSimulation
                 // Data must be 4 bytes since it's just the new host's nameuid
                 if (data.Count != 4)
                 {
-                    Logger.LogWarning<GameSimulation>($"Failed to parse LeaderChangeRequest from {player.Username}, disconnecting them from the session.");
+                    Logger.LogWarning<SimServer>($"Failed to parse LeaderChangeRequest from {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
@@ -866,7 +880,7 @@ public class GameSimulation
                 }
                 catch (Exception)
                 {
-                    Logger.LogWarning<GameSimulation>(
+                    Logger.LogWarning<SimServer>(
                         $"Failed to parse PlayerLeave message from {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
@@ -909,7 +923,7 @@ public class GameSimulation
                     // Data must be 4 bytes since it's just the voted track id
                     if (data.Count != 4)
                     {
-                        Logger.LogWarning<GameSimulation>($"Failed to parse PostRaceVoteForTrack from {player.Username}, disconnecting them from the session.");
+                        Logger.LogWarning<SimServer>($"Failed to parse PostRaceVoteForTrack from {player.Username}, disconnecting them from the session.");
                         player.Disconnect();
                         break;
                     }
@@ -920,7 +934,7 @@ public class GameSimulation
                     trackId |= data[2] << 8;
                     trackId |= data[3] << 0;
                     
-                    votes.CastVote(player.UserId, trackId);
+                    votes.CastVote(player.UserId, trackId);                    
                     _votePackage.Sync();
                 }
                 
@@ -970,44 +984,28 @@ public class GameSimulation
 
                     if (oldState != newState)
                     {
-                        Logger.LogDebug<GameSimulation>("RaceState: " + _raceInfo.Value.RaceState);
-                        Logger.LogDebug<GameSimulation>("RaceEndServerTime: " + _raceInfo.Value.RaceEndServerTime);
-                        Logger.LogDebug<GameSimulation>("PostRaceServerTime: " + _raceInfo.Value.PostRaceServerTime);
+                        Logger.LogDebug<SimServer>("RaceState: " + _raceInfo.Value.RaceState);
+                        Logger.LogDebug<SimServer>("RaceEndServerTime: " + _raceInfo.Value.RaceEndServerTime);
+                        Logger.LogDebug<SimServer>("PostRaceServerTime: " + _raceInfo.Value.PostRaceServerTime);
 
                         // The current race has been completed
-                        if (newState == RaceState.PostRace)
+                        if (oldState == RaceState.PostRace)
                         {
                             // Reset the flags for the next race
                             foreach (var racer in _players) racer.SetupNextRaceState();
                             EventStarted = false;
-                            _waitingForPlayerNisEvents = true; 
+                            _waitingForPlayerNisEvents = true;
                             _waitingForPlayerStartEvents = false; 
                             _hasSentEventResults = false;
-                        }
-                        
-                        // A single race has ended and we're returning to the gameroom
-                        if (newState == RaceState.Invalid)
-                        {
-                            _waitingForPlayerNisEvents = false;
-                            SetCurrentGameroomState(RoomState.None);
-                            if (IsKarting && _votePackage.Value.IsVoting)
-                            {
-                                var votes = _votePackage.Value;
-                                if (votes.NumPlayersVoted != 0)
-                                {
-                                    votes.FinishVote();
-                                    _votePackage.Sync();
-                                }
-                                
-                                _votePackage.Value.Reset();
-                                _votePackage.Sync();
-                            }
+                            if (_seriesInfo == null)
+                                SetCurrentGameroomState(RoomState.None);
+
                         }
                     }
                 }
                 catch (Exception)
                 {
-                    Logger.LogWarning<GameSimulation>($"Failed to parse SpectatorInfo from {player.Username}, disconnecting them from the session.");
+                    Logger.LogWarning<SimServer>($"Failed to parse SpectatorInfo from {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                 }
                 
@@ -1051,12 +1049,12 @@ public class GameSimulation
                     }
                     
                     string xml = reader.ReadString(len);
-                    Logger.LogDebug<GameSimulation>(xml);
+                    Logger.LogDebug<SimServer>(xml);
                     results = EventResult.Deserialize(xml);
                 }
                 catch (Exception)
                 {
-                    Logger.LogWarning<GameSimulation>($"Failed to parse EventResultsPreliminary for {player.Username}, disconnecting them from the session.");
+                    Logger.LogWarning<SimServer>($"Failed to parse EventResultsPreliminary for {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
@@ -1075,7 +1073,7 @@ public class GameSimulation
 
                 if (!isValid)
                 {
-                    Logger.LogWarning<GameSimulation>($"{player.Username} tried to submit invalid event results. Disconnecting them from the session.");
+                    Logger.LogWarning<SimServer>($"{player.Username} tried to submit invalid event results. Disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
@@ -1092,14 +1090,14 @@ public class GameSimulation
                     // Basic spoofing prevention, don't allow sender name mismatches
                     if (message.Sender != player.Username)
                     {
-                        Logger.LogWarning<GameSimulation>($"TextChatMsg from {player.Username} has mis-matching sender name {message.Sender}, disconnecting them from the session.");
+                        Logger.LogWarning<SimServer>($"TextChatMsg from {player.Username} has mis-matching sender name {message.Sender}, disconnecting them from the session.");
                         player.Disconnect();
                         break;
                     }
                 }
                 catch
                 {
-                    Logger.LogWarning<GameSimulation>($"Failed to parse TextChatMsg from {player.Username}, disconnecting them from the session.");
+                    Logger.LogWarning<SimServer>($"Failed to parse TextChatMsg from {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
@@ -1145,7 +1143,7 @@ public class GameSimulation
             
             case NetMessageType.GroupLeaderMatchmakingStatus:
             case NetMessageType.GenericGameplay:
-            case NetMessageType.Gameplay:
+            case NetMessageType.WorldObjectStateChange:
             case NetMessageType.WandererUpdate:
             {
                 BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
@@ -1163,7 +1161,7 @@ public class GameSimulation
                 }
                 catch (Exception)
                 {
-                    Logger.LogWarning<GameSimulation>($"Failed to parse EventSettingsUpdate from {player.Username}, disconnecting them from the session.");
+                    Logger.LogWarning<SimServer>($"Failed to parse EventSettingsUpdate from {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
@@ -1180,7 +1178,7 @@ public class GameSimulation
                     _seriesInfo = CreateSystemSyncObject(series, NetObjectType.SeriesInfo);
                     settings = series.Events[0];
                 }
-                
+
                 // Since we got new settings, we should update the room attributes for matchmaking
                 Room.UpdateAttributes(settings);
                 
@@ -1225,14 +1223,14 @@ public class GameSimulation
                 }
                 catch (Exception)
                 {
-                    Logger.LogWarning<GameSimulation>($"Invalid PlayerStateUpdate received from {player.Username}, disconnecting them from the session.");
+                    Logger.LogWarning<SimServer>($"Invalid PlayerStateUpdate received from {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
 
                 if (state.NameUid != senderNameUid)
                 {
-                    Logger.LogWarning<GameSimulation>($"PlayerStateUpdate NameUid doesn't match SenderNameUid! Disconnecting player!");
+                    Logger.LogWarning<SimServer>($"PlayerStateUpdate NameUid doesn't match SenderNameUid! Disconnecting player!");
                     player.Disconnect();
                     break;
                 }
@@ -1244,7 +1242,7 @@ public class GameSimulation
                 {
                     if (_players.Any(p => p.State.NameUid == state.NameUid))
                     {
-                        Logger.LogWarning<GameSimulation>($"Disconnecting {player.Username} from game since another user already has the same UID!");
+                        Logger.LogWarning<SimServer>($"Disconnecting {player.Username} from game since another user already has the same UID!");
                         player.Disconnect();
                         break;
                     }
@@ -1277,7 +1275,7 @@ public class GameSimulation
                 }
                 catch (Exception)
                 {
-                    Logger.LogWarning<GameSimulation>($"Failed to parse SyncObjectRemove message from {player.Username}, disconnecting them from the session.");
+                    Logger.LogWarning<SimServer>($"Failed to parse SyncObjectRemove message from {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
@@ -1298,7 +1296,7 @@ public class GameSimulation
                 }
                 catch (Exception)
                 {
-                    Logger.LogWarning<GameSimulation>($"Failed to parse SyncObjectUpdate message from {player.Username}, disconnecting them from the session.");
+                    Logger.LogWarning<SimServer>($"Failed to parse SyncObjectUpdate message from {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
@@ -1322,7 +1320,7 @@ public class GameSimulation
                     }
                     catch (Exception)
                     {
-                        Logger.LogWarning<GameSimulation>($"Failed to parse SyncObject message from {player.Username}, disconnecting them from the session.");
+                        Logger.LogWarning<SimServer>($"Failed to parse SyncObject message from {player.Username}, disconnecting them from the session.");
                         player.Disconnect();
                         break;
                     }
@@ -1356,7 +1354,7 @@ public class GameSimulation
                     }
                     catch (Exception)
                     {
-                        Logger.LogWarning<GameSimulation>($"Failed to parse SyncObjectCreate message from {player.Username}, disconnecting them from the session.");
+                        Logger.LogWarning<SimServer>($"Failed to parse SyncObjectCreate message from {player.Username}, disconnecting them from the session.");
                         player.Disconnect();
                         break;
                     }
@@ -1375,7 +1373,7 @@ public class GameSimulation
 
             default:
             {
-                Logger.LogWarning<GameSimulation>("Unhandled network message type: " + type);
+                Logger.LogWarning<SimServer>("Unhandled network message type: " + type);
 
                 // byte[] b = new byte[data.Count];
                 // data.CopyTo(b, 0);
@@ -1383,6 +1381,17 @@ public class GameSimulation
 
                 break;
             }
+        }
+    }
+
+    private void FinalizeVote()
+    {
+        if (IsKarting && Type == ServerType.Competitive && _votePackage.Value.IsVoting)
+        {
+            Logger.LogDebug<SimServer>("Finalizing vote!");
+            var votes = _votePackage.Value;
+            votes.FinishVote();
+            _votePackage.Sync();
         }
     }
 
@@ -1397,7 +1406,7 @@ public class GameSimulation
         string xml = EventResult.Serialize(_eventResults);
         _eventResults.Clear();
 
-        Logger.LogDebug<GameSimulation>("Finishing event with XML:\n" + xml);
+        Logger.LogDebug<SimServer>("Finishing event with XML:\n" + xml);
 
         return xml;
     }
@@ -1514,15 +1523,17 @@ public class GameSimulation
                             EventStarted = true;
                         }
                     }
+
+                    break;
                 }
 
                 bool shouldSendResults = 
                     (raceInfo.RaceState == RaceState.WaitingForRaceEnd && TimeHelper.LocalTime >= raceInfo.RaceEndServerTime) ||
                     _players.All(player => player.IsSpectator || player.HasSentRaceResults);
 
-                if (shouldSendResults && !_hasSentEventResults && EventStarted)
+                if (shouldSendResults && !_hasSentEventResults)
                 {
-                    string destination = IsKarting ? "destPod" : "destGameroom";
+                    string destination = "destGameroom";
                     if (_raceSettings != null && _seriesInfo != null)
                     {
                         var events = _seriesInfo.Value.Events;
@@ -1538,7 +1549,7 @@ public class GameSimulation
                     // Single xp races in ModNation just return back to the kart park
                     else if (IsRanked) destination = "destKartPark";
 
-                    Logger.LogInfo<GameSimulation>($"{Room.Game.GameName} race has been completed, destination is {destination}");
+                    Logger.LogInfo<SimServer>($"{Room.Game.GameName} race has been completed, destination is {destination}");
 
                     int postRaceDelay = _raceConstants.PostRaceTime;
                     var message = new NetMessageEventResults
@@ -1550,7 +1561,7 @@ public class GameSimulation
                         PostEventDelayTime = TimeHelper.LocalTime + postRaceDelay,
                         PostEventScreenTime = postRaceDelay
                     };
-                    
+
                     BroadcastMessage(message, NetMessageType.EventResultsFinal, PacketType.ReliableGameData);
                     if (_seriesInfo != null)
                     {
@@ -1565,6 +1576,10 @@ public class GameSimulation
                     BroadcastMessage(new NetMessageRandomSeed { Seed = _seed }, PacketType.ReliableGameData);
                     _hasSentEventResults = true;
                 }
+
+                // Finalize the results for Karting before the post race section ends
+                if (raceInfo.RaceState == RaceState.PostRace && (uint)TimeHelper.LocalTime >= (uint)raceInfo.PostRaceServerTime - 1500u)
+                    FinalizeVote();
                 
                 break;
             }

@@ -1,6 +1,6 @@
 ﻿using Bombd.Helpers;
-using Bombd.Simulation;
 using Bombd.Types.GameManager;
+using Bombd.Types.Network.Simulation;
 
 namespace Bombd.Types.Requests;
 

@@ -1,11 +1,10 @@
 ﻿using Bombd.Helpers;
 using Bombd.Protocols;
 using Bombd.Serialization;
-using Bombd.Types.Network;
 using Bombd.Types.Network.Messages;
 using Bombd.Types.Network.Room;
 
-namespace Bombd.Simulation;
+namespace Bombd.Types.Network.Simulation;
 
 public class GamePlayer
 {
@@ -74,6 +73,25 @@ public class GamePlayer
     {
         using NetworkWriterPooled writer = NetworkWriterPool.Get();
         ArraySegment<byte> packed = NetworkMessages.Pack(writer, message);
+        Send(packed, PacketType.ReliableGameData);
+    }
+
+    public void SendMessage(ArraySegment<byte> data)
+    {
+        Send(data, PacketType.ReliableGameData);
+    }
+    
+    public void SendMessage(INetworkWritable writable, NetMessageType type)
+    {
+        using NetworkWriterPooled writer = NetworkWriterPool.Get();
+        ArraySegment<byte> packed = NetworkMessages.Pack(writer, writable, type);
+        Send(packed, PacketType.ReliableGameData);
+    }
+
+    public void SendMessage(int data, NetMessageType type)
+    {
+        using NetworkWriterPooled writer = NetworkWriterPool.Get();
+        ArraySegment<byte> packed = NetworkMessages.PackInt(writer, data, type);
         Send(packed, PacketType.ReliableGameData);
     }
 }

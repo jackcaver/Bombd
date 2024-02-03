@@ -9,16 +9,24 @@ public struct NetMessagePlayerSessionInfo : INetworkMessage
 
     public GameSessionStatus JoinStatus;
     public int UserId;
-    public int PlayerId;
-    public uint NameUid;
+    
+    public NetMessagePlayerSessionInfo(GameSessionStatus status)
+    {
+        JoinStatus = status;
+    }
+
+    public NetMessagePlayerSessionInfo(GameSessionStatus status, int userId)
+    {
+        JoinStatus = status;
+        UserId = userId;
+    }
 
     public void Write(NetworkWriter writer)
     {
         writer.Write((int)JoinStatus);
         writer.Write(UserId);
-
-        // These don't even get used in Modnation
-        writer.Write(PlayerId);
-        writer.Write(NameUid);
+        // These two fields are technically PlayerId and NameUid, but ModNation doesn't use them,
+        // so I'm not going to bother keeping track of them
+        writer.Clear(0x8);
     }
 }

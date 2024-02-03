@@ -43,7 +43,8 @@ public class SslServer : IServer
         _socket.Listen(128);
 
         Endpoint = _socket.LocalEndPoint!;
-        StartAccept();
+
+        Task.Run(async () => await Block());
     }
 
     public void Stop()
@@ -64,23 +65,21 @@ public class SslServer : IServer
         _service.OnTick();
     }
     
-    private async void StartAccept()
+    private async Task Block()
     {
-        if (!IsActive) return;
-
-        try
+        while (IsActive)
         {
-            Socket client = await _socket.AcceptAsync();
-            var session = new SslConnection(_service, this);
-            Connections.TryAdd(session.Id, session);
-            session.Connect(client);
+            try
+            {
+                Socket client = await _socket.AcceptAsync();
+                var session = new SslConnection(_service, this);
+                session.Connect(client);
+            }
+            catch (Exception e)
+            {
+                Logger.LogError<SslServer>("An error occurred while accepting a connection");
+                Logger.LogError<SslServer>(e.ToString());
+            }            
         }
-        catch (Exception e)
-        {
-            Logger.LogError<SslServer>("An error occurred while accepting a connection");
-            Logger.LogError<SslServer>(e.ToString());
-        }
-        
-        StartAccept();
     }
 }

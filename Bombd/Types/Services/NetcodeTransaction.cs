@@ -22,7 +22,7 @@ public class NetcodeTransaction
         var document = new XmlDocument();
         document.LoadXml(xml);
         ServiceName = document.SelectSingleNode("service").Attributes["name"].Value;
-        MethodName = document.SelectSingleNode("service/transaction/method")?.InnerText.Trim().Split(' ')[0];
+        MethodName = document.SelectSingleNode("service/transaction/method")?.InnerText.Split(' ')[1].Trim();
         TransactionType = document.SelectSingleNode("service/transaction")?.Attributes?["type"].Value;
         TransactionId = int.Parse(document.SelectSingleNode("service/transaction").Attributes?["id"].Value);
         foreach (object? element in document.GetElementsByTagName("param"))
@@ -128,14 +128,14 @@ public class NetcodeTransaction
         XmlElement transaction = document.CreateXmlElement(root, "transaction");
         transaction.SetAttribute("id", TransactionId.ToString());
         transaction.SetAttribute("type", TransactionType);
-        XmlElement method = document.CreateXmlElement(transaction, "method", MethodName);
+        XmlElement method = document.CreateXmlElement(transaction, "method", $" {MethodName} ");
 
         if (string.IsNullOrEmpty(Error))
         {
             foreach (string param in _params.Keys)
             {
                 XmlElement node = document.CreateXmlElement(method, "param");
-                document.CreateXmlElement(node, "name", param);
+                document.CreateXmlElement(node, "name", $" {param} ");
                 document.CreateXmlElement(node, "value", $" {_params[param]} ");
             }
         }

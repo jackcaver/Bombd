@@ -9,17 +9,17 @@ namespace Bombd.Protocols.RUDP;
 
 public class RudpConnection : ConnectionBase
 {
-    public const int MinPacketSize = 8;
-    public const int MaxPacketSize = 1040;
-    public const int MaxPayloadSize = 1024;
+    private const int MinPacketSize = 8;
+    private const int MaxPacketSize = 1040;
+    private const int MaxPayloadSize = 1024;
 
-    public const int VoipDataSize = 896;
-    
-    public const int PacketTimeout = 30000;
-    public const int ResendTime = 300;
-    
-    public const int MaxNetcodeSize = 0xFFFF;
-    public const int MaxGamedataSize = 0x7FFFFF;
+    private const int VoipDataSize = 896;
+
+    private const int PacketTimeout = 5000;
+    private const int ResendTime = 300;
+
+    private const int MaxNetcodeSize = 0xFFFF;
+    private const int MaxGamedataSize = 0x7FFFFF;
     
     private readonly List<RudpAckRecord> _ackList = new(16);
 
@@ -149,7 +149,7 @@ public class RudpConnection : ConnectionBase
             if (State > ConnectionState.WaitingForConnection) Service.OnDisconnected(this);
 
             State = ConnectionState.Disconnected;
-            _server.connectionsToRemove.Add(Endpoint);
+            _server.ConnectionsToRemove.Add(Endpoint);
 
             return;
         }
@@ -174,7 +174,7 @@ public class RudpConnection : ConnectionBase
             _secret = secretNum;
             _remoteGamedataSequence = gamedataSequence;
 
-            Session? session = BombdServer.Instance.SessionManager.GetSession(this);
+            Session? session = BombdServer.Instance.SessionManager.Get(this);
             if (session == null)
             {
                 Logger.LogInfo<RudpConnection>("Got invalid session id. Disconnecting.");
@@ -437,7 +437,7 @@ public class RudpConnection : ConnectionBase
 
         State = ConnectionState.Disconnected;
 
-        _server.connectionsToRemove.Add(Endpoint);
+        _server.ConnectionsToRemove.Add(Endpoint);
     }
 
     private void SendReliable(PacketType protocol, ArraySegment<byte> data)

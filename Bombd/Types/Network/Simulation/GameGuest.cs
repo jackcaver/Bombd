@@ -1,7 +1,4 @@
-﻿using Bombd.Serialization;
-using Bombd.Types.Network;
-
-namespace Bombd.Simulation;
+﻿namespace Bombd.Types.Network.Simulation;
 
 public class GameGuest
 {

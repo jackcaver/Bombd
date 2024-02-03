@@ -4,10 +4,10 @@ using Bombd.Helpers;
 using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
-using Bombd.Simulation;
 using Bombd.Types.Events;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
+using Bombd.Types.Network.Simulation;
 using Bombd.Types.Requests;
 using Bombd.Types.Services;
 

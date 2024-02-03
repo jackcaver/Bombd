@@ -1,8 +1,8 @@
 ﻿using System.Collections.Concurrent;
 using Bombd.Helpers;
-using Bombd.Simulation;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
+using Bombd.Types.Network.Simulation;
 using Bombd.Types.Requests;
 
 namespace Bombd.Core;

@@ -8,17 +8,14 @@ namespace Bombd.Protocols.RUDP;
 
 public class RudpServer : IServer
 {
-    public const long Timestep = 66;
     private readonly byte[] _recv = new byte[1040];
 
     private readonly BombdService _service;
-    public readonly Dictionary<EndPoint, RudpConnection> Connections = new();
+    private readonly Dictionary<EndPoint, RudpConnection> _connections = new();
 
-    internal readonly HashSet<EndPoint> connectionsToRemove = new();
-
-    private long _accumulatedTime;
+    internal readonly HashSet<EndPoint> ConnectionsToRemove = [];
+    
     private EndPoint _clientEndpoint = new IPEndPoint(IPAddress.Any, 0);
-    private EndPoint _endpoint;
     private Socket? _socket;
 
     public RudpServer(
@@ -58,9 +55,9 @@ public class RudpServer : IServer
             return;
         }
         
-        foreach (var connection in Connections.Values)
+        foreach (RudpConnection connection in _connections.Values)
             connection.Disconnect();
-        Connections.Clear();
+        _connections.Clear();
         
         _socket.Close();
         _socket = null;
@@ -104,14 +101,14 @@ public class RudpServer : IServer
 
     private void HandleData(ArraySegment<byte> segment)
     {
-        if (Connections.TryGetValue(_clientEndpoint, out RudpConnection? connection))
+        if (_connections.TryGetValue(_clientEndpoint, out RudpConnection? connection))
         {
             connection.OnData(segment);
             return;
         }
 
         connection = new RudpConnection(_clientEndpoint, _service, this);
-        Connections.Add(_clientEndpoint, connection);
+        _connections.Add(_clientEndpoint, connection);
         connection.OnData(segment);
     }
 
@@ -122,10 +119,10 @@ public class RudpServer : IServer
             while (ReceiveFrom(out ArraySegment<byte> segment)) HandleData(segment);
             _service.OnTick();
             
-            foreach (RudpConnection connection in Connections.Values) connection.Update();
+            foreach (RudpConnection connection in _connections.Values) connection.Update();
             
-            foreach (EndPoint client in connectionsToRemove) Connections.Remove(client);
-            connectionsToRemove.Clear();
+            foreach (EndPoint client in ConnectionsToRemove) _connections.Remove(client);
+            ConnectionsToRemove.Clear();
         }
         catch (Exception ex)
         {

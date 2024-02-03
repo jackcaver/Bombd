@@ -1,5 +1,5 @@
 ﻿using Bombd.Serialization;
-using Bombd.Simulation;
+using Bombd.Types.Network.Simulation;
 
 namespace Bombd.Types.Network.Messages;
 

@@ -23,6 +23,4 @@ server.AddService<Matchmaking>();
 server.AddService<GameManager>();
 server.AddService<GameBrowser>();
 
-ServerCommunication.Initialize().Wait();
-
 server.Start();

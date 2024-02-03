@@ -133,7 +133,6 @@ public class Matchmaking : BombdService
     
     public override void OnDisconnected(ConnectionBase connection)
     {
-        Bombd.SessionManager.UnregisterSession(connection);
         UserInfo.TryRemove(connection.UserId, out _);
         
         // In case we're currently matchmaking, need to make sure that it gets cleaned up.

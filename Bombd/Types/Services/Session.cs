@@ -2,7 +2,12 @@
 
 public class Session
 {
-    public HashSet<string> ConnectedServices = new();
-    public string GameName;
+    public string GameName = string.Empty;
+    
+    public string PlayerConnectUuid = string.Empty;
+    public int PlayerConnectId;
+    public string Username = string.Empty;
+    public int Issuer;
+    
     public uint HashSalt;
 }

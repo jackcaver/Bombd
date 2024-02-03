@@ -26,6 +26,23 @@ public class NetworkMessages
 
         return payload;
     }
+    
+    public static ArraySegment<byte> Pack(NetworkWriter writer, INetworkWritable message, NetMessageType type)
+    {
+        writer.Reset();
+
+        writer.Write((byte)type);
+        writer.Offset += 3;
+        writer.Write(SimServerUid);
+        writer.Write(message);
+
+        ArraySegment<byte> payload = writer.ToArraySegment();
+        int size = payload.Count;
+        payload[2] = (byte)(size >> 8);
+        payload[3] = (byte)(size >> 0);
+
+        return payload;
+    }
 
     public static ArraySegment<byte> PackData(NetworkWriter writer, ArraySegment<byte> message, NetMessageType type)
     {
