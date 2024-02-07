@@ -157,6 +157,14 @@ public class SslConnection : ConnectionBase
             try
             {
                 int len = await _sslStream.ReadAsync(_recv.AsMemory(0, MessageHeaderSize));
+                
+                // Socket has been shutdown on the other side
+                if (len == 0)
+                {
+                    Disconnect();
+                    return;
+                }
+                
                 if (len != MessageHeaderSize)
                 {
                     Logger.LogError<SslConnection>("Received message with invalid header. Closing connection.");
