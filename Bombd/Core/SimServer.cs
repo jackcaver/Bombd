@@ -17,29 +17,35 @@ namespace Bombd.Core;
 
 public class SimServer
 {
-    public int Owner;
-
-    private readonly List<GamePlayer> _players;
-    private readonly List<PlayerInfo> _playerInfos = new();
-    private readonly List<PlayerState> _playerStates = new();
-    private readonly Dictionary<int, GamePlayer> _playerLookup = new();
-    private readonly Dictionary<int, ItemNode> _itemNodes = new();
+    public int Owner { get; private set; }
     
-    private int _seed = CryptoHelper.GetRandomSecret();
-    private int _lastStateTime = TimeHelper.LocalTime;
-    private readonly Dictionary<int, SyncObject> _syncObjects = new();
-
     public readonly GameRoom Room;
     public readonly Platform Platform;
     public readonly ServerType Type;
     public readonly bool IsRanked;
+    
+    // Needs to be able to be set by the subclass because top track races in ModNation
+    // don't get created with series race attributes set.
+    public bool IsSeries { get; private set; }
+    
+    public readonly bool IsModNation;
+    public readonly bool IsKarting;
+    
     public RaceState RaceState { get; private set; } = RaceState.Invalid;
-    public bool IsKarting => Platform == Platform.Karting;
-    public bool IsModNation => Platform == Platform.ModNation;
     public bool HasRaceSettings => _raceSettings != null;
     public bool HasSeriesSetting => _seriesInfo != null;
+
+    private readonly List<GamePlayer> _players = [];
+    private readonly List<PlayerInfo> _playerInfos = [];
+    private readonly List<PlayerState> _playerStates = [];
+    private readonly Dictionary<int, GamePlayer> _playerLookup = new();
+    private readonly NetArbitrationServer _arbitrationServer;
     
-    private RaceConstants _raceConstants;
+    private readonly Dictionary<int, SyncObject> _syncObjects = new();
+    private int _seed = CryptoHelper.GetRandomSecret();
+    
+    private readonly RaceConstants _raceConstants;
+    private readonly List<EventResult> _eventResults = [];
     private int _raceStateEndTime;
     private float _pausedTimeRemaining;
     private string _destination = Destination.GameRoom;
@@ -52,20 +58,24 @@ public class SimServer
     private GenericSyncObject<StartingGrid> _startingGrid;
     private GenericSyncObject<EventSettings>? _raceSettings;
     private GenericSyncObject<SeriesInfo>? _seriesInfo;
-    private List<EventResult> _eventResults = new();
     
     public SimServer(ServerType type, GameRoom room, int owner, bool isRanked, bool isSeries)
     {
-        Room = room;
-        Type = type;
         Platform = room.Platform;
+        Type = type;
+        Room = room;
         Owner = owner;
-        _players = room.Game.Players;
         IsRanked = isRanked;
+        IsSeries = isSeries;
+
+        IsModNation = Platform == Platform.ModNation;
+        IsKarting = Platform == Platform.Karting;
         
-        if (Platform == Platform.ModNation)
+        if (IsModNation)
             _raceConstants = isRanked ? RaceConstants.Ranked : RaceConstants.ModNation;
         else _raceConstants = RaceConstants.Karting;
+
+        _arbitrationServer = new NetArbitrationServer(OnReleaseArbitratedItem);
         
         Logger.LogInfo<SimServer>($"Starting SimServer ({Type}:{Platform}, IsRanked = {isRanked}, IsSeries = {isSeries})");
         
@@ -114,15 +124,15 @@ public class SimServer
 
     private void SwitchAllToRacers()
     {
-        foreach (var player in _players)
+        foreach (GamePlayer player in _players)
             player.IsSpectator = false;
-        foreach (var info in _playerInfos)
+        foreach (PlayerInfo info in _playerInfos)
             info.Operation = PlayerJoinStatus.RacerPending;
         
-        if (IsKarting)
-            BroadcastKartingPlayerSessionInfo();
+        if (IsModNation)
+            Broadcast(new NetMessageSessionInfo(PlayerSessionOperation.SwitchAllToRacer), NetMessageType.PlayerSessionInfo);
         else
-            BroadcastMessage(new NetMessagePlayerSessionInfo { Operation = PlayerSessionOperation.SwitchAllToRacer }, PacketType.ReliableGameData);
+            BroadcastSessionInfo();
     }
 
     private void SwitchToSpectator(GamePlayer player)
@@ -130,81 +140,72 @@ public class SimServer
         if (player.IsSpectator) return;
         
         player.IsSpectator = true;
-        if (IsKarting) BroadcastKartingPlayerSessionInfo();
-        else BroadcastMessage(new NetMessagePlayerSessionInfo
+        if (IsKarting) BroadcastSessionInfo();
+        else
         {
-            Operation = PlayerSessionOperation.SwitchRacerToSpectator,
-            UserId = player.UserId
-        }, PacketType.ReliableGameData);
+            Broadcast(new NetMessageSessionInfo(PlayerSessionOperation.SwitchRacerToSpectator, player.UserId), 
+                NetMessageType.PlayerSessionInfo);   
+        }
         
         if (RaceState == RaceState.GameroomCountdown)
             UpdateRaceSetup();
     }
 
-    private void BroadcastKartingPlayerSessionInfo()
+    private void BroadcastSessionInfo()
     {
-        if (!IsKarting) return;
-        BroadcastMessage(new NetMessagePlayerCreateInfo { Data = _playerInfos }, PacketType.ReliableGameData);
+        // In ModNation, the session messages seem to only be switches and joins rather than their actual states,
+        // so re-sending them might cause issues?
+        if (IsModNation) return;
+        
+        Broadcast(new NetMessagePlayerInfo { Data = _playerInfos }, NetMessageType.PlayerSessionInfo);
     }
     
     public void OnPlayerJoin(GamePlayer player)
     {
         // Don't actually know if this is random per room or random per player,
         // I assume it's used for determinism, but I don't know?
-        player.SendReliableMessage(new NetMessageRandomSeed { Seed = _seed });
+        player.SendMessage(_seed, NetMessageType.RandomSeed);
         
         // Add player to lookup cache
         _playerLookup[player.UserId] = player;
         _playerStates.Add(player.State);
+        _players.Add(player);
         
         if (IsModNation)
         {
             player.IsSpectator = !CanJoinAsRacer();
+            PlayerSessionOperation operation = 
+                player.IsSpectator ? PlayerSessionOperation.JoinAsSpectator : PlayerSessionOperation.JoinAsRacer;
             
-            // Tell everybody else about yourself
-            foreach (GamePlayer peer in _players)
-            {
-                PlayerSessionOperation operation =
-                    player.IsSpectator ? PlayerSessionOperation.JoinAsSpectator : PlayerSessionOperation.JoinAsRacer;
-                
-                peer.SendReliableMessage(new NetMessagePlayerSessionInfo
-                {
-                    Operation = operation,
-                    UserId = player.UserId
-                });
-            }
-
-            // Tell the player about everyone who is in the game.
+            // Tell everybody in the game room about our session state
+            Broadcast(new NetMessageSessionInfo(operation, player.UserId), NetMessageType.PlayerSessionInfo);
+            // Tell the joining player about everybody else who is in the game room
             foreach (GamePlayer peer in _players)
             {
                 if (player == peer) continue;
-                PlayerSessionOperation operation =
-                    peer.IsSpectator ? PlayerSessionOperation.JoinAsSpectator : PlayerSessionOperation.JoinAsRacer;
-                player.SendReliableMessage(new NetMessagePlayerSessionInfo
-                {
-                    Operation = operation,
-                    UserId = peer.UserId
-                });
+                operation = peer.IsSpectator ? PlayerSessionOperation.JoinAsSpectator : PlayerSessionOperation.JoinAsRacer;
+                player.SendMessage(new NetMessageSessionInfo(operation, peer.UserId), NetMessageType.PlayerSessionInfo);
             }
-        } else BroadcastKartingPlayerSessionInfo();
+        }
+        else
+        {
+            // In Karting, we can just send the current player infos, our state will get sent when the client sends
+            // an initial PlayerCreateInfo message
+            player.SendMessage(new NetMessagePlayerInfo { Data = _playerInfos }, NetMessageType.PlayerCreateInfo);
+        }
 
         // Initialize any sync objects that exist
         foreach (SyncObject syncObject in _syncObjects.Values)
         {
-            var message = MakeCreateSyncObjectMessage(syncObject);
-            
             // Needs to be sent twice with a create and update message,
             // they use the same net message type in Modnation despite having
             // separate network event types, but whatever.
-            player.SendReliableMessage(message);
+            SendSyncObjectMessage(syncObject, NetObjectMessageType.Create, player);
 
             // If the segment is empty, it probably hasn't been initialized
             // by the owner yet, don't send it.
             if (syncObject.Data.Count != 0)
-            {
-                message = MakeUpdateSyncObjectMessage(syncObject);
-                player.SendReliableMessage(message);
-            }
+                SendSyncObjectMessage(syncObject, NetObjectMessageType.Update, player);
         }
     }
     
@@ -214,24 +215,19 @@ public class SimServer
         _playerStates.Remove(player.State);
         _playerLookup.Remove(player.UserId);
         _playerInfos.RemoveAll(info => info.NetcodeUserId == player.UserId);
+        _players.Remove(player);
         
-        // Destroy all sync objects owned by the player, this will realistically only be the player info object,
-        // but just to be safe search for all owned objects anyway.
+        // Destroy all sync objects owned by the player
         IEnumerable<KeyValuePair<int, SyncObject>>
             owned = _syncObjects.Where(x => x.Value.OwnerUserId == player.UserId);
         foreach (KeyValuePair<int, SyncObject> pair in owned)
         {
-            var message = MakeRemoveSyncObjectMessage(pair.Value);
-            BroadcastMessage(player, message, PacketType.ReliableGameData);
+            SendSyncObjectMessage(pair.Value, NetObjectMessageType.Remove);
             _syncObjects.Remove(pair.Key);
         }
         
         // Send a leave reason to everybody else in the session
-        BroadcastMessage(new NetMessagePlayerLeave(Platform)
-        {
-            PlayerName = player.Username,
-            Reason = player.LeaveReason
-        }, PacketType.ReliableGameData);
+        Broadcast(new NetMessagePlayerLeave(Platform) { PlayerName = player.Username, Reason = player.LeaveReason }, NetMessageType.PlayerLeave);
 
         if (Type == ServerType.Competitive && !player.IsSpectator)
         {
@@ -276,6 +272,18 @@ public class SimServer
         }
     }
 
+    private void OnReleaseArbitratedItem(ItemNode item, ItemAcquirerNode acquirer)
+    {
+        var message = new NetMessageArbitratedItem(Platform)
+        {
+            ItemType = item.TypeId,
+            ItemId = item.Uid,
+            PlayerNameUid = acquirer.Uid
+        };
+
+        Broadcast(message, NetMessageType.ArbitratedItemRelease);
+    }
+
     private void RecalculatePodPositions()
     {
         if (!IsKarting) return;
@@ -285,84 +293,67 @@ public class SimServer
            info.PodLocation = $"POD_Player0{position++}_Placer";
         
         // Send the new session info to everybody in the game
-        BroadcastKartingPlayerSessionInfo();
+        BroadcastSessionInfo();
     }
 
-    private void BroadcastVoipData(GamePlayer sender, ArraySegment<byte> data)
+    private void BroadcastPlayerState()
     {
-        foreach (var player in _players)
+        Broadcast(new NetMessagePlayerUpdate(Platform) { Data = _playerStates }, NetMessageType.BulkPlayerStateUpdate);
+    }
+    
+    private void BroadcastVoipData(ArraySegment<byte> data, GamePlayer sender)
+    {
+        foreach (GamePlayer player in _players)
         {
             if (player == sender) continue;
             player.Send(data, PacketType.VoipData);
         }
     }
-    
-    private void BroadcastGenericIntMessage(int value, NetMessageType messageType, PacketType packetType)
+
+    private void BroadcastBlock(ArraySegment<byte> data, bool reliable, GamePlayer? sender = null)
     {
         using NetworkWriterPooled writer = NetworkWriterPool.Get();
-        ArraySegment<byte> message = NetworkMessages.PackInt(writer, value, messageType);
-        foreach (GamePlayer player in _players)
-        {
-            player.Send(message, packetType);
-        }
-    }
-    
-    private void BroadcastGenericMessage(GamePlayer sender, ArraySegment<byte> data, NetMessageType messageType, PacketType packetType)
-    {
-        using NetworkWriterPooled writer = NetworkWriterPool.Get();
-        ArraySegment<byte> message = NetworkMessages.PackData(writer, data, messageType);
+        ArraySegment<byte> message = NetworkMessages.PackData(writer, data,
+            reliable ? NetMessageType.MessageReliableBlock : NetMessageType.MessageUnreliableBlock);
+        PacketType type = reliable ? PacketType.ReliableGameData : PacketType.UnreliableGameData;
         foreach (GamePlayer player in _players)
         {
             if (player == sender) continue;
-            player.Send(message, packetType);
-        }
-    }
-    
-    private void BroadcastGenericMessage(ArraySegment<byte> data, NetMessageType messageType, PacketType packetType)
-    {
-        using NetworkWriterPooled writer = NetworkWriterPool.Get();
-        ArraySegment<byte> message = NetworkMessages.PackData(writer, data, messageType);
-        foreach (GamePlayer player in _players)
-        {
-            player.Send(message, packetType);
+            player.Send(message, type);
         }
     }
 
-    private void BroadcastMessage(GamePlayer sender, INetworkMessage message, PacketType type)
+    private void Broadcast(int data, NetMessageType type, GamePlayer? sender = null)
     {
         using NetworkWriterPooled writer = NetworkWriterPool.Get();
-        ArraySegment<byte> payload = NetworkMessages.Pack(writer, message);
+        ArraySegment<byte> message = NetworkMessages.PackInt(writer, data, type);
         foreach (GamePlayer player in _players)
         {
             if (player == sender) continue;
-            player.Send(payload, type);
+            player.Send(message, PacketType.ReliableGameData);
         }
     }
     
-    private void BroadcastMessage(INetworkMessage message, PacketType type)
+    private void Broadcast(ArraySegment<byte> data, NetMessageType type, GamePlayer? sender = null)
     {
         using NetworkWriterPooled writer = NetworkWriterPool.Get();
-        ArraySegment<byte> payload = NetworkMessages.Pack(writer, message);
-        foreach (GamePlayer player in _players) player.Send(payload, type);
-    }
-
-    private void BroadcastMessage(INetworkMessage message, NetMessageType messageType, PacketType type)
-    {
-        using NetworkWriterPooled writer = NetworkWriterPool.Get();
-        ArraySegment<byte> payload = NetworkMessages.Pack(writer, message);
-        payload[0] = (byte)messageType;
-        foreach (GamePlayer player in _players) player.Send(payload, type);
-    }
-    
-    private void BroadcastPlayerStates()
-    {
-        if (IsKarting)
+        ArraySegment<byte> message = NetworkMessages.PackData(writer, data, type);
+        foreach (GamePlayer player in _players)
         {
-            BroadcastMessage(new NetMessageKartingPlayerUpdate { StateUpdates = _playerStates }, PacketType.ReliableGameData);
-            return;
+            if (player == sender) continue;
+            player.Send(message, PacketType.ReliableGameData);   
         }
-        
-        BroadcastMessage(new NetMessageModnationPlayerUpdate { StateUpdates = _playerStates }, PacketType.ReliableGameData);
+    }
+    
+    private void Broadcast(INetworkWritable data, NetMessageType type, GamePlayer? sender = null)
+    {
+        using NetworkWriterPooled writer = NetworkWriterPool.Get();
+        ArraySegment<byte> message = NetworkMessages.Pack(writer, data, type);
+        foreach (GamePlayer player in _players)
+        {
+            if (player == sender) continue;
+            player.Send(message, PacketType.ReliableGameData);
+        }
     }
 
     private void UpdateVotePackage()
@@ -418,15 +409,15 @@ public class SimServer
         {
             case RoomState.None:
             { 
-                BroadcastPlayerStates();
+                BroadcastPlayerState();
                 SwitchAllToRacers();
                 break;
             }
             case RoomState.RaceInProgress:
             {
                 StartEvent();
-                BroadcastKartingPlayerSessionInfo();
-                BroadcastPlayerStates();
+                BroadcastSessionInfo();
+                BroadcastPlayerState();
                 break;
             }
             case RoomState.Ready:
@@ -461,8 +452,7 @@ public class SimServer
                 break;
             }
         }
-
-        _lastStateTime = TimeHelper.LocalTime;
+        
         _gameroomState.Sync();
     }
     
@@ -481,17 +471,17 @@ public class SimServer
         _syncObjects[syncObject.Guid] = syncObject;
         syncObject.OnUpdate = () =>
         {
-            var message = MakeUpdateSyncObjectMessage(syncObject);
-            BroadcastMessage(message, PacketType.ReliableGameData);
+            SendSyncObjectMessage(syncObject, NetObjectMessageType.Update);
         };
         
+        // If there are players in the game room, make sure to send the newly created sync object to them
         if (_players.Count != 0)
         {
-            BroadcastMessage(MakeCreateSyncObjectMessage(syncObject), PacketType.ReliableGameData);
-            BroadcastMessage(MakeUpdateSyncObjectMessage(syncObject), PacketType.ReliableGameData);
+            SendSyncObjectMessage(syncObject, NetObjectMessageType.Create);
+            SendSyncObjectMessage(syncObject, NetObjectMessageType.Update);
         }
         
-        Logger.LogDebug<SimServer>($"{syncObject} has been created by the system.");
+        Logger.LogInfo<SimServer>($"{syncObject} has been created by the system.");
         
         return syncObject;
     }
@@ -563,28 +553,40 @@ public class SimServer
         return syncObject;
     }
     
-    private INetworkMessage MakeCreateSyncObjectMessage(SyncObject syncObject)
+    private void SendSyncObjectMessage(SyncObject syncObject, NetObjectMessageType messageType,
+        GamePlayer? recipient = null)
     {
-        if (IsKarting) 
-            return new NetMessageSyncObjectCreate(syncObject);
+        INetworkWritable message;
+        var type = NetMessageType.SyncObjectCreate;
+        if (IsKarting)
+        {
+            switch (messageType)
+            {
+                case NetObjectMessageType.Create:
+                {
+                    message = new NetMessageSyncObjectCreate(syncObject);
+                    break;
+                }
+                case NetObjectMessageType.Update:
+                {
+                    message = new NetMessageSyncObjectUpdate(syncObject);
+                    type = NetMessageType.SyncObjectUpdate;
+                    break;
+                }
+                case NetObjectMessageType.Remove:
+                {
+                    message = new NetMessageSyncObjectRemove(syncObject);
+                    type = NetMessageType.SyncObjectRemove;
+                    break;
+                }
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(messageType), messageType, null);
+            }
+        }
+        else message = new NetMessageSyncObject(syncObject, messageType);
         
-        return new NetMessageSyncObject(syncObject, NetObjectMessageType.Create);
-    }
-
-    private INetworkMessage MakeUpdateSyncObjectMessage(SyncObject syncObject)
-    {
-        if (IsKarting) 
-            return new NetMessageSyncObjectUpdate(syncObject);
-        
-        return new NetMessageSyncObject(syncObject, NetObjectMessageType.Update);
-    }
-
-    private INetworkMessage MakeRemoveSyncObjectMessage(SyncObject syncObject)
-    {
-        if (IsKarting) 
-            return new NetMessageSyncObjectRemove(syncObject);
-        
-        return new NetMessageSyncObject(syncObject, NetObjectMessageType.Remove);
+        if (recipient != null) recipient.SendMessage(message, type);
+        else Broadcast(message, type);
     }
     
     private bool PersistUserSyncedObject(SyncObject syncObject, GamePlayer player)
@@ -665,7 +667,6 @@ public class SimServer
         data.CopyTo(array);
         syncObject.Data = new ArraySegment<byte>(array);
         
-
         // Check if we've received the player config object yet
         var playerConfigType = NetObjectType.PlayerConfig;
         bool isKartingConfig = Platform == Platform.Karting && syncObject.Type == playerConfigType.KartingTypeId;
@@ -713,10 +714,10 @@ public class SimServer
         {
             case NetMessageType.PlayerDetachGuestInfo:
             {
-                NetMessagePlayerCreateInfo message;
+                NetMessagePlayerInfo message;
                 try
                 {
-                    message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);
+                    message = NetworkReader.Deserialize<NetMessagePlayerInfo>(data);
                 }
                 catch (Exception)
                 {
@@ -734,7 +735,7 @@ public class SimServer
                 }
                 
                 // Tell everybody else that we've detached the guest(s)
-                BroadcastGenericMessage(data, type, PacketType.ReliableGameData);
+                Broadcast(data, type);
                 
                 // Recalculate the pod positions
                 if (Type == ServerType.Pod) RecalculatePodPositions();
@@ -754,37 +755,75 @@ public class SimServer
                 // ItemHitConfirm gets sent by the player that's being hit, so
                 // we don't have to verify that message.
                 
-                BroadcastGenericMessage(data, type, PacketType.ReliableGameData);
+                Broadcast(data, type, player);
                 break;
             }
             case NetMessageType.ArbitratedItemCreateBlock:
+            {
+                var block = NetMessageArbitratedItemBlock.ReadVersioned(data, Platform);
+                var created = new List<int>(block.ItemIds.Count);
+                foreach (var item in block.ItemIds)
+                {
+                    if (_arbitrationServer.Create(block.ItemType, block.PlayerNameUid, block.AcquireBehavior, item))
+                        created.Add(item);
+                }
+                
+                block.ItemIds = created;
+                Broadcast(block, NetMessageType.ArbitratedItemCreateBlock);
+                
+                break;
+            }
             case NetMessageType.ArbitratedItemDestroyBlock:
             {
-                // I assume this has to be sent to everyone else on the server
-                // We might also have to actually keep track of the item ids?
+                var block = NetMessageArbitratedItemBlock.ReadVersioned(data, Platform);
+                var destroyed = new List<int>(block.ItemIds.Count);
+                foreach (var item in block.ItemIds)
+                {
+                    if (_arbitrationServer.Destroy(item, block.PlayerNameUid))
+                        destroyed.Add(item);
+                }
                 
-                BroadcastGenericMessage(data, type, PacketType.ReliableGameData);
+                block.ItemIds = destroyed;
+                Broadcast(block, NetMessageType.ArbitratedItemDestroyBlock);
+                
                 break;
             }
             case NetMessageType.ArbitratedItemAcquire:
-            case NetMessageType.ArbitratedItemRelease:
-            case NetMessageType.ArbitratedItemDestroy:
+            {
+                var item = NetMessageArbitratedItem.ReadVersioned(data, Platform);
+                var response = NetMessageType.ArbitratedItemAcquireFailed;
+                if (_arbitrationServer.Acquire(item.ItemId, item.PlayerNameUid, item.Timeout))
+                    response = NetMessageType.ArbitratedItemAcquire;
+                Broadcast(data, response);
+                break;
+            }
             case NetMessageType.ArbitratedItemCreate:
             {
-                // This message can be responded to with a failure, what's the case for that?
-                // Is it just if it's currently in timeout?
-                    // E.g., you grabbed the item, but you didn't send the acquire response fast enough
-                    // so somebody else acquired it and the item is currently in a timeout phase, so you cant
-                    // acquire it?
-                BroadcastGenericMessage(data, type, PacketType.ReliableGameData);
+                var item = NetMessageArbitratedItem.ReadVersioned(data, Platform);
+                if (_arbitrationServer.Create(item.ItemType, item.PlayerNameUid, AcquireBehavior.SingleAcquire, item.ItemId))
+                    Broadcast(data, type);
+                break;
+            }
+            case NetMessageType.ArbitratedItemRelease:
+            {
+                var item = NetMessageArbitratedItem.ReadVersioned(data, Platform);
+                _arbitrationServer.Release(item.ItemId, item.PlayerNameUid);
+                break;
+            }
+            case NetMessageType.ArbitratedItemDestroy:
+            {
+                var item = NetMessageArbitratedItem.ReadVersioned(data, Platform);
+                if (_arbitrationServer.Destroy(item.ItemId, item.PlayerNameUid))
+                    Broadcast(data, type);
+                
                 break;
             }
             case NetMessageType.PlayerCreateInfo:
             {
-                NetMessagePlayerCreateInfo message;
+                NetMessagePlayerInfo message;
                 try
                 {
-                    message = NetworkReader.Deserialize<NetMessagePlayerCreateInfo>(data);
+                    message = NetworkReader.Deserialize<NetMessagePlayerInfo>(data);
                 }
                 catch (Exception)
                 {
@@ -846,8 +885,7 @@ public class SimServer
                 
                 // Does the player need their status back? If we changed the status maybe, but we should probably
                 // just send it back when their gameroom is ready.
-                BroadcastMessage(player, message, PacketType.ReliableGameData);
-                
+                Broadcast(message, type, player);
                 
                 // Since we have the player info now, we can recalculate the positions in
                 // pod, if relevant
@@ -858,7 +896,7 @@ public class SimServer
             }
             case NetMessageType.WorldObjectCreate:
             {
-                BroadcastGenericMessage(data, NetMessageType.WorldObjectCreate, PacketType.ReliableGameData);
+                Broadcast(data, type);
                 break;
             }
             case NetMessageType.LeaderChangeRequest:
@@ -923,8 +961,8 @@ public class SimServer
                 else if (RaceState == RaceState.GameroomCountdown)
                     UpdateRaceSetup();
                 
-                BroadcastPlayerStates();
-                BroadcastKartingPlayerSessionInfo();
+                BroadcastPlayerState();
+                BroadcastSessionInfo();
                 
                 break;
             }
@@ -997,8 +1035,8 @@ public class SimServer
                     _raceSettings.Value = raceSettings;
                     Room.UpdateAttributes(raceSettings);
                 }
-
-                BroadcastGenericIntMessage((int)player.State.NameUid, NetMessageType.RankedEventVeto, PacketType.ReliableGameData);
+                
+                Broadcast((int)player.State.NameUid, NetMessageType.RankedEventVeto);
                 break;
             }
             case NetMessageType.SpectatorInfo:
@@ -1118,7 +1156,7 @@ public class SimServer
                     break;
                 }
                 
-                BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
+                Broadcast(data, type, player);
                 break;
             }
 
@@ -1127,8 +1165,7 @@ public class SimServer
                 // challenge nameuid
                 // challengee nameuid
                 // invite status 1
-                
-                BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
+                Broadcast(data, type, player);
                 break;
             }
 
@@ -1136,8 +1173,7 @@ public class SimServer
             {
                 // challenger nameuid
                 // challengee nameuid
-
-                BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
+                Broadcast(data, type, player);
                 break;
             }
 
@@ -1146,7 +1182,7 @@ public class SimServer
                 // challenge nameuid
                 // challengee nameuid
                 // invite status
-                BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
+                Broadcast(data, type, player);
                 break;
             }
 
@@ -1158,7 +1194,7 @@ public class SimServer
                     _raceStateEndTime = TimeHelper.LocalTime + 30_000;
                 }
                 
-                BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
+                Broadcast(data, type, player);
                 break;
             }
             
@@ -1167,7 +1203,7 @@ public class SimServer
             case NetMessageType.WorldObjectStateChange:
             case NetMessageType.WandererUpdate:
             {
-                BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
+                Broadcast(data, type, player);
                 break;
             }
             case NetMessageType.EventSettingsUpdate:
@@ -1187,6 +1223,8 @@ public class SimServer
                     break;
                 }
                 
+                settings.IsRanked = IsRanked;
+                
                 // Can't limit to less people than we actually have
                 if (settings.MaxHumans < _players.Count)
                     break;
@@ -1195,6 +1233,8 @@ public class SimServer
                 // initial event settings, switch to a series race here.
                 if (settings.CareerEventIndex == CoiInfo.SPHERE_INDEX_TOP_TRACKS)
                 {
+                    IsSeries = true;
+                    
                     var series = WebApiManager.GetTopTrackSeries(Owner, settings.KartParkHome);
                     _seriesInfo = CreateSystemSyncObject(series, NetObjectType.SeriesInfo);
                     settings = series.Events[0];
@@ -1210,12 +1250,12 @@ public class SimServer
             }
             case NetMessageType.VoipPacket:
             {
-                BroadcastVoipData(player, data);
+                BroadcastVoipData(data, player);
                 break;
             }
             case NetMessageType.MessageReliableBlock:
             {
-                BroadcastGenericMessage(player, data, NetMessageType.MessageReliableBlock, PacketType.ReliableGameData);
+                BroadcastBlock(data, true, player);
                 break;
             }
             case NetMessageType.MessageUnreliableBlock:
@@ -1223,7 +1263,7 @@ public class SimServer
                 // The only unreliable message block I've seen get sent is just input data,
                 // and it just gets broadcasted to all other players, should probably check for other conditions?
                 // But it seems fine for now.
-                BroadcastGenericMessage(player, data, NetMessageType.MessageUnreliableBlock, PacketType.UnreliableGameData);
+                BroadcastBlock(data, false, player);
                 break;
             }
             
@@ -1232,15 +1272,8 @@ public class SimServer
                 PlayerState state;
                 try
                 {
-                    if (IsKarting)
-                    {
-                        var message = NetworkReader.Deserialize<NetMessageKartingPlayerUpdate>(data);
-                        state = message.StateUpdates.ElementAt(0);
-                    }
-                    else
-                    {
-                        state = PlayerState.LoadXml(data);
-                    }
+                    NetMessagePlayerUpdate message = NetMessagePlayerUpdate.ReadVersioned(data, Platform);
+                    state = message.Data.ElementAt(0);
                 }
                 catch (Exception)
                 {
@@ -1279,11 +1312,11 @@ public class SimServer
                     if (player.State is { IsConnecting: true, WaitingForPlayerConfig: false })
                     {
                         player.State.IsConnecting = false;
-                        BroadcastKartingPlayerSessionInfo();
+                        BroadcastSessionInfo();
                     }   
                 }
                 
-                BroadcastPlayerStates();
+                BroadcastPlayerState();
                 
                 break;
             }
@@ -1304,7 +1337,7 @@ public class SimServer
                 
                 if (RemoveUserSyncObject(message.Guid, player))
                 {
-                    BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
+                    Broadcast(data, type, player);
                 }
                 break;
             }
@@ -1325,7 +1358,7 @@ public class SimServer
                 
                 if (UpdateUserSyncObject(message.Guid, message.Data, player))
                 {
-                    BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
+                    Broadcast(data, type, player);
                 }
                 break;
             }
@@ -1387,7 +1420,7 @@ public class SimServer
                 // If the operation succeeded, send the sync object message to everyone else in the server.
                 if (success)
                 {
-                    BroadcastGenericMessage(player, data, type, PacketType.ReliableGameData);
+                    Broadcast(data, type, player);
                 }
                 
                 break;
@@ -1396,11 +1429,6 @@ public class SimServer
             default:
             {
                 Logger.LogWarning<SimServer>("Unhandled network message type: " + type);
-
-                // byte[] b = new byte[data.Count];
-                // data.CopyTo(b, 0);
-                // File.WriteAllBytes(type.ToString(), b);
-
                 break;
             }
         }
@@ -1421,8 +1449,7 @@ public class SimServer
     private string FinalizeEventResults()
     {
         RaceType mode = _raceSettings!.Value.RaceType;
-        ScoreboardType scoreboard = _raceSettings!.Value.ScoreboardType;
-
+        
         if (IsKarting && mode == RaceType.Battle) _eventResults.Sort((a, z) => z.BattleKills.CompareTo(a.BattleKills));
         else _eventResults.Sort((a, z) => a.EventScore.CompareTo(z.EventScore));
 
@@ -1465,7 +1492,7 @@ public class SimServer
             racers[i].TotalPoints += RaceConstants.SeriesPoints[i];
         }
 
-        var results = racers.OrderByDescending(p => p.TotalPoints).Select((p, i) => new SeriesResult()
+        var results = racers.OrderByDescending(p => p.TotalPoints).Select((p, i) => new SeriesResult
         {
             OwnerName = p.Username,
             TotalPoints = p.TotalPoints,
@@ -1560,7 +1587,7 @@ public class SimServer
                         List<GamePlayer> racers = _players.Where(player => !player.IsSpectator).ToList();
                         if (racers.All(racer => (racer.State.Flags & PlayerStateFlags.ReadyForNis) != 0))
                         {
-                            BroadcastGenericIntMessage(TimeHelper.LocalTime, NetMessageType.NisStart, PacketType.ReliableGameData);
+                            Broadcast(TimeHelper.LocalTime, NetMessageType.NisStart);
                             RaceState = RaceState.Nis;
                         }
                         
@@ -1572,7 +1599,7 @@ public class SimServer
                         if (racers.All(x => (x.State.Flags & PlayerStateFlags.ReadyForEvent) != 0))
                         {
                             int countdown = TimeHelper.LocalTime + _raceConstants.EventCountdownTime;
-                            BroadcastGenericIntMessage(countdown, NetMessageType.EventStart, PacketType.ReliableGameData);
+                            Broadcast(countdown, NetMessageType.EventStart);
                             RaceState = RaceState.Racing;
                             // Since the race has started, clear all the race load flags for next time
                             foreach (var racer in racers) 
@@ -1591,7 +1618,6 @@ public class SimServer
                         if (shouldSendResults)
                         {
                             string results = FinalizeEventResults();
-                            
                             
                             _destination = Destination.GameRoom;
                             if (_raceSettings != null && _seriesInfo != null)
@@ -1613,35 +1639,41 @@ public class SimServer
                             int postRaceDelay = _raceConstants.PostRaceTime;
                             RaceState = RaceState.PostRace;
                             _raceStateEndTime = TimeHelper.LocalTime + postRaceDelay;
-                            var message = new NetMessageEventResults
+                            var message = new NetMessageEventResults(Platform)
                             {
                                 SenderNameUid = NetworkMessages.SimServerUid,
-                                Platform = Platform,
                                 ResultsXml = results,
                                 Destination = _seriesInfo != null ? Destination.PostSeries : _destination,
                                 PostEventDelayTime = _raceStateEndTime,
                                 PostEventScreenTime = postRaceDelay
                             };
                             
-                            BroadcastMessage(message, NetMessageType.EventResultsFinal, PacketType.ReliableGameData);
+                            Broadcast(message, NetMessageType.EventResultsFinal);
                             if (_seriesInfo != null)
                             {
                                 message.Destination = _destination;
                                 message.ResultsXml = FinalizeSeriesResults();
-                                BroadcastMessage(message, NetMessageType.SeriesResults, PacketType.ReliableGameData);
+                                Broadcast(message, NetMessageType.SeriesResults);
                             }
                             
                             if (IsKarting) UpdateVotePackage();
 
                             // Broadcast new seed for the next race
                             _seed = CryptoHelper.GetRandomSecret();
-                            BroadcastMessage(new NetMessageRandomSeed(_seed), PacketType.ReliableGameData);
+                            Broadcast(_seed, NetMessageType.RandomSeed);
                         }
                         
                         break;
                     }
                     case RaceState.PostRace:
                     {
+                        // Destroy all the arbitrated items that were created
+                        var block = new NetMessageArbitratedItemBlock(Platform);
+                        foreach (ItemNode item in _arbitrationServer.Items)
+                            block.ItemIds.Add(item.Uid);
+                        _arbitrationServer.Items.Clear();
+                        Broadcast(block, NetMessageType.ArbitratedItemDestroyBlock);
+                        
                         // After the race has officially ended, reset the gameroom state
                         if (TimeHelper.LocalTime >= _raceStateEndTime)
                         {
@@ -1667,7 +1699,7 @@ public class SimServer
                                         racer.State.IsConnecting = true;
                                     }
                                     
-                                    BroadcastPlayerStates();
+                                    BroadcastPlayerState();
                                     SetCurrentGameroomState(RoomState.None);
                                 
                                     // Reset back to the first series race
@@ -1695,7 +1727,7 @@ public class SimServer
                         }
                 
                         // Finalize the results for Karting before the post race section ends
-                        if ((uint)TimeHelper.LocalTime >= (uint)_raceStateEndTime - 1500u)
+                        if ((uint)TimeHelper.LocalTime >= (uint)_raceStateEndTime - 1000u)
                             FinalizeVote();
                         break;
                     }
@@ -1708,7 +1740,8 @@ public class SimServer
 
     public void Tick()
     {
-        if (Type != ServerType.Competitive) return;
-        SimUpdate();
+        _arbitrationServer.Update();
+        if (Type == ServerType.Competitive)
+            SimUpdate();
     }
 }

@@ -3,10 +3,8 @@ using Bombd.Types.Network.Simulation;
 
 namespace Bombd.Types.Network.Messages;
 
-public struct NetMessageSyncObject : INetworkMessage, INetworkReadable
+public struct NetMessageSyncObject : INetworkWritable, INetworkReadable
 {
-    public NetMessageType Type => NetMessageType.SyncObjectCreate;
-
     public string OwnerName = string.Empty;
     public string DebugTag = string.Empty;
     public int ObjectType;

@@ -3,10 +3,8 @@ using Bombd.Types.Network.Simulation;
 
 namespace Bombd.Types.Network.Messages;
 
-public struct NetMessageSyncObjectUpdate : INetworkMessage, INetworkReadable
+public struct NetMessageSyncObjectUpdate : INetworkWritable, INetworkReadable
 {
-    public NetMessageType Type => NetMessageType.SyncObjectUpdate;
-
     public int Guid;
     public ArraySegment<byte> Data = ArraySegment<byte>.Empty;
     

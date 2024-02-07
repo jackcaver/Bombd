@@ -2,10 +2,8 @@
 
 namespace Bombd.Types.Network.Messages;
 
-public struct NetMessageWorldObjectCreate : INetworkMessage, INetworkReadable
+public struct NetMessageWorldObjectCreate : INetworkWritable, INetworkReadable
 {
-    public NetMessageType Type => NetMessageType.WorldObjectCreate;
-
     public int MessageType;
     public int EmitterUid;
     public List<int> Uids;

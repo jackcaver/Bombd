@@ -3,8 +3,8 @@
 public class ItemNode
 {
     public int TypeId;
-    public AcquireBehavior AcquireBehavior;
+    public AcquireBehavior AcquireBehavior = AcquireBehavior.SingleAcquire;
     public int Uid;
-    public int OwnerUid;
-    public List<ItemAcquirerNode> Acquirers = new();
+    public uint OwnerUid;
+    public readonly List<ItemAcquirerNode> Acquirers = [];
 }

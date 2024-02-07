@@ -3,20 +3,17 @@ using Bombd.Serialization;
 
 namespace Bombd.Types.Network.Messages;
 
-public struct NetMessageEventResults : INetworkMessage
+public struct NetMessageEventResults(Platform platform) : INetworkWritable
 {
-    public NetMessageType Type => NetMessageType.EventResultsFinal;
-    public required Platform Platform;
-
     public uint SenderNameUid;
     public string ResultsXml;
     public string Destination;
-    public int PostEventDelayTime; // 614885743
+    public int PostEventDelayTime;
     public float PostEventScreenTime;
 
     public void Write(NetworkWriter writer)
     {
-        if (Platform == Platform.ModNation)
+        if (platform == Platform.ModNation)
         {
             writer.Write(ResultsXml, 0x1800);
             writer.Write(Destination, 0x40);

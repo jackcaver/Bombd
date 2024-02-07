@@ -1,7 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
 using Bombd.Types.Network.Objects;
 
-namespace Bombd.Types.Network.Messages.v2;
+namespace Bombd.Types.Network.Data;
 
 [InlineArray(10)]
 public struct NetAiDataSet

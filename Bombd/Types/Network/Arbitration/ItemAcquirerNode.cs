@@ -1,8 +1,8 @@
 ﻿namespace Bombd.Types.Network.Arbitration;
 
-public struct ItemAcquirerNode
+public class ItemAcquirerNode
 {
-    public int Uid;
+    public uint Uid;
     public int Timeout;
-    public int AcquireTime;
+    public uint AcquireTime;
 }

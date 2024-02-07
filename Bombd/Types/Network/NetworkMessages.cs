@@ -10,23 +10,6 @@ public class NetworkMessages
     private const int HeaderSize = 0x8;
     public static readonly uint SimServerUid = CryptoHelper.StringHashU32(SimServerName);
     
-    public static ArraySegment<byte> Pack(NetworkWriter writer, INetworkMessage message)
-    {
-        writer.Reset();
-
-        writer.Write((byte)message.Type);
-        writer.Offset += 3;
-        writer.Write(SimServerUid);
-        writer.Write(message);
-
-        ArraySegment<byte> payload = writer.ToArraySegment();
-        int size = payload.Count;
-        payload[2] = (byte)(size >> 8);
-        payload[3] = (byte)(size >> 0);
-
-        return payload;
-    }
-    
     public static ArraySegment<byte> Pack(NetworkWriter writer, INetworkWritable message, NetMessageType type)
     {
         writer.Reset();

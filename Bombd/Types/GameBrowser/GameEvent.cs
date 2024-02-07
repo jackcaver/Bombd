@@ -1,7 +1,6 @@
 ﻿using System.Xml.Serialization;
-using Bombd.Types.GameBrowser;
 
-namespace Bombd.Types.Network;
+namespace Bombd.Types.GameBrowser;
 
 public class GameEvent
 {

@@ -3,16 +3,14 @@ using Bombd.Types.Network.Simulation;
 
 namespace Bombd.Types.Network.Messages;
 
-public struct NetMessagePlayerCreateInfo : INetworkMessage, INetworkReadable
+public struct NetMessagePlayerInfo : INetworkWritable, INetworkReadable
 {
-    public NetMessageType Type => NetMessageType.PlayerCreateInfo;
-
     public List<PlayerInfo> Data;
-
+    
     public void Read(NetworkReader reader)
     {
-        Data = new List<PlayerInfo>();
         int count = reader.ReadInt32();
+        Data = new List<PlayerInfo>(count);
         for (int i = 0; i < count; ++i)
             Data.Add(reader.Read<PlayerInfo>());
     }
@@ -20,7 +18,7 @@ public struct NetMessagePlayerCreateInfo : INetworkMessage, INetworkReadable
     public void Write(NetworkWriter writer)
     {
         writer.Write(Data.Count);
-        foreach (var data in Data)
+        foreach (PlayerInfo data in Data)
             writer.Write(data);
     }
 }

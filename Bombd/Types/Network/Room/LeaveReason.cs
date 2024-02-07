@@ -1,4 +1,4 @@
-﻿namespace Bombd.Types.Network.Room;
+namespace Bombd.Types.Network.Room;
 
 public enum LeaveReason
 {

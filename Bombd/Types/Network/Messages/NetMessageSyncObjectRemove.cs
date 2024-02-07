@@ -3,10 +3,8 @@ using Bombd.Types.Network.Simulation;
 
 namespace Bombd.Types.Network.Messages;
 
-public struct NetMessageSyncObjectRemove : INetworkMessage, INetworkReadable
+public struct NetMessageSyncObjectRemove : INetworkWritable, INetworkReadable
 {
-    public NetMessageType Type => NetMessageType.SyncObjectRemove;
-
     public int Guid;
     
     public NetMessageSyncObjectRemove()

@@ -73,7 +73,7 @@ public static class CryptoHelper
     
     public static int StringHash32Upper(string str) => StringHash32(str.ToUpper());
 
-    public static byte[] GetMD5(byte[] data) => MD5.Create().ComputeHash(data);
+    public static byte[] GetMD5(byte[] data) => MD5.HashData(data);
 
     // TODO: Make changes to this to avoid allocations since it gets called a lot
     private static byte[] GetHMAC(ArraySegment<byte> data, uint salt)

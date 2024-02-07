@@ -1,6 +1,6 @@
 ﻿using System.Xml.Serialization;
 
-namespace Bombd.Types.Network;
+namespace Bombd.Types.GameBrowser;
 
 public enum GameEventType
 {
@@ -15,5 +15,7 @@ public enum GameEventType
     [XmlEnum("gameAddedSubMatch")]
     GameAddSubMatch,
     [XmlEnum("gameShutdown")]
-    Shutdown
+    Shutdown,
+    [XmlEnum("unknown")]
+    Unknown
 }

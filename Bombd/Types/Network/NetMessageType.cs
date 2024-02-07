@@ -152,38 +152,24 @@ public enum NetMessageType : byte
     GenericGameplay = 0x18, // size = 12
     PlayerStateUpdate = 0x19, // size = 8
     
-    // mItemType
-    // mItemId
-    // mPlayerNameUID
-    // mTimeout
-    // mParam
-    // mFlags
-    ArbitratedItemCreate = 0x1a, // size = 24
-    ArbitratedItemDestroy = 0x1b, // size = 24
-    
-    // KARTING
+    // KARTING. size = 0x18
         // int mItemType
         // int mItemId
         // int mPlayerNameUID
         // int mTimeout
         // int mParam
         // int mFlags
-    // MODNATION
-        // int ??? some kind of index?
+    // MODNATION, size = 0x58
+        // int mItemType
         // int mItemId
         // int mPlayerNameUID
         // int mTimeout - Unused?
         // int ??? - No idea, flags or param maybe
-    ArbitratedItemAcquire = 0x1c, // size = 24
-    
-    // KARTING
-        // int mItemType
-        // int mItemId
-        // int mPlayerNameUID
-        // int mTimeout
-        // int mParam
-        // int mFlags
-    ArbitratedItemRelease = 0x1d, // size = 24
+    // ModNation sends a Create and a Destroy event to request game creation rights for a COI?
+    ArbitratedItemCreate = 0x1a,
+    ArbitratedItemDestroy = 0x1b,
+    ArbitratedItemAcquire = 0x1c,
+    ArbitratedItemRelease = 0x1d,
     
     ArbitratedItemDestroyBlock = 0x1e, // size = 12304
     EventSettingsUpdate = 0x1f, // size = 132

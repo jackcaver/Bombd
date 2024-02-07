@@ -1,4 +1,4 @@
-﻿namespace Bombd.Protocols;
+namespace Bombd.Protocols;
 
 public enum ConnectionState
 {

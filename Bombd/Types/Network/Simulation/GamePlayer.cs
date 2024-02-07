@@ -33,7 +33,7 @@ public class GamePlayer
     public bool HasSentRaceResults;
     public bool HasFinishedRace;
     public bool ListeningForGameEvents;
-
+    
     public float Score = float.PositiveInfinity;
     public int Points;
     public int TotalPoints;
@@ -67,14 +67,7 @@ public class GamePlayer
     {
         Room.Simulation.OnNetworkMessage(this, sender, type, data);
     }
-
-    public void SendReliableMessage(INetworkMessage message)
-    {
-        using NetworkWriterPooled writer = NetworkWriterPool.Get();
-        ArraySegment<byte> packed = NetworkMessages.Pack(writer, message);
-        Send(packed, PacketType.ReliableGameData);
-    }
-
+    
     public void SendMessage(ArraySegment<byte> data)
     {
         Send(data, PacketType.ReliableGameData);

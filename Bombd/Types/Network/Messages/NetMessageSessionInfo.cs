@@ -3,19 +3,17 @@ using Bombd.Types.Network.Room;
 
 namespace Bombd.Types.Network.Messages;
 
-public struct NetMessagePlayerSessionInfo : INetworkMessage
+public struct NetMessageSessionInfo : INetworkWritable
 {
-    public NetMessageType Type => NetMessageType.PlayerSessionInfo;
-
     public PlayerSessionOperation Operation;
     public int UserId;
     
-    public NetMessagePlayerSessionInfo(PlayerSessionOperation operation)
+    public NetMessageSessionInfo(PlayerSessionOperation operation)
     {
         Operation = operation;
     }
 
-    public NetMessagePlayerSessionInfo(PlayerSessionOperation operation, int userId)
+    public NetMessageSessionInfo(PlayerSessionOperation operation, int userId)
     {
         Operation = operation;
         UserId = userId;

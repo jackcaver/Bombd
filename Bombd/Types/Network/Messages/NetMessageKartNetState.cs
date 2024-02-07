@@ -1,6 +1,9 @@
-﻿namespace Bombd.Types.Network.Messages.v2;
+﻿using Bombd.Helpers;
+using Bombd.Types.Network.Data;
 
-public struct NetMessageKartNetState
+namespace Bombd.Types.Network.Messages;
+
+public struct NetMessageKartNetState(Platform platform)
 {
     // xA ??? (NetMatrix44 mLocalWorld)
         // int rotation?
@@ -20,10 +23,6 @@ public struct NetMessageKartNetState
     // byte z [-3, 3]
     // x1 Padding
     // ulong Flags
-    // int LocalTime/Sequence
-    // int PlayerNameUID
-    
-    
-    
-    
+    public int LocalTime;
+    public uint PlayerNameUid;
 }

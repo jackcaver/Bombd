@@ -1,4 +1,4 @@
-﻿namespace Bombd.Types.Services;
+namespace Bombd.Types.Services;
 
 public class Session
 {
