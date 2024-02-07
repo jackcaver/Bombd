@@ -2,6 +2,7 @@
 
 public class KickReason
 {
+    public const string Disconnected = "disconnected";
     public const string LeaderKickRequest = "leaderKickRequest";
     public const string TrackDownloadFailed = "trackDownloadFailed";
     public const string TrackDownloadTimeout = "trackDownloadTimeout";

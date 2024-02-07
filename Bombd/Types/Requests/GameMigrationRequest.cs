@@ -9,7 +9,7 @@ public struct GameMigrationRequest
     public int HostUserId;
     public Platform Platform;
     public string? GameName;
-    public List<string> Guests;
+    public string? Guest;
     public List<GenericInt32> PlayerIdList;
     public GameAttributes? Attributes;
 }

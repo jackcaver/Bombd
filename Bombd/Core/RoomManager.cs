@@ -53,9 +53,9 @@ public class RoomManager
         }
     }
     
-    public GamePlayer? TryJoinRoom(string username, int userId, GameRoom room, List<string>? guests = null)
+    public GamePlayer? RequestJoinRoom(string username, int userId, GameRoom room, string? guest)
     {
-        GamePlayer? player = room.TryJoin(username, userId, guests);
+        GamePlayer? player = room.RequestJoin(username, userId, guest);
         if (player == null) return null;
         
         if (room.Platform == Platform.Karting)
@@ -65,16 +65,25 @@ public class RoomManager
         return player;
     }
 
-    public GamePlayer JoinRoom(string username, int userId, int playerId, GameRoom room, List<string>? guests = null)
+    public GamePlayer JoinRoom(string username, int userId, int playerId, GameRoom room)
     {
-        GamePlayer player = room.Join(username, userId, playerId, guests);
+        GamePlayer player = room.Join(username, userId, playerId);
         if (room.Platform == Platform.Karting)
             IncrementPlayerCount(room);
         _userRooms[player.UserId] = room;
         return player;
     }
 
-    public bool TryLeaveCurrentRoom(int userId)
+    public GamePlayer JoinRoomWithGuest(string username, string guestName, int userId, int playerId, int guestId, GameRoom room)
+    {
+        GamePlayer player = room.JoinWithGuest(username, guestName, userId, playerId, guestId);
+        if (room.Platform == Platform.Karting)
+            IncrementPlayerCount(room);
+        _userRooms[player.UserId] = room;
+        return player;
+    }
+    
+    public bool RequestLeaveCurrentRoom(int userId)
     {
         GameRoom? room = GetRoomByUser(userId);
         if (room == null) return false;
@@ -85,7 +94,7 @@ public class RoomManager
         _userRooms.Remove(userId);
 
         GamePlayer player = room.GetUser(userId);
-        return room.TryLeave(player.PlayerId);
+        return room.Leave(player.PlayerId);
     }
 
     public GameRoom CreateRoom(CreateGameRequest request)
@@ -132,7 +141,7 @@ public class RoomManager
                     GameName = name,
                     GameBrowserName = name,
                     GameId = id,
-                    Players = new GameManagerPlayerList(),
+                    Players = [],
                     Attributes = request.Attributes
                 },
                 Type = type,

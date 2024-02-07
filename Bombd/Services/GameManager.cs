@@ -26,25 +26,60 @@ public class GameManager : BombdService
     [Transaction("joinGame")]
     public void JoinGame(TransactionContext context)
     {
+        if (!context.Request.TryGet("gamename", out string? gameName))
+        {
+            context.Response.Error = JoinFailReason.GameNotFound;
+            return;
+        }
+        
+        GameRoom? room = Bombd.RoomManager.GetRoomByName(gameName);
+        if (room == null || room.Platform != context.Connection.Platform)
+        {
+            context.Response.Error = JoinFailReason.GameNotFound;
+            return;
+        }
+
+        int numSlots = 1;
+        if (context.Request.TryGet("guest", out string guest))
+        {
+            // Only a single guest is allowed in online play
+            if (guest.Split(",").Length > 1)
+            {
+                context.Response.Error = "tooManyGuests";
+                return;
+            }
+
+            numSlots++;
+        }
+        
+        if (!context.Request.TryGet("reservationKey", out string? reservationKey))
+        {
+            if (room.IsFull)
+            {
+                context.Response.Error = JoinFailReason.GameFull;
+                return;
+            }
+
+            if (!Bombd.GameServer.ReserveSlotsInGame(gameName, numSlots, out reservationKey))
+            {
+                context.Response.Error = JoinFailReason.NotEnoughSlots;
+                return;
+            }
+        }
+        
         context.Response["listenIP"] = BombdConfig.Instance.ExternalIP;
         context.Response["listenPort"] = Bombd.GameServer.Port.ToString();
         context.Response["hashSalt"] = context.Session.HashSalt.ToString();
         context.Response["sessionId"] = context.Connection.SessionId.ToString();
-        
-        List<string> guests = new();
-        if (context.Request.TryGet("guest", out string guest))
-            guests.AddRange(guest.Split(","));
-
-        context.Request.TryGet("reservationKey", out string? reservationKey);
         
         Bombd.GameServer.AddPlayerToJoinQueue(new PlayerJoinRequest
         {
             Username = context.Connection.Username,
             Timestamp = TimeHelper.LocalTime,
             UserId = context.Connection.UserId,
-            GameName = context.Request["gamename"],
+            GameName = gameName,
             ReservationKey = reservationKey,
-            Guests = guests
+            Guest = guest
         });
     }
 
@@ -63,9 +98,15 @@ public class GameManager : BombdService
         context.Response["hashSalt"] = context.Session.HashSalt.ToString();
         context.Response["sessionId"] = context.Connection.SessionId.ToString();
         
-        List<string> guests = new();
         if (context.Request.TryGet("guest", out string guest))
-            guests.AddRange(guest.Split(","));
+        {
+            // Only a single guest is allowed in online play
+            if (guest.Split(",").Length > 1)
+            {
+                context.Response.Error = "tooManyGuests";
+                return;
+            }
+        }
         
         Bombd.GameServer.AddPlayerToJoinQueue(new PlayerJoinRequest
         {
@@ -73,7 +114,7 @@ public class GameManager : BombdService
             Timestamp = TimeHelper.LocalTime,
             UserId = context.Connection.UserId,
             GameName = room.Game.GameName,
-            Guests = guests
+            Guest = guest
         });
     }
 
@@ -96,7 +137,7 @@ public class GameManager : BombdService
         {
             context.Response["reservationKey"] = reservationKey;
         }
-        else context.Response.Error = "RoomFull";
+        else context.Response.Error = JoinFailReason.GameFull;
     }
 
     [Transaction("logClientMessage")]
@@ -120,7 +161,7 @@ public class GameManager : BombdService
         // join another game, so just handle that case here by returning early.
         if (gameName != currentGameName) return;
         
-        Bombd.GameServer.AddPlayerToLeaveQueue(context.Connection.UserId, context.Connection.Username, "leftGame");
+        Bombd.GameServer.AddPlayerToLeaveQueue(context.Connection.UserId, context.Connection.Username, "userInitiatedLeave");
     }
 
     [Transaction("migrateToGame")]
@@ -135,16 +176,14 @@ public class GameManager : BombdService
         if (context.Request.Has("attributes"))
             attributes = NetworkReader.Deserialize<GameAttributes>(context.Request["attributes"]);
         
-        List<string> guests = new();
-        if (context.Request.TryGet("guest", out string guest))
-            guests.AddRange(guest.Split(","));
+        context.Request.TryGet("guest", out string? guest);
         
         Bombd.GameServer.AddMigrationGroup(new GameMigrationRequest
         {
             HostUserId = context.Connection.UserId,
             Platform = context.Connection.Platform,
             GameName = gameName,
-            Guests = guests,
+            Guest = guest,
             Attributes = attributes,
             PlayerIdList = players
         });

@@ -7,5 +7,5 @@ public struct PlayerJoinRequest
     public int UserId;
     public string GameName;
     public string? ReservationKey;
-    public List<string> Guests;
+    public string? Guest;
 }
