@@ -19,8 +19,8 @@ namespace Bombd.Services;
 public class GameServer : BombdService
 {
     private const int ReservationTimeout = 25_000;
-    private const int JoinTimeout = 10_000;
-    private const int MigrationTimeout = 10_000;
+    private const int JoinTimeout = 5000;
+    private const int MigrationTimeout = 5000;
     
     private readonly Dictionary<string, ReservationGroup> _reservationGroups = new();
     private readonly List<PlayerJoinRequest> _playerJoinQueue = [];
@@ -263,11 +263,11 @@ public class GameServer : BombdService
         if (Bombd.RoomManager.RequestLeaveCurrentRoom(userId))
         {
             Logger.LogInfo<GameServer>($"{username} left {room.Game.GameName}.");
-            player.Room.Simulation.OnPlayerLeft(player, reason == "disconnected");
+            player.Room.Simulation.OnPlayerLeft(player, reason == DisconnectReason.Generic);
             OnPlayerLeft?.Invoke(this, new PlayerLeaveEventArgs
             {
                 Room = room,
-                PlayerName = username,
+                Player = player,
                 Reason = reason
             });
                 
@@ -583,7 +583,7 @@ public class GameServer : BombdService
         UserInfo.TryRemove(connection.UserId, out _);
 
         if (Bombd.RoomManager.GetPlayerInRoom(connection.UserId) != null)
-            AddPlayerToLeaveQueue(connection.UserId, connection.Username, "disconnected");
+            AddPlayerToLeaveQueue(connection.UserId, connection.Username, DisconnectReason.Generic);
 
         Logger.LogInfo<GameServer>($"{connection.Username} has been disconnected.");
     }

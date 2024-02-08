@@ -30,6 +30,11 @@ public class GenericSyncObject<T> : SyncObject where T : INetworkWritable
         Data = NetworkWriter.Serialize(Value);
         OnUpdate();
     }
+
+    public void UpdateNoSync()
+    {
+        Data = NetworkWriter.Serialize(Value);
+    }
     
     public static implicit operator T(GenericSyncObject<T> value) => value.Value;
 }

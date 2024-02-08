@@ -46,6 +46,7 @@ public class SimServer
     
     private readonly RaceConstants _raceConstants;
     private readonly List<EventResult> _eventResults = [];
+    private int _raceStateStartTime;
     private int _raceStateEndTime;
     private float _pausedTimeRemaining;
     private string _destination = Destination.GameRoom;
@@ -261,13 +262,12 @@ public class SimServer
             if (_raceSettings != null)
             {
                 _raceSettings.Value.OwnerNetcodeUserId = Owner;
-                _raceSettings.Sync();
-            }
-
-            if (_seriesInfo != null)
-            {
-                foreach (var evt in _seriesInfo.Value.Events)
-                    evt.OwnerNetcodeUserId = Owner;
+                TriggerRaceEventSync(EventUpdateReason.HostChanged);
+                if (_seriesInfo != null)
+                {
+                    foreach (var evt in _seriesInfo.Value.Events)
+                        evt.OwnerNetcodeUserId = Owner;
+                }
             }
         }
     }
@@ -485,11 +485,11 @@ public class SimServer
         
         return syncObject;
     }
-    
+
     private void UpdateRaceSetup()
     {
-        if (_raceSettings == null || Type != ServerType.Competitive) return;
-        
+        if (_raceSettings == null || Type != ServerType.Competitive || _players.Count == 0) return;
+
         _startingGrid.Value.Clear();
         foreach (GamePlayer player in _players)
         {
@@ -685,6 +685,27 @@ public class SimServer
         Logger.LogDebug<SimServer>($"Removing SyncObject({syncObject})");
         _syncObjects.Remove(guid);
         return true;
+    }
+
+    private void TriggerRaceEventSync(EventUpdateReason reason, EventSettings? newEventSettings = null)
+    {
+        if (_raceSettings == null || Type != ServerType.Competitive) return;
+        
+        if (newEventSettings != null)
+        {
+            newEventSettings.UpdateReason = reason;
+            _raceSettings.Value = newEventSettings;
+        }
+        else
+        {
+            _raceSettings.Value.UpdateReason = reason;
+            _raceSettings.Sync();    
+        }
+        
+        Logger.LogDebug<SimServer>($"Sending EventSettingsUpdate UpdateReason {reason}");
+        
+        _raceSettings.Value.UpdateReason = EventUpdateReason.None;
+        _raceSettings.UpdateNoSync();
     }
     
     public void OnNetworkMessage(GamePlayer player, uint senderNameUid, NetMessageType type, ArraySegment<byte> data)
@@ -899,6 +920,29 @@ public class SimServer
                 Broadcast(data, type);
                 break;
             }
+            case NetMessageType.KickPlayerRequest:
+            {
+                // Only the current session leader can kick people
+                if (player.UserId != Owner) break;
+                // Make sure we're in a valid gameroom state
+                if (Type != ServerType.Competitive || _raceSettings == null) break;
+
+                NetMessagePlayerRequest request;
+                try
+                {
+                    request = NetMessagePlayerRequest.ReadVersioned(data, Platform);
+                }
+                catch (Exception)
+                {
+                    Logger.LogWarning<SimServer>($"Failed to parse KickPlayerRequest from {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+
+                GamePlayer? target = _players.FirstOrDefault(target => target.State.NameUid == request.Target);
+                target?.Kick(DisconnectReason.LeaderKickRequest);
+                break;
+            }
             case NetMessageType.LeaderChangeRequest:
             {
                 // Only the current session leader can change the host
@@ -906,28 +950,24 @@ public class SimServer
                 // Make sure we're in a valid gameroom state
                 if (Type != ServerType.Competitive || _raceSettings == null) break;
                 
-                // Data must be 4 bytes since it's just the new host's nameuid
-                if (data.Count != 4)
+                NetMessagePlayerRequest request;
+                try
+                {
+                    request = NetMessagePlayerRequest.ReadVersioned(data, Platform);
+                }
+                catch (Exception)
                 {
                     Logger.LogWarning<SimServer>($"Failed to parse LeaderChangeRequest from {player.Username}, disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
                 
-                uint nameUid = 0;
-                nameUid |= (uint)(data[0] << 24);
-                nameUid |= (uint)(data[1] << 16);
-                nameUid |= (uint)(data[2] << 8);
-                nameUid |= (uint)(data[3] << 0);
-                
-                // Find the player by nameUID, if they exist, set them to host
-                foreach (var racer in _players)
+                GamePlayer? target = _players.FirstOrDefault(target => target.State.NameUid == request.Target);
+                if (target != null)
                 {
-                    if (racer.State.NameUid != nameUid) continue;
-                    _raceSettings.Value.OwnerNetcodeUserId = racer.UserId;
-                    _raceSettings.Sync();
-                    Owner = racer.UserId;
-                    break;
+                    _raceSettings.Value.OwnerNetcodeUserId = target.UserId;
+                    Owner = target.UserId;
+                    TriggerRaceEventSync(EventUpdateReason.HostChanged);
                 }
                 
                 break;
@@ -1030,9 +1070,8 @@ public class SimServer
                     {
                         raceSettings = Career.ModNation.GetRankedEvent(Owner, _raceSettings.Value.CreationId);
                     }
-
-                    raceSettings.UpdateReason = EventUpdateReason.RaceSettingsVetoed;
-                    _raceSettings.Value = raceSettings;
+                    
+                    TriggerRaceEventSync(EventUpdateReason.RaceSettingsVetoed, raceSettings);
                     Room.UpdateAttributes(raceSettings);
                 }
                 
@@ -1063,7 +1102,7 @@ public class SimServer
             }
             case NetMessageType.GameroomDownloadTracksFailed:
             {
-                SwitchToSpectator(player);
+                player.Kick(DisconnectReason.TrackDownloadFailed);
                 break;
             }
             case NetMessageType.ReadyForEventStart:
@@ -1242,8 +1281,8 @@ public class SimServer
 
                 // Since we got new settings, we should update the room attributes for matchmaking
                 Room.UpdateAttributes(settings);
-                
-                if (_raceSettings != null) _raceSettings.Value = settings;
+
+                if (_raceSettings != null) TriggerRaceEventSync(EventUpdateReason.RaceSettingsChanged, settings);
                 else _raceSettings = CreateSystemSyncObject(settings, NetObjectType.RaceSettings);
                 
                 break;

@@ -1,8 +1,10 @@
 ﻿namespace Bombd.Types.Network.Room;
 
-public class KickReason
+public static class DisconnectReason
 {
-    public const string Disconnected = "disconnected";
+    public const string Generic = "disconnected";
+    public const string UserRequested = "userInitiatedLeave";
+    
     public const string LeaderKickRequest = "leaderKickRequest";
     public const string TrackDownloadFailed = "trackDownloadFailed";
     public const string TrackDownloadTimeout = "trackDownloadTimeout";

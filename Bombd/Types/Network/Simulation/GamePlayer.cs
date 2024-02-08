@@ -1,4 +1,5 @@
 ﻿using Bombd.Helpers;
+using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
 using Bombd.Types.Network.Messages;
@@ -28,8 +29,7 @@ public class GamePlayer
     public readonly List<GameGuest> Guests = [];
     
     public LeaveReason LeaveReason = LeaveReason.Generic;
-    
-    
+    public string? KickReason;
     
     public bool IsSpectator;
     public bool HasSentRaceResults;
@@ -87,5 +87,11 @@ public class GamePlayer
         using NetworkWriterPooled writer = NetworkWriterPool.Get();
         ArraySegment<byte> packed = NetworkMessages.PackInt(writer, data, type);
         Send(packed, PacketType.ReliableGameData);
+    }
+    
+    public void Kick(string reason)
+    {
+        KickReason = reason;
+        Disconnect();
     }
 }

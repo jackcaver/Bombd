@@ -5,6 +5,6 @@ namespace Bombd.Types.Events;
 public struct PlayerLeaveEventArgs
 {
     public GameRoom Room;
-    public string PlayerName;
+    public GamePlayer Player;
     public string Reason;
 }

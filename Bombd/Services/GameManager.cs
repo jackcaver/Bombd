@@ -161,7 +161,7 @@ public class GameManager : BombdService
         // join another game, so just handle that case here by returning early.
         if (gameName != currentGameName) return;
         
-        Bombd.GameServer.AddPlayerToLeaveQueue(context.Connection.UserId, context.Connection.Username, "userInitiatedLeave");
+        Bombd.GameServer.AddPlayerToLeaveQueue(context.Connection.UserId, context.Connection.Username, DisconnectReason.UserRequested);
     }
 
     [Transaction("migrateToGame")]
@@ -232,13 +232,28 @@ public class GameManager : BombdService
 
     private void OnPlayerLeft(object? sender, PlayerLeaveEventArgs args)
     {
-        var request = NetcodeTransaction.MakeRequest(Name, "playerLeft", new PlayerLeaveInfo
+        GameRoom room = args.Room;
+        string gameName = room.Game.GameName;
+        NetcodeTransaction request;
+        
+        // If a kick reason exists, tell the player
+        if (args.Player.KickReason != null)
         {
-            GameName = args.Room.Game.GameName,
-            PlayerName = args.PlayerName,
+            request = NetcodeTransaction.MakeRequest(Name, "kickedFromGame");
+            request["gamename"] = gameName;
+            request["reason"] = args.Player.KickReason;
+            SendTransaction(args.Player.UserId, request);
+        }
+
+        // Tell everybody else in the game that somebody has left
+        request = NetcodeTransaction.MakeRequest(Name, "playerLeft", new PlayerLeaveInfo
+        {
+            GameName = gameName,
+            PlayerName = args.Player.Username,
             Reason = args.Reason
         });
 
-        foreach (GamePlayer player in args.Room.Game.Players) SendTransaction(player.UserId, request);
+        foreach (GamePlayer player in room.Game.Players) 
+            SendTransaction(player.UserId, request);
     }
 }

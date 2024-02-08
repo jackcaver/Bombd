@@ -23,7 +23,7 @@ public class EventSettings : INetworkReadable, INetworkWritable
     public int MaxHumans = 12;
     public bool AiEnabled = true;
     public int CareerEventIndex = -1;
-    public EventUpdateReason UpdateReason = EventUpdateReason.AdvanceTimer;
+    public EventUpdateReason UpdateReason = EventUpdateReason.None;
     
     // Karting
     public int MaxPlayers = 12;
