@@ -18,9 +18,9 @@ namespace Bombd.Services;
 [Service("gameserver", 50002, ProtocolType.RUDP)]
 public class GameServer : BombdService
 {
-    private const int ReservationTimeout = 25_000;
-    private const int JoinTimeout = 5000;
-    private const int MigrationTimeout = 5000;
+    private const int ReservationTimeout = 60_000;
+    private const int JoinTimeout = 60_000;
+    private const int MigrationTimeout = 60_000;
     
     private readonly Dictionary<string, ReservationGroup> _reservationGroups = new();
     private readonly List<PlayerJoinRequest> _playerJoinQueue = [];
