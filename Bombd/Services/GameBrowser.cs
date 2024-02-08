@@ -62,7 +62,8 @@ public class GameBrowser : BombdService
         }
         
         player.ListeningForGameEvents = true;
-        List<GameBrowserGame> games = Bombd.RoomManager.GetKartParkSubMatches(kartPark, context.Connection.Platform);
+        List<GameBrowserGame> games = [];
+        // List<GameBrowserGame> games = Bombd.RoomManager.GetKartParkSubMatches(kartPark, context.Connection.Platform);
         return CreateServerGameList(games);
     }
     
@@ -131,25 +132,25 @@ public class GameBrowser : BombdService
     
     private void OnPlayerJoin(object? sender, PlayerJoinEventArgs args)
     {
-        var request = NetcodeTransaction.MakeRequest(Name, "gameEvent");
-        request["eventType"] = "playerJoined";
-        request["gameinfo"] = Convert.ToBase64String(NetworkWriter.Serialize(args.Room.GetGameBrowserInfo()));
-        foreach (GamePlayer player in args.Room.Game.Players)
-        {
-            if (!player.ListeningForGameEvents) continue;
-            SendTransaction(player.UserId, request);
-        }
+        // var request = NetcodeTransaction.MakeRequest(Name, "gameEvent");
+        // request["eventType"] = "playerJoined";
+        // request["gameinfo"] = Convert.ToBase64String(NetworkWriter.Serialize(args.Room.GetGameBrowserInfo()));
+        // foreach (GamePlayer player in args.Room.Game.Players)
+        // {
+        //     if (!player.ListeningForGameEvents) continue;
+        //     SendTransaction(player.UserId, request);
+        // }
     }
 
     private void OnPlayerLeft(object? sender, PlayerLeaveEventArgs args)
     {
-        var request = NetcodeTransaction.MakeRequest(Name, "gameEvent");
-        request["eventType"] = "playerLeft";
-        request["gameinfo"] = Convert.ToBase64String(NetworkWriter.Serialize(args.Room.GetGameBrowserInfo()));
-        foreach (GamePlayer player in args.Room.Game.Players)
-        {
-            if (!player.ListeningForGameEvents) continue;
-            SendTransaction(player.UserId, request);
-        }
+        // var request = NetcodeTransaction.MakeRequest(Name, "gameEvent");
+        // request["eventType"] = "playerLeft";
+        // request["gameinfo"] = Convert.ToBase64String(NetworkWriter.Serialize(args.Room.GetGameBrowserInfo()));
+        // foreach (GamePlayer player in args.Room.Game.Players)
+        // {
+        //     if (!player.ListeningForGameEvents) continue;
+        //     SendTransaction(player.UserId, request);
+        // }
     }
 }

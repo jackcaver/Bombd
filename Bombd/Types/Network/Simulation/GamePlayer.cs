@@ -25,9 +25,11 @@ public class GamePlayer
 
     // Karting has multiple guests in the pod so we have to keep it in a list,
     // even though racing and ModNation only have a single guest
-    public readonly List<GameGuest> Guests = new();
-
+    public readonly List<GameGuest> Guests = [];
+    
     public LeaveReason LeaveReason = LeaveReason.Generic;
+    
+    
     
     public bool IsSpectator;
     public bool HasSentRaceResults;
