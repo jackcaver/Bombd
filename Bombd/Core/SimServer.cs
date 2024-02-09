@@ -1214,45 +1214,19 @@ public class SimServer
                     break;
                 }
                 
-                RaceType raceType = _raceSettings.Value.RaceType;
-                bool isPlayerResults =
-                    (Platform == Platform.Karting && raceType is RaceType.Battle or RaceType.Custom) || (Platform == Platform.ModNation);
-                
                 bool isValid = true;
-                if (isPlayerResults)
+                foreach (var result in results)
                 {
-                    foreach (var result in results)
+                    bool isMyAi = _aiInfo.Value.DataSet.Any(ai => ai.NameUid == result.OwnerUid && ai.OwnerName == player.Username);
+                    bool isMe = result.OwnerUid == player.State.NameUid;
+                    bool isGuest = player.Guests.Any(guest => guest.NameUid == result.OwnerUid);
+                
+                    isValid = (isMyAi || isMe || isGuest);
+                    if (!isValid) break;
+                    if (isMe)
                     {
-                        bool isMyAi = _aiInfo.Value.DataSet.Any(ai => ai.NameUid == result.OwnerUid && ai.OwnerName == player.Username);
-                        bool isMe = result.OwnerUid == player.State.NameUid;
-                        bool isGuest = player.Guests.Any(guest => guest.NameUid == result.OwnerUid);
-                    
-                        isValid = (isMyAi || isMe || isGuest);
-                        if (!isValid) break;
-                        if (isMe)
-                        {
-                            player.HasFinishedRace = result.PercentComplete >= 1.0f;
-                            player.Score = result.EventScore;
-                        }
-                    }
-                }
-                else
-                {
-                    if (player.UserId != Owner)
-                    {
-                        Logger.LogWarning<SimServer>($"{player.Username} tried to submit event results, even though they aren't the owner. Disconnecting them from the session.");
-                        player.Disconnect();
-                        break;
-                    }
-                    
-                    foreach (var result in results)
-                    {
-                        GamePlayer? participant = _players.FirstOrDefault(p => p.State.NameUid == result.OwnerUid);
-                        if (participant != null)
-                        {
-                            player.HasFinishedRace = result.PercentComplete >= 1.0f;
-                            player.Score = result.EventScore;
-                        }
+                        player.HasFinishedRace = result.PercentComplete >= 1.0f;
+                        player.Score = result.EventScore;
                     }
                 }
                 
@@ -1753,14 +1727,7 @@ public class SimServer
                         bool shouldSendResults = 
                             (RaceState == RaceState.WaitingForRaceEnd && TimeHelper.LocalTime >= _raceStateEndTime) ||
                             _players.All(player => player.IsSpectator || player.HasSentRaceResults);
-                        
-                        if (Platform == Platform.Karting && _raceSettings != null)
-                        {
-                            RaceType raceType = _raceSettings.Value.RaceType;
-                            if (raceType is RaceType.Pure or RaceType.Action && _playerLookup[Owner].HasSentRaceResults)
-                                shouldSendResults = true;
-                        }
-                        
+ 
                         if (shouldSendResults)
                         {
                             string results = FinalizeEventResults();
