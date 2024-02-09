@@ -1,6 +1,7 @@
 ﻿using Bombd.Attributes;
 using Bombd.Core;
 using Bombd.Helpers;
+using Bombd.Logging;
 using Bombd.Protocols;
 using Bombd.Serialization;
 using Bombd.Serialization.Wrappers;
@@ -128,16 +129,18 @@ public class GameManager : BombdService
             return;
         }
         
-        // NOTE:
-        // If you're in a group, it'll just give 1 for numSlots?
-        // If you're not in a group, it'll give 0?
-        numSlots++;
+        // If there's no requested slots, it means we're not in an online playgroup, so don't return a reservation key
+        if (numSlots <= 0)
+        {
+            context.Response["reservationKey"] = string.Empty;
+            return;
+        }
         
         if (Bombd.GameServer.ReserveSlotsInGame(gameName, numSlots, out string? reservationKey))
         {
             context.Response["reservationKey"] = reservationKey;
         }
-        else context.Response.Error = JoinFailReason.GameFull;
+        else context.Response.Error = JoinFailReason.NotEnoughSlots;
     }
 
     [Transaction("logClientMessage")]
