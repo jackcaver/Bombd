@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Bombd.Core;
 using Bombd.Helpers;
 using Bombd.Logging;
@@ -45,7 +45,14 @@ public abstract class ConnectionBase
             Disconnect();
             return null;
         }
-
+        
+        // Karting is annoying
+        if (request.MethodName == "logClientMessage")
+        {
+            Send(request.MakeResponse().ToArraySegment(), PacketType.ReliableNetcodeData);
+            return null;
+        }
+        
         if (request.ServiceName != "connect" || request.MethodName != method)
         {
             Logger.LogWarning<ConnectionBase>(
