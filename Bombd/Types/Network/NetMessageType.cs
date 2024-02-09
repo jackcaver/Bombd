@@ -146,9 +146,24 @@ public enum NetMessageType : byte
     EventResultsPreliminary = 0x16, // size = 20
     EventResultsFinal = 0x17, // size = 20
     
-    // 0x1 = GameplayMessageShunt, KartMoverInterface
-    // 0x2 = GameplayMessageStomped, KartStateComponent
-    // 0xd = KartTransformerData? (0xfbc in Karting)
+    // The game sends the following types in ModNation...
+        // 0x1, Shunt
+        // 0x2, Stomped
+    // The game sends the following types in Karting...
+        // Messages 2/4 are unused
+        // Messages 1->5 are only read in race/spectator mode
+        // 0x1, Battle Hit Streak         size = 0x04c
+        // 0x3, Impulse                   size = 0x00c ; Fired when boosting, or when extra forces are applied to player?
+        // 0x5, ???                       size = 0x00c
+        // 0x6, Shunt                     size = 0x01c
+        // 0x7, Grapple Attach            size = 0x008
+        // 0x8, Grapple Release           size = 0x008
+        // 0x9, Respawn                   size = 0x01c
+        // 0xa, ???                       size = 0x008
+        // 0xb, ???                       size = 0x008
+        // 0xc, Nis Completed             size = 0x000 ; Fired when the NIS is either skipped or completed
+        // 0xd, Kart Transform            size = 0xfbc
+        // 0xe, Request Kart Transforms   size = 0x000 ; Fired when entering a game room, requests everybody's transform data?
     GenericGameplay = 0x18, // size = 12
     PlayerStateUpdate = 0x19, // size = 8
     

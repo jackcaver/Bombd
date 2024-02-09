@@ -781,7 +781,18 @@ public class SimServer
             }
             case NetMessageType.ArbitratedItemCreateBlock:
             {
-                var block = NetMessageArbitratedItemBlock.ReadVersioned(data, Platform);
+                NetMessageArbitratedItemBlock block;
+                try
+                {
+                    block = NetMessageArbitratedItemBlock.ReadVersioned(data, Platform);
+                }
+                catch
+                {
+                    Logger.LogWarning<SimServer>($"Failed to parse ArbitratedItemCreateBlock for {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+                
                 var created = new List<int>(block.ItemIds.Count);
                 foreach (var item in block.ItemIds)
                 {
@@ -796,7 +807,18 @@ public class SimServer
             }
             case NetMessageType.ArbitratedItemDestroyBlock:
             {
-                var block = NetMessageArbitratedItemBlock.ReadVersioned(data, Platform);
+                NetMessageArbitratedItemBlock block;
+                try
+                {
+                    block = NetMessageArbitratedItemBlock.ReadVersioned(data, Platform);
+                }
+                catch
+                {
+                    Logger.LogWarning<SimServer>($"Failed to parse ArbitratedItemDestroyBlock for {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+                
                 var destroyed = new List<int>(block.ItemIds.Count);
                 foreach (var item in block.ItemIds)
                 {
@@ -811,7 +833,18 @@ public class SimServer
             }
             case NetMessageType.ArbitratedItemAcquire:
             {
-                var item = NetMessageArbitratedItem.ReadVersioned(data, Platform);
+                NetMessageArbitratedItem item;
+                try
+                {
+                    item = NetMessageArbitratedItem.ReadVersioned(data, Platform);
+                }
+                catch
+                {
+                    Logger.LogWarning<SimServer>($"Failed to parse ArbitratedItemAcquire for {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+                
                 var response = NetMessageType.ArbitratedItemAcquireFailed;
                 if (_arbitrationServer.Acquire(item.ItemId, item.PlayerNameUid, item.Timeout))
                     response = NetMessageType.ArbitratedItemAcquire;
@@ -820,20 +853,53 @@ public class SimServer
             }
             case NetMessageType.ArbitratedItemCreate:
             {
-                var item = NetMessageArbitratedItem.ReadVersioned(data, Platform);
+                NetMessageArbitratedItem item;
+                try
+                {
+                    item = NetMessageArbitratedItem.ReadVersioned(data, Platform);
+                }
+                catch
+                {
+                    Logger.LogWarning<SimServer>($"Failed to parse ArbitratedItemCreate for {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+                
                 if (_arbitrationServer.Create(item.ItemType, item.PlayerNameUid, AcquireBehavior.SingleAcquire, item.ItemId))
                     Broadcast(data, type);
                 break;
             }
             case NetMessageType.ArbitratedItemRelease:
             {
-                var item = NetMessageArbitratedItem.ReadVersioned(data, Platform);
+                NetMessageArbitratedItem item;
+                try
+                {
+                    item = NetMessageArbitratedItem.ReadVersioned(data, Platform);
+                }
+                catch
+                {
+                    Logger.LogWarning<SimServer>($"Failed to parse ArbitratedItemRelease for {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+                
                 _arbitrationServer.Release(item.ItemId, item.PlayerNameUid);
                 break;
             }
             case NetMessageType.ArbitratedItemDestroy:
             {
-                var item = NetMessageArbitratedItem.ReadVersioned(data, Platform);
+                NetMessageArbitratedItem item;
+                try
+                {
+                    item = NetMessageArbitratedItem.ReadVersioned(data, Platform);
+                }
+                catch
+                {
+                    Logger.LogWarning<SimServer>($"Failed to parse ArbitratedItemDestroy for {player.Username}, disconnecting them from the session.");
+                    player.Disconnect();
+                    break;
+                }
+                
                 if (_arbitrationServer.Destroy(item.ItemId, item.PlayerNameUid))
                     Broadcast(data, type);
                 
@@ -922,10 +988,10 @@ public class SimServer
             }
             case NetMessageType.KickPlayerRequest:
             {
-                // Only the current session leader can kick people
-                if (player.UserId != Owner) break;
                 // Make sure we're in a valid gameroom state
                 if (Type != ServerType.Competitive || _raceSettings == null) break;
+                // Only the current session leader can kick people
+                if (player.UserId != Owner) break;
 
                 NetMessagePlayerRequest request;
                 try
@@ -945,10 +1011,10 @@ public class SimServer
             }
             case NetMessageType.LeaderChangeRequest:
             {
-                // Only the current session leader can change the host
-                if (player.UserId != Owner) break;
                 // Make sure we're in a valid gameroom state
                 if (Type != ServerType.Competitive || _raceSettings == null) break;
+                // Only the current session leader can change the host
+                if (player.UserId != Owner) break;
                 
                 NetMessagePlayerRequest request;
                 try
@@ -996,10 +1062,14 @@ public class SimServer
                 player.State.Flags |= PlayerStateFlags.GameRoomReady;
                 player.State.IsConnecting = false;
                 
-                // If the player took too long to load, switch them to spectator
-                if (!CanJoinAsRacer()) SwitchToSpectator(player);
-                else if (RaceState == RaceState.GameroomCountdown)
-                    UpdateRaceSetup();
+                // In Karting, you can receive GameroomReady messages in the Pod
+                if (Type == ServerType.Competitive)
+                {
+                    // If the player took too long to load, switch them to spectator
+                    if (!CanJoinAsRacer()) SwitchToSpectator(player);
+                    else if (RaceState == RaceState.GameroomCountdown)
+                        UpdateRaceSetup();   
+                }
                 
                 BroadcastPlayerState();
                 BroadcastSessionInfo();
@@ -1008,7 +1078,7 @@ public class SimServer
             }
             case NetMessageType.GameroomStopTimer:
             {
-                if (player.UserId != Owner) break;
+                if (player.UserId != Owner || Type != ServerType.Competitive) break;
                 
                 // Make sure we're still within the threshold of being able to stop the timer
                 var room = _gameroomState.Value;
@@ -1022,6 +1092,7 @@ public class SimServer
             }
             case NetMessageType.PostRaceVoteForTrack:
             {
+                if (Type != ServerType.Competitive) break;
                 if (IsKarting)
                 {
                     var votes = _votePackage.Value;
@@ -1051,7 +1122,8 @@ public class SimServer
             }
             case NetMessageType.RankedEventVeto:
             {
-                if (!IsRanked || player.State.HasEventVetoed) return;
+                if (_raceSettings == null || !IsRanked || Type != ServerType.Competitive ||
+                    player.State.HasEventVetoed) break;
                 
                 player.State.HasEventVetoed = true;
                 if (_players.All(p => p.State.HasEventVetoed))
@@ -1081,7 +1153,7 @@ public class SimServer
             case NetMessageType.SpectatorInfo:
             {
                 // Only the owner should be able to update the spectator info for the gameroom
-                if (player.UserId != Owner) break;
+                if (player.UserId != Owner || Type != ServerType.Competitive) break;
                 
                 try
                 {
@@ -1118,28 +1190,22 @@ public class SimServer
             case NetMessageType.GameroomRequestStartEvent:
             {
                 // Only the host should be allowed to start the event I'm fairly sure
-                if (player.UserId != Owner || RaceState != RaceState.Invalid) break;
+                if (player.UserId != Owner || Type != ServerType.Competitive || RaceState != RaceState.Invalid) break;
                 SetCurrentGameroomState(RoomState.DownloadingTracks);
                 break;
             }
             case NetMessageType.EventResultsPreliminary:
             {
+                if (_raceSettings == null || Type != ServerType.Competitive) break;
+                
+                // Just in case someone submits race results after we've already ended
+                if (RaceState != RaceState.Racing && RaceState != RaceState.WaitingForRaceEnd) break;
+                
                 List<EventResult> results;
                 try
                 {
-                    using NetworkReaderPooled reader = NetworkReaderPool.Get(data);
-
-                    int len = reader.Capacity;
-                    if (IsKarting)
-                    {
-                        // Don't really care about this data
-                        reader.Offset += 0xc;
-                        len = reader.ReadInt32();
-                    }
-                    
-                    string xml = reader.ReadString(len);
-                    Logger.LogDebug<SimServer>(xml);
-                    results = EventResult.Deserialize(xml);
+                    NetMessageEventResults message = NetMessageEventResults.ReadVersioned(data, Platform);
+                    results = EventResult.Deserialize(message.ResultsXml);
                 }
                 catch (Exception)
                 {
@@ -1147,32 +1213,59 @@ public class SimServer
                     player.Disconnect();
                     break;
                 }
-
+                
+                RaceType raceType = _raceSettings.Value.RaceType;
+                bool isPlayerResults =
+                    (Platform == Platform.Karting && raceType is RaceType.Battle or RaceType.Custom) || (Platform == Platform.ModNation);
+                
                 bool isValid = true;
-                foreach (var result in results)
+                if (isPlayerResults)
                 {
-                    bool isMyAi = _aiInfo.Value.DataSet.Any(ai => ai.NameUid == result.OwnerUid && ai.OwnerName == player.Username);
-                    bool isMe = result.OwnerUid == player.State.NameUid;
-                    bool isGuest = player.Guests.Any(guest => guest.NameUid == result.OwnerUid);
-
-                    isValid = isMyAi || isMe || isGuest;
-                    if (!isValid) break;
-                    if (isMe)
+                    foreach (var result in results)
                     {
-                        player.HasFinishedRace = result.PercentComplete >= 1.0f;
-                        player.Score = result.EventScore;
+                        bool isMyAi = _aiInfo.Value.DataSet.Any(ai => ai.NameUid == result.OwnerUid && ai.OwnerName == player.Username);
+                        bool isMe = result.OwnerUid == player.State.NameUid;
+                        bool isGuest = player.Guests.Any(guest => guest.NameUid == result.OwnerUid);
+                    
+                        isValid = (isMyAi || isMe || isGuest);
+                        if (!isValid) break;
+                        if (isMe)
+                        {
+                            player.HasFinishedRace = result.PercentComplete >= 1.0f;
+                            player.Score = result.EventScore;
+                        }
                     }
                 }
-
+                else
+                {
+                    if (player.UserId != Owner)
+                    {
+                        Logger.LogWarning<SimServer>($"{player.Username} tried to submit event results, even though they aren't the owner. Disconnecting them from the session.");
+                        player.Disconnect();
+                        break;
+                    }
+                    
+                    foreach (var result in results)
+                    {
+                        GamePlayer? participant = _players.FirstOrDefault(p => p.State.NameUid == result.OwnerUid);
+                        if (participant != null)
+                        {
+                            player.HasFinishedRace = result.PercentComplete >= 1.0f;
+                            player.Score = result.EventScore;
+                        }
+                    }
+                }
+                
                 if (!isValid)
                 {
                     Logger.LogWarning<SimServer>($"{player.Username} tried to submit invalid event results. Disconnecting them from the session.");
                     player.Disconnect();
                     break;
                 }
-
-                player.HasSentRaceResults = true;
+                
                 _eventResults.AddRange(results);
+                player.HasSentRaceResults = true;
+                
                 break;
             }
             case NetMessageType.TextChatMsg:
@@ -1227,10 +1320,15 @@ public class SimServer
 
             case NetMessageType.PlayerFinishedEvent:
             {
-                if (RaceState != RaceState.WaitingForRaceEnd)
+                if (Type != ServerType.Competitive) break;
+                
+                if (RaceState == RaceState.Racing)
                 {
                     RaceState = RaceState.WaitingForRaceEnd;
-                    _raceStateEndTime = TimeHelper.LocalTime + 30_000;
+                    
+                    // The catch up timer is 30 seconds, but give an additional 5 
+                    // seconds on the server to wait for event results
+                    _raceStateEndTime = TimeHelper.LocalTime + 35_000;
                 }
                 
                 Broadcast(data, type, player);
@@ -1248,7 +1346,7 @@ public class SimServer
             case NetMessageType.EventSettingsUpdate:
             {
                 // Only the host should be allowed to update unranked event settings I'm fairly sure
-                if (player.UserId != Owner || IsRanked) break;
+                if (player.UserId != Owner || IsRanked || Type != ServerType.Competitive) break;
 
                 EventSettings settings;
                 try
@@ -1487,7 +1585,9 @@ public class SimServer
 
     private string FinalizeEventResults()
     {
-        RaceType mode = _raceSettings!.Value.RaceType;
+        if (_raceSettings == null || Type != ServerType.Competitive) return string.Empty;
+        
+        RaceType mode = _raceSettings.Value.RaceType;
         
         if (IsKarting && mode == RaceType.Battle) _eventResults.Sort((a, z) => z.BattleKills.CompareTo(a.BattleKills));
         else _eventResults.Sort((a, z) => a.EventScore.CompareTo(z.EventScore));
@@ -1511,7 +1611,7 @@ public class SimServer
                 });
             }
         
-            BombdServer.Comms.NotifyEventFinished(_raceSettings!.Value.CreationId, stats);   
+            BombdServer.Comms.NotifyEventFinished(_raceSettings.Value.CreationId, stats);   
         }
         
         string xml = EventResult.Serialize(_eventResults);
@@ -1653,7 +1753,14 @@ public class SimServer
                         bool shouldSendResults = 
                             (RaceState == RaceState.WaitingForRaceEnd && TimeHelper.LocalTime >= _raceStateEndTime) ||
                             _players.All(player => player.IsSpectator || player.HasSentRaceResults);
-
+                        
+                        if (Platform == Platform.Karting && _raceSettings != null)
+                        {
+                            RaceType raceType = _raceSettings.Value.RaceType;
+                            if (raceType is RaceType.Pure or RaceType.Action && _playerLookup[Owner].HasSentRaceResults)
+                                shouldSendResults = true;
+                        }
+                        
                         if (shouldSendResults)
                         {
                             string results = FinalizeEventResults();
