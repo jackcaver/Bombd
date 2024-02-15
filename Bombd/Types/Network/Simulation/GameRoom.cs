@@ -14,25 +14,26 @@ public class GameRoom
 {
     private const int MaxSlots = 12;
     private const int InvalidSlot = -1;
+    private const int SlotBitsMask = 0x3f;
+    
+    public readonly Platform Platform;
+    
+    public int TrackCreationId { get; private set; }
+    public GameRoom? KartParkHome;
+    public readonly GameManagerGame Game;
+    public readonly SimServer Simulation;
+    
+    public bool IsEmpty => _usedSlots == 0;
+    public bool IsFull => _usedSlots == _maxPlayers;
+    public int NumFreeSlots => _maxPlayers - _usedSlots;
     
     private readonly Dictionary<int, GamePlayer> _playerIdLookup = new();
     private readonly List<bool> _slots;
     private readonly List<int> _guests;
     private readonly Dictionary<int, GamePlayer> _userIdLookup = new();
-    
-    public readonly GameManagerGame Game;
-    public readonly SimServer Simulation;
-    
-    public int Owner => Simulation.Owner;
-    
-    public bool IsEmpty => UsedSlots == 0;
-    public bool IsFull => UsedSlots == MaxPlayers;
-    public int NumFreeSlots => MaxPlayers - UsedSlots;
-    public int UsedSlots { get; private set; }
-    
-    public readonly Platform Platform;
-    public int MaxPlayers;
-    
+
+    private int _usedSlots;
+    private int _maxPlayers;
     private int _gameCreationTime = TimeHelper.LocalTime;
     private int _lastPlayerJoinTime = TimeHelper.LocalTime;
     
@@ -44,88 +45,16 @@ public class GameRoom
             request.Type, this, request.OwnerUserId, request.IsRanked, request.IsSeries);
         _slots = Enumerable.Repeat(false, MaxSlots).ToList();
         _guests = Enumerable.Repeat(InvalidSlot, MaxSlots).ToList();
-        MaxPlayers = request.MaxPlayers;
-        UsedSlots = 0;
+        _maxPlayers = request.MaxPlayers;
+        _usedSlots = 0;
     }
 
+    
     public void UpdateAttributes(EventSettings settings)
     {
-        var attr = Game.Attributes;
-
-        settings.Print();
-        
-        string visibility = settings.Private ? "CLOSED" : "OPEN";
-        attr["__MM_MODE_G"] = visibility;
-        attr["__MM_MODE_P"] = visibility;
-        attr["__JOIN_MODE"] = visibility;
-
-        MaxPlayers = settings.MaxHumans;
-        attr["__MAX_PLAYERS"] = MaxPlayers.ToString();
-        
-        // TODO: Adjust player counts on Karting?
-        attr["TRACK_CREATIONID"] = settings.CreationId.ToString();
-        if (settings.CreationId >= NetCreationIdRange.MinOnlineCreationId)
-            attr["TRACK_GROUP"] = "userCreated";
-        else attr["TRACK_GROUP"] = "official";
-        
-        attr.Remove("KART_PARK_HOME");
-        attr.Remove("SPHERE_INDEX");
-        if (Platform == Platform.ModNation)
-        {
-            if (!string.IsNullOrEmpty(settings.KartParkHome))
-                attr["KART_PARK_HOME"] = settings.KartParkHome;
-            if (settings.CareerEventIndex != -1)
-                attr["SPHERE_INDEX"] = settings.CareerEventIndex.ToString();
-        }
-        
-        if (settings.SeriesEventIndex == -1)
-        {
-            attr["SERIES_TYPE"] = "single";
-            attr.Remove("EVENT_INDEX");
-        }
-        else
-        {
-            attr["SERIES_TYPE"] = "series";
-            attr["EVENT_INDEX"] = settings.SeriesEventIndex.ToString();
-        }
-        
-        switch (settings.KartSpeed)
-        {
-            case SpeedClass.Fast:
-                attr["SPEED_CLASS"] = "fast";
-                break;
-            case SpeedClass.Faster:
-                attr["SPEED_CLASS"] = "faster";
-                break;
-            case SpeedClass.Fastest:
-                attr["SPEED_CLASS"] = "fastest";
-                break;
-            default:
-                attr.Remove("SPEED_CLASS");
-                break;
-        }
-
-        switch (settings.RaceType)
-        {
-            case RaceType.Pure:
-                attr["MODE_TYPE"] = "pure";
-                break;
-            case RaceType.Action:
-                attr["MODE_TYPE"] = "action";
-                break;
-            case RaceType.Battle:
-                attr["MODE_TYPE"] = "battle";
-                break;
-            default:
-                attr.Remove("MODE_TYPE");
-                break;
-        }
-        
-        Logger.LogDebug<GameRoom>($"Updating ${Game.GameName} attributes:");
-        foreach (var attribute in attr)
-        {
-            Logger.LogDebug<GameRoom>($"\t{attribute.Key} = {attribute.Value}");
-        }
+        _maxPlayers = settings.MaxHumans;
+        TrackCreationId = settings.CreationId;
+        BombdServer.Instance.RoomManager.UpdateRoom(this, settings);
     }
     
     public GamePlayer? RequestJoin(string username, int userId, string? guest = null)
@@ -168,7 +97,7 @@ public class GameRoom
     private void AttachGuest(GamePlayer player, string username, int id)
     {
         player.Guests.Add(new GameGuest(player.Username, username));
-        int slotId = player.PlayerId & 0x3f;
+        int slotId = player.PlayerId & SlotBitsMask;
         _guests[slotId] = id;
     }
 
@@ -181,7 +110,7 @@ public class GameRoom
             _playerIdLookup.Remove(playerId);
             Game.Players.Remove(player);
 
-            int slotId = playerId & 0x3f;
+            int slotId = playerId & SlotBitsMask;
             FreeSlot(_guests[slotId]);
             _guests[slotId] = InvalidSlot;
             
@@ -195,7 +124,7 @@ public class GameRoom
     {
         int gameId = player.PlayerId >>> 8;
         if (gameId != Game.GameId) return;
-        int slotId = player.PlayerId & 0x3f;
+        int slotId = player.PlayerId & SlotBitsMask;
         
         foreach (GuestStatus guestStatus in block)
         {
@@ -244,9 +173,9 @@ public class GameRoom
 
         _lastPlayerJoinTime = TimeHelper.LocalTime;
         _slots[index] = true;
-        UsedSlots++;
+        _usedSlots++;
         
-        playerId = (Game.GameId << 8) | (index & 0x3f);
+        playerId = (Game.GameId << 8) | (index & SlotBitsMask);
         return true;
     }
 
@@ -256,11 +185,11 @@ public class GameRoom
         
         int gameId = slot >>> 8;
         if (gameId != Game.GameId) return false;
-        int slotId = slot & 0x3f;
+        int slotId = slot & SlotBitsMask;
 
         if (_slots[slotId])
         {
-            UsedSlots--;
+            _usedSlots--;
             _slots[slotId] = false;
             return true;
         }
@@ -272,12 +201,14 @@ public class GameRoom
     public bool IsUserInGame(int userId) => _userIdLookup.ContainsKey(userId);
     public bool IsOwnerInGame()
     {
-        return Owner == -1 || _userIdLookup.ContainsKey(Owner);
+        int owner = Simulation.Owner;
+        return owner == -1 || _userIdLookup.ContainsKey(owner);
     }
 
     public bool IsReadyToJoin(int userId)
     {
-        if (userId == Owner || Owner == -1) return true;
+        int owner = Simulation.Owner;
+        if (userId == owner || owner == -1) return true;
         return Simulation.IsRoomReady();
     }
     

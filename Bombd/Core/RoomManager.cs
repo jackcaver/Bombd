@@ -1,7 +1,10 @@
 ﻿using System.Collections.Concurrent;
 using Bombd.Helpers;
+using Bombd.Types.Events;
 using Bombd.Types.GameBrowser;
 using Bombd.Types.GameManager;
+using Bombd.Types.Network;
+using Bombd.Types.Network.Objects;
 using Bombd.Types.Network.Races;
 using Bombd.Types.Network.Simulation;
 using Bombd.Types.Requests;
@@ -10,9 +13,11 @@ namespace Bombd.Core;
 
 public class RoomManager
 {
-    private readonly ConcurrentDictionary<string, GameRoom> _rooms = new();
+    public event EventHandler<GameEventArgs>? OnGameEvent;
     
-    private readonly Dictionary<int, GameRoom> _userRooms = new();
+    private readonly ConcurrentDictionary<string, GameRoom> _rooms = new();
+    private readonly ConcurrentDictionary<int, GameRoom> _userRooms = new();
+    
     private readonly Dictionary<int, int> _creationPlayerCounts = new();
     
     private readonly object _roomLock = new();
@@ -29,14 +34,12 @@ public class RoomManager
 
     public GameRoom? GetRoomByUser(int userId)
     {
-        if (_userRooms.TryGetValue(userId, out GameRoom? room)) return room;
-        return null;
+        return _userRooms.GetValueOrDefault(userId);
     }
 
     public GameRoom? GetRoomByName(string name)
     {
-        if (_rooms.TryGetValue(name, out GameRoom? room)) return room;
-        return null;
+        return _rooms.GetValueOrDefault(name);
     }
 
     public GamePlayer? GetPlayerInRoom(int userId)
@@ -51,6 +54,8 @@ public class RoomManager
         {
             _rooms.TryRemove(room.Game.GameName, out _);
         }
+        
+        OnGameEvent?.Invoke(this, new GameEventArgs(GameEventType.Shutdown, room));
     }
     
     public GamePlayer? RequestJoinRoom(string username, int userId, GameRoom room, string? guest)
@@ -91,22 +96,23 @@ public class RoomManager
         if (room.Platform == Platform.Karting)
             DecrementPlayerCount(room);
         
-        _userRooms.Remove(userId);
-
+        _userRooms.TryRemove(userId, out _);
+        
         GamePlayer player = room.GetUser(userId);
         return room.Leave(player.PlayerId);
     }
 
     public GameRoom CreateRoom(CreateGameRequest request)
     {
-        request.Attributes["__IS_RANKED"] = request.IsRanked ? "1" : "0";
+        // Add internal attributes to the room
         request.Attributes["COMM_CHECKSUM"] = ((int)request.Platform).ToString();
+        request.Attributes["__IS_RANKED"] = request.IsRanked ? "1" : "0";
+        request.Attributes["__JOIN_MODE"] = "OPEN";
+        request.Attributes["__MM_MODE_G"] = "OPEN";
+        request.Attributes["__MM_MODE_P"] = "OPEN";
         
-        // Add default attributes to games if they weren't
-        // sent by the game for whatever reason.
-        request.Attributes.TryAdd("__JOIN_MODE", "OPEN");
-        request.Attributes.TryAdd("__MM_MODE_G", "OPEN");
-        request.Attributes.TryAdd("__MM_MODE_P", "OPEN");
+        // Set default server type if none was provided, although this
+        // generally shouldn't happen
         request.Attributes.TryAdd("SERVER_TYPE", "kartPark");
         
         var type = ServerType.KartPark;
@@ -212,17 +218,9 @@ public class RoomManager
         }
     }
 
-    public List<GameBrowserGame> GetKartParkSubMatches(string kartPark, Platform platform)
+    public List<GameBrowserGame> GetKartParkSubMatches(GameRoom room)
     {
-        IEnumerable<GameRoom> rooms = GetRooms().Where(room =>
-        {
-            if (room.Platform != platform) return false;
-            if (room.Game.Attributes.TryGetValue("KART_PARK_HOME", out string? value))
-                return value == kartPark;
-            return false;
-        });
-        
-        return rooms.Select(room => room.GetGameBrowserInfo()).ToList();
+        return GetRooms().Where(s => s.KartParkHome == room).Select(s => s.GetGameBrowserInfo()).ToList();
     }
     
     public List<GameBrowserGame> SearchRooms(GameAttributes attributes, Platform id, int freeSlotsRequired, bool createIfNoneExist = true)
@@ -269,5 +267,97 @@ public class RoomManager
             rooms.Add(CreateRoom(new CreateGameRequest { Attributes = attributes, Platform = id }));
 
         return rooms.Select(room => room.GetGameBrowserInfo()).ToList();
+    }
+
+    public void UpdateRoom(GameRoom room, EventSettings settings)
+    {
+        GameAttributes attr = room.Game.Attributes;
+        lock (_roomLock)
+        {
+            string visibility = settings.Private ? "CLOSED" : "OPEN";
+            attr["__MM_MODE_G"] = visibility;
+            attr["__MM_MODE_P"] = visibility;
+            attr["__JOIN_MODE"] = visibility;
+            
+            attr["__MAX_PLAYERS"] = settings.MaxHumans.ToString();
+            
+            // TODO: Adjust player counts on Karting?
+            attr["TRACK_CREATIONID"] = settings.CreationId.ToString();
+            if (settings.CreationId >= NetCreationIdRange.MinOnlineCreationId)
+                attr["TRACK_GROUP"] = "userCreated";
+            else attr["TRACK_GROUP"] = "official";
+            
+            attr.Remove("KART_PARK_HOME");
+            attr.Remove("SPHERE_INDEX");
+            if (room.Platform == Platform.ModNation)
+            {
+                if (!string.IsNullOrEmpty(settings.KartParkHome))
+                {
+                    attr["KART_PARK_HOME"] = settings.KartParkHome;
+                    if (room.KartParkHome == null)
+                    {
+                        GameRoom? kartPark = GetRoomByName(settings.KartParkHome);
+                        if (kartPark != null)
+                        {
+                            room.KartParkHome = kartPark;
+                            OnGameEvent?.Invoke(this, new GameEventArgs(GameEventType.GameAddSubMatch, room));
+                        }
+                    }
+                }
+                else if (room.KartParkHome != null)
+                {
+                    OnGameEvent?.Invoke(this, new GameEventArgs(GameEventType.GameRemovedNoSubMatch, room));
+                    room.KartParkHome = null;
+                }
+                
+                if (settings.CareerEventIndex != -1)
+                    attr["SPHERE_INDEX"] = settings.CareerEventIndex.ToString();
+            }
+        
+            if (settings.SeriesEventIndex == -1)
+            {
+                attr["SERIES_TYPE"] = "single";
+                attr.Remove("EVENT_INDEX");
+            }
+            else
+            {
+                attr["SERIES_TYPE"] = "series";
+                attr["EVENT_INDEX"] = settings.SeriesEventIndex.ToString();
+            }
+        
+            switch (settings.KartSpeed)
+            {
+                case SpeedClass.Fast:
+                    attr["SPEED_CLASS"] = "fast";
+                    break;
+                case SpeedClass.Faster:
+                    attr["SPEED_CLASS"] = "faster";
+                    break;
+                case SpeedClass.Fastest:
+                    attr["SPEED_CLASS"] = "fastest";
+                    break;
+                default:
+                    attr.Remove("SPEED_CLASS");
+                    break;
+            }
+
+            switch (settings.RaceType)
+            {
+                case RaceType.Pure:
+                    attr["MODE_TYPE"] = "pure";
+                    break;
+                case RaceType.Action:
+                    attr["MODE_TYPE"] = "action";
+                    break;
+                case RaceType.Battle:
+                    attr["MODE_TYPE"] = "battle";
+                    break;
+                default:
+                    attr.Remove("MODE_TYPE");
+                    break;
+            }
+            
+            OnGameEvent?.Invoke(this, new GameEventArgs(GameEventType.UpdatedAttributes, room));
+        }
     }
 }

@@ -20,6 +20,7 @@ public class GameBrowser : BombdService
     {
         Bombd.GameServer.OnPlayerJoined += OnPlayerJoin;
         Bombd.GameServer.OnPlayerLeft += OnPlayerLeft;
+        Bombd.RoomManager.OnGameEvent += OnGameEvent;
     }
     
     [Transaction("listGames")]
@@ -55,15 +56,15 @@ public class GameBrowser : BombdService
         }
         
         // We should only be subscribing to events in the kart park that we're currently in
-        if (kartPark != player.Room.Game.GameName)
+        GameRoom room = player.Room;
+        if (kartPark != room.Game.GameName)
         {
             context.Response.Error = "notInKartPark";
             return null;
         }
         
         player.ListeningForGameEvents = true;
-        List<GameBrowserGame> games = [];
-        // List<GameBrowserGame> games = Bombd.RoomManager.GetKartParkSubMatches(kartPark, context.Connection.Platform);
+        List<GameBrowserGame> games = Bombd.RoomManager.GetKartParkSubMatches(room);
         return CreateServerGameList(games);
     }
     
@@ -130,27 +131,28 @@ public class GameBrowser : BombdService
         };
     }
     
-    private void OnPlayerJoin(object? sender, PlayerJoinEventArgs args)
+    private void BroadcastSubMatchEvent(GameRoom room, GameEventType type)
     {
-        // var request = NetcodeTransaction.MakeRequest(Name, "gameEvent");
-        // request["eventType"] = "playerJoined";
-        // request["gameinfo"] = Convert.ToBase64String(NetworkWriter.Serialize(args.Room.GetGameBrowserInfo()));
-        // foreach (GamePlayer player in args.Room.Game.Players)
-        // {
-        //     if (!player.ListeningForGameEvents) continue;
-        //     SendTransaction(player.UserId, request);
-        // }
+        GameRoom? kartPark = room.KartParkHome;
+        if (kartPark == null || kartPark.IsEmpty) return;
+        
+        var request = NetcodeTransaction.MakeRequest(Name, "gameEvent", new GameEvent
+        {
+            Type = type,
+            Info = room.GetGameBrowserInfo()
+        });
+        
+        foreach (GamePlayer player in kartPark.Game.Players)
+        {
+            if (!player.ListeningForGameEvents) continue;
+            SendTransaction(player.UserId, request);
+        }
     }
-
-    private void OnPlayerLeft(object? sender, PlayerLeaveEventArgs args)
-    {
-        // var request = NetcodeTransaction.MakeRequest(Name, "gameEvent");
-        // request["eventType"] = "playerLeft";
-        // request["gameinfo"] = Convert.ToBase64String(NetworkWriter.Serialize(args.Room.GetGameBrowserInfo()));
-        // foreach (GamePlayer player in args.Room.Game.Players)
-        // {
-        //     if (!player.ListeningForGameEvents) continue;
-        //     SendTransaction(player.UserId, request);
-        // }
-    }
+    
+    private void OnPlayerJoin(object? sender, PlayerJoinEventArgs args) =>
+        BroadcastSubMatchEvent(args.Room, GameEventType.PlayerJoined);
+    private void OnPlayerLeft(object? sender, PlayerLeaveEventArgs args) =>
+        BroadcastSubMatchEvent(args.Room, GameEventType.PlayerLeft);
+    private void OnGameEvent(object? sender, GameEventArgs args) =>
+        BroadcastSubMatchEvent(args.Room, args.Type);
 }
