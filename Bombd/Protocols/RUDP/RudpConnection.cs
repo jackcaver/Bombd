@@ -14,8 +14,12 @@ public class RudpConnection : ConnectionBase
     private const int MaxPayloadSize = 1024;
 
     private const int VoipDataSize = 896;
-
-    private const int PacketTimeout = 5000;
+    
+    // Using a higher timeout because Karting at least doesn't
+    // seem to send keep alive packets while the game is loading a level,
+    // so disconnections are common with a smaller timeout.
+    private const int PacketTimeout = 30_000;
+    
     private const int ResendTime = 300;
 
     private const int MaxNetcodeSize = 0xFFFF;
