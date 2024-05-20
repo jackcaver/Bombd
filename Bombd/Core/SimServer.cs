@@ -1214,28 +1214,28 @@ public class SimServer
                     break;
                 }
                 
-                bool isValid = true;
-                foreach (var result in results)
-                {
-                    bool isMyAi = _aiInfo.Value.DataSet.Any(ai => ai.NameUid == result.OwnerUid && ai.OwnerName == player.Username);
-                    bool isMe = result.OwnerUid == player.State.NameUid;
-                    bool isGuest = player.Guests.Any(guest => guest.NameUid == result.OwnerUid);
-                
-                    isValid = (isMyAi || isMe || isGuest);
-                    if (!isValid) break;
-                    if (isMe)
-                    {
-                        player.HasFinishedRace = result.PercentComplete >= 1.0f;
-                        player.Score = result.EventScore;
-                    }
-                }
-                
-                if (!isValid)
-                {
-                    Logger.LogWarning<SimServer>($"{player.Username} tried to submit invalid event results. Disconnecting them from the session.");
-                    player.Disconnect();
-                    break;
-                }
+                // bool isValid = true;
+                // foreach (var result in results)
+                // {
+                //     bool isMyAi = _aiInfo.Value.DataSet.Any(ai => ai.NameUid == result.OwnerUid && ai.OwnerName == player.Username);
+                //     bool isMe = result.OwnerUid == player.State.NameUid;
+                //     bool isGuest = player.Guests.Any(guest => guest.NameUid == result.OwnerUid);
+                //
+                //     isValid = (isMyAi || isMe || isGuest);
+                //     if (!isValid) break;
+                //     if (isMe)
+                //     {
+                //         player.HasFinishedRace = result.PercentComplete >= 1.0f;
+                //         player.Score = result.EventScore;
+                //     }
+                // }
+                //
+                // if (!isValid)
+                // {
+                //     Logger.LogWarning<SimServer>($"{player.Username} tried to submit invalid event results. Disconnecting them from the session.");
+                //     player.Disconnect();
+                //     break;
+                // }
                 
                 _eventResults.AddRange(results);
                 player.HasSentRaceResults = true;
@@ -1547,7 +1547,9 @@ public class SimServer
 
     private void FinalizeVote()
     {
-        if (IsKarting && Type == ServerType.Competitive && _votePackage.Value.IsVoting)
+        if (_raceSettings == null || Type != ServerType.Competitive) return;
+        
+        if (IsKarting && _votePackage.Value.IsVoting)
         {
             var votes = _votePackage.Value;
             int trackId = votes.FinishVote();
