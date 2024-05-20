@@ -12,9 +12,9 @@ namespace Bombd.Types.Network.Simulation;
 
 public class GameRoom
 {
-    private const int MaxSlots = 12;
+    private const int MaxSlots = 16;
     private const int InvalidSlot = -1;
-    private const int SlotBitsMask = 0x3f;
+    private const int SlotBitsMask = 0xf;
     
     public readonly Platform Platform;
     
@@ -48,7 +48,6 @@ public class GameRoom
         _maxPlayers = request.MaxPlayers;
         _usedSlots = 0;
     }
-
     
     public void UpdateAttributes(EventSettings settings)
     {
@@ -122,8 +121,6 @@ public class GameRoom
 
     public void UpdateGuestStatuses(GamePlayer player, GuestStatusBlock block)
     {
-        int gameId = player.PlayerId >>> 8;
-        if (gameId != Game.GameId) return;
         int slotId = player.PlayerId & SlotBitsMask;
         
         foreach (GuestStatus guestStatus in block)
@@ -175,18 +172,15 @@ public class GameRoom
         _slots[index] = true;
         _usedSlots++;
         
-        playerId = (Game.GameId << 8) | (index & SlotBitsMask);
+        playerId = index & SlotBitsMask;
         return true;
     }
 
     public bool FreeSlot(int slot)
     {
         if (slot == InvalidSlot) return false;
-        
-        int gameId = slot >>> 8;
-        if (gameId != Game.GameId) return false;
         int slotId = slot & SlotBitsMask;
-
+        
         if (_slots[slotId])
         {
             _usedSlots--;
