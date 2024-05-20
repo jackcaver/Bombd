@@ -28,7 +28,7 @@ public class SslConnection : ConnectionBase
     private Timer? _keepAliveTimer;
     
     private SslStream _sslStream;
-
+    
     public SslConnection(BombdService service, SslServer server) : base(service, server)
     {
         Id = CryptoHelper.GetRandomSecret();
@@ -41,26 +41,32 @@ public class SslConnection : ConnectionBase
     private readonly SslServer _server;
     private Socket _socket;
     
-    public void Connect(Socket socket)
+    public async void Connect(Socket socket)
     {
         _socket = socket;
         try
         {
             _sslStream = new SslStream(new NetworkStream(_socket, false), false);
-            _sslStream.AuthenticateAsServer(_server.Certificate, false, SslProtocols.Ssl3, false);
+            
+            // Prevent lingering connections, the game should periodically send keep alive packets
+            // in response to our own.
+            _sslStream.ReadTimeout = 10_000;
+            _sslStream.WriteTimeout = 10_000;
+            
+            await _sslStream.AuthenticateAsServerAsync(_server.Certificate, false, SslProtocols.Ssl3, false);
             
             _keepAliveTimer = new Timer(KeepAliveFrequency);
             _keepAliveTimer.Elapsed += OnKeepAliveTimerElapsed;
             _keepAliveTimer.AutoReset = false;
             _keepAliveTimer.Enabled = true;
-            
-            Task.Run(async () => await Block());
         }
         catch (Exception)
         {
-            Logger.LogError<SslConnection>("Handshake failed. Disconnecting.");
             Disconnect();
+            return;
         }
+        
+        DoBlockAndReceive();
     }
 
     public override void Disconnect()
@@ -77,7 +83,8 @@ public class SslConnection : ConnectionBase
             }
             catch (Exception)
             {
-                Logger.LogError<SslConnection>("An error occurred while shutting down SSL stream.");
+                // Don't really need to log if an exception occurred during this,
+                // it's not exactly an issue.
             }
 
             _sslStream.Dispose();
@@ -88,15 +95,16 @@ public class SslConnection : ConnectionBase
             }
             catch (SocketException)
             {
-                Logger.LogError<SslConnection>("An error occurred while shutting down socket.");
+                // Disconnection doesn't need to log these exceptions, it just
+                // pollutes the logs.
             }
-
+            
             _socket.Close();
             _socket.Dispose();
         }
         catch (ObjectDisposedException)
         {
-            
+            // ...
         }
         
         _server.Connections.Remove(Id);
@@ -114,6 +122,7 @@ public class SslConnection : ConnectionBase
         if (State == ConnectionState.Disconnected) return;
         
         int messageSize = MessageHeaderSize + data.Count;
+        
         lock (_sendLock)
         {
             _send[messageSize++] = 0;
@@ -148,7 +157,7 @@ public class SslConnection : ConnectionBase
         }
     }
 
-    private async Task Block()
+    private async void DoBlockAndReceive()
     {
         while (State != ConnectionState.Disconnected)
         {
@@ -204,7 +213,7 @@ public class SslConnection : ConnectionBase
                 Disconnect();
                 return;
             }
-
+            
             if (type == PacketType.KeepAlive) _keepAliveTimer!.Start();
             else
             {
