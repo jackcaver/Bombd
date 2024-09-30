@@ -1568,27 +1568,54 @@ public class SimServer
         if (IsKarting && mode == RaceType.Battle) _eventResults.Sort((a, z) => z.BattleKills.CompareTo(a.BattleKills));
         else _eventResults.Sort((a, z) => a.EventScore.CompareTo(z.EventScore));
 
-        if (IsModNation)
-        {
-            int rank = 0;
-            List<PlayerEventStats> stats = [];
-            foreach (EventResult result in _eventResults)
-            {
-                rank++;
-                GamePlayer? player = _players.SingleOrDefault(x => x.State.NameUid == result.OwnerUid);
-                if (player == null) continue;
-                stats.Add(new PlayerEventStats
-                {
-                    BestDrift = result.BestDrift,
-                    BestHangTime = result.BestHangTime,
-                    Finished = player.HasFinishedRace,
-                    PlayerConnectId = player.State.PlayerConnectId,
-                    Rank = rank
-                });
-            }
         
-            BombdServer.Comms.NotifyEventFinished(_raceSettings.Value.CreationId, stats);   
+        int rank = 0;
+        List<PlayerEventStats> stats = [];
+        foreach (EventResult result in _eventResults)
+        {
+            rank++;
+            GamePlayer? player = _players.SingleOrDefault(x => x.State.NameUid == result.OwnerUid);
+            if (player == null) continue;
+            stats.Add(new PlayerEventStats
+            {
+                BestDrift = result.BestDrift,
+                BestHangTime = result.BestHangTime,
+                Finished = player.HasFinishedRace,
+                PlayerConnectId = player.State.PlayerConnectId,
+                Rank = rank,
+                BestLapTime = result.BestEventSubScore,
+                FinishTime = result.EventScore,
+                PlaygroupSize = result.PlayerGroupId != 0 ? _eventResults.Count(match => match.PlayerGroupId == result.PlayerGroupId) : 1,
+                Points = result.PointsScored
+            });
         }
+
+        string gameType = "";
+
+        switch (mode)
+        {
+            case RaceType.Pure:
+                gameType = IsModNation ? "ONLINE_PURE_RACE" : "RACE";
+                break;
+
+            case RaceType.Action:
+                gameType = IsModNation ? "ONLINE_ACTION_RACE" : "RACE";
+                break;
+
+            case RaceType.Battle:
+                gameType = "BATTLE";
+                break;
+
+            case RaceType.HotSeat:
+                gameType = "ONLINE_HOT_SEAT_RACE";
+                break;
+
+            default:
+                gameType = IsModNation ? "ONLINE_PURE_RACE" : "RACE";
+                break;
+        }
+
+        BombdServer.Comms.NotifyEventFinished(_raceSettings.Value.CreationId, stats, IsModNation, gameType, IsRanked);
         
         string xml = EventResult.Serialize(_eventResults);
         _eventResults.Clear();

@@ -50,12 +50,15 @@ public sealed class ServerComm : IDisposable
         });
     }
 
-    public void NotifyEventFinished(int trackId, List<PlayerEventStats> stats)
+    public void NotifyEventFinished(int trackId, List<PlayerEventStats> stats, bool IsMNR, string GameType, bool IsRanked)
     {
         DispatchEvent(GatewayEvents.EventFinished, new EventFinishedEvent
         {
             Stats = stats,
-            TrackId = trackId
+            TrackId = trackId,
+            IsMNR = IsMNR,
+            GameType = GameType,
+            IsRanked = IsRanked
         });
     }
 

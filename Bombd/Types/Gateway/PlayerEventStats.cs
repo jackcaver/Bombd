@@ -9,4 +9,8 @@ public class PlayerEventStats
     [JsonPropertyName("drift")] public float BestDrift { get; set; }
     [JsonPropertyName("finished")] public bool Finished { get; set; }
     [JsonPropertyName("rank")] public int Rank { get; set; }
+    [JsonPropertyName("playgroupSize")] public int PlaygroupSize { get; set; }
+    [JsonPropertyName("finish")] public float FinishTime { get; set; }
+    [JsonPropertyName("lap")] public float BestLapTime { get; set; }
+    [JsonPropertyName("score")] public float Points { get; set; }
 }
