@@ -128,20 +128,24 @@ public abstract class BombdService
             response.Error = "ticketParseFail";
             return false;
         }
-
-        TicketVerifier verifier;
-        switch (ticket.IssuerId)
-        {
-            case 0x100:
-                verifier = new TicketVerifier(ticketData, ticket, UfgSigningKey.Instance);
-                break;
-            case 0x33333333:
-                verifier = new TicketVerifier(ticketData, ticket, RpcnSigningKey.Instance);
-                break;
-            default:
-                response.Error = "invalidTickerIssuerId";
-                return false;
-        }
+		
+		bool isRPCN = ticket.SignatureIdentifier == "RPCN" || ticket.IssuerId == 0x33333333;
+		bool isPSN = !isRPCN && ticket.IssuerId == 0x100;
+		
+		TicketVerifier verifier;
+		if (isRPCN)
+		{
+			verifier = new TicketVerifier(ticketData, ticket, RpcnSigningKey.Instance);
+		}
+		else if (isPSN)
+		{
+			verifier = new TicketVerifier(ticketData, ticket, UfgSigningKey.Instance);
+		}
+		else
+		{
+			response.Error = "invalidTickerIssuerId";
+			return false;
+		}
 
         if (!verifier.IsTicketValid())
         {
@@ -159,8 +163,8 @@ public abstract class BombdService
             case Platform.ModNation when !BombdConfig.Instance.AllowModNation:
                 return false;
         }
-        
-        int userId = CryptoHelper.StringHash32Upper(ticket.Username + ticket.IssuerId);
+		
+        int userId = CryptoHelper.StringHash32Upper(ticket.Username + (isRPCN ? "RPCN" : "PSN"));
         if (UserInfo.ContainsKey(userId))
         {
             response.Error = "alreadyLoggedIn";
