@@ -1,5 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using Bombd.Helpers;
+using Bombd.Logging;
 using Bombd.Services;
 
 namespace Bombd.Core;
@@ -28,7 +29,12 @@ public class BombdServer
         Instance = this;
         
         // Used for COI updates in Modnation
-        WebApiManager.Initialize();
+        while (!WebApiManager.Initialize())
+        {
+            Logger.LogWarning<BombdServer>("Could not initialize Web API Manager waiting before retrying...");
+            Task.Delay(5000); // Wait some amount of time before retrying
+        }
+
         // Initialize connection to server communication gateway
         Comms = new ServerComm();
         
