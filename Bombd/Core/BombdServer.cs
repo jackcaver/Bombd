@@ -29,11 +29,7 @@ public class BombdServer
         Instance = this;
         
         // Used for COI updates in Modnation
-        while (!WebApiManager.Initialize())
-        {
-            Logger.LogWarning<BombdServer>("Could not initialize Web API Manager waiting before retrying...");
-            Task.Delay(5000); // Wait some amount of time before retrying
-        }
+        WebApiManager.Initialize();
 
         // Initialize connection to server communication gateway
         Comms = new ServerComm();

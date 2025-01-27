@@ -152,12 +152,12 @@ public class WebApiManager
         return info;
     }
 
-    public static bool Initialize()
+    public static void Initialize()
     {
         if (string.IsNullOrEmpty(BombdConfig.Instance.ApiURL))
         {
             Logger.LogWarning<WebApiManager>("No Web API URL provided!");
-            return false;
+            return;
         }
         
         // Strip the trailing slash from the URL if someone left it in
@@ -168,7 +168,7 @@ public class WebApiManager
         if (string.IsNullOrEmpty(xml))
         {
             Logger.LogWarning<WebApiManager>("Content updates XML was empty!");
-            return false;
+            return;
         }
         
         try
@@ -180,7 +180,7 @@ public class WebApiManager
             if (tags.Count == 0)
             {
                 Logger.LogWarning<WebApiManager>("No content updates URL in XML!");
-                return false;
+                return;
             }
             
             ContentUpdatesURL = tags[0].Attributes["url"].Value;
@@ -189,17 +189,5 @@ public class WebApiManager
         {
             Logger.LogError<WebApiManager>("Failed to parse content updates XML!");
         }
-
-        return true;
-    }
-
-    public static bool CheckSessionStatus(string SessionID)
-    {
-        string url = BombdConfig.Instance.ApiURL.TrimEnd('/');
-
-        if (bool.TryParse(MakeRequest($"{url}/api/CheckSession/{SessionID}"), out bool Result))
-            return Result;
-
-        return false;
     }
 }
