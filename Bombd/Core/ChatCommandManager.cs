@@ -22,7 +22,8 @@ namespace Bombd.Core
 
         public static void RegisterChatCommand(IChatCommand command)
         {
-            Commands.Add(command);
+            if (!Commands.Any(match => match.Name == command.Name))
+                Commands.Add(command);
         }
 
         public static void ProcessChatCommand(SimServer server, GamePlayer player, string commandName, string[] args)
