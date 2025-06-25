@@ -1561,11 +1561,28 @@ public class SimServer
 
     private string FinalizeEventResults()
     {
-        if (_raceSettings == null || Type != ServerType.Competitive) return string.Empty;
+        if (_raceSettings == null || Type != ServerType.Competitive || _eventResults.Count < 1) return string.Empty;
         
         RaceType mode = _raceSettings.Value.RaceType;
         
-        if (IsKarting && mode == RaceType.Battle) _eventResults.Sort((a, z) => z.BattleKills.CompareTo(a.BattleKills));
+        if (IsKarting)
+        {
+            switch (_eventResults[0].ScoreSortField)
+            {
+                case "battleKills":
+                    _eventResults.Sort((a, z) => z.BattleKills.CompareTo(a.BattleKills));
+                    break;
+
+                case "pointsScored":
+                    _eventResults.Sort((a, z) => z.PointsScored.CompareTo(a.PointsScored));
+                    break;
+
+                default:
+                case "raceTimeScore":
+                    _eventResults.Sort((a, z) => a.EventScore.CompareTo(z.EventScore));
+                    break;
+            }
+        }
         else _eventResults.Sort((a, z) => a.EventScore.CompareTo(z.EventScore));
 
         
