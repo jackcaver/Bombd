@@ -1586,6 +1586,8 @@ public class SimServer
         if (IsKarting && mode == RaceType.Battle) _eventResults.Sort((a, z) => z.BattleKills.CompareTo(a.BattleKills));
         else _eventResults.Sort((a, z) => a.EventScore.CompareTo(z.EventScore));
 
+        if (ForceStart)
+            ForceStart = false;
         
         int rank = 0;
         List<PlayerEventStats> stats = [];
@@ -1896,6 +1898,15 @@ public class SimServer
                 break;
             }
         }
+    }
+
+    public void DisableAI()
+    {
+        if (_raceSettings == null) return;
+
+        _raceSettings.Value.AiEnabled = false;
+        _raceSettings.Value.NumHoard = 0;
+        TriggerRaceEventSync(EventUpdateReason.RaceSettingsChanged);
     }
 
     public void Tick()

@@ -17,6 +17,7 @@ namespace Bombd.Core
             if (BombdConfig.Instance.EnableDebugCommands) //maybe add some kind of permission system for stuff like that...?
             {
                 RegisterChatCommand(new ForceStart());
+                RegisterChatCommand(new DisableAI());
             }
         }
 
