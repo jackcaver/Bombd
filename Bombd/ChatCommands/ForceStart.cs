@@ -17,7 +17,7 @@ namespace Bombd.ChatCommands
                 player.SendMessage(message, NetMessageType.TextChatMsg);
                 return;
             }
-            message = ChatCommandManager.GetChatMessage(player, $"Race was focefully started by {player.Username}");
+            message = ChatCommandManager.GetChatMessage(player, $"Race was forcefully started by {player.Username}");
             message.Private = 0;
             message.Recipient = "";
             server.Broadcast(message, NetMessageType.TextChatMsg);
