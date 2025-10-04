@@ -33,6 +33,8 @@ public class EventResult
     [XmlAttribute("playgroupRaceTime")] public float PlaygroupRaceTime;
     [XmlAttribute("battleKills")] public int BattleKills;
     [XmlAttribute("pointsScored")] public int PointsScored;
+    [XmlAttribute("individualPointsScored")] public int IndividualPointsScored;
+    [XmlAttribute("playgroupPointsScored")] public int PlaygroupPointsScored;
     [XmlAttribute("scoreSortField")] public string ScoreSortField = "raceTimeScore";
 
     public static List<EventResult> Deserialize(string xml)

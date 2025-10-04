@@ -190,14 +190,4 @@ public class WebApiManager
             Logger.LogError<WebApiManager>("Failed to parse content updates XML!");
         }
     }
-
-    public static bool CheckSessionStatus(string SessionID)
-    {
-        string url = BombdConfig.Instance.ApiURL.TrimEnd('/');
-
-        if (bool.TryParse(MakeRequest($"{url}/api/CheckSession/{SessionID}"), out bool Result))
-            return Result;
-
-        return false;
-    }
 }

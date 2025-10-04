@@ -51,7 +51,7 @@ public class NetArbitrationServer(Action<ItemNode, ItemAcquirerNode> onReleaseNo
     
     public bool Acquire(int id, uint player, int timeout)
     {
-        Logger.LogDebug<NetArbitrationServer>($"NetItem request acquire 0x{id:x8}, player 0x{player:x8}");
+        Logger.LogDebug<NetArbitrationServer>($"NetItem request acquire 0x{id:x8}, player 0x{player:x8}, timeout: {timeout}");
         ItemNode? item = Items.FirstOrDefault(item => item.Uid == id);
         if (item == null)
         {
@@ -111,7 +111,7 @@ public class NetArbitrationServer(Action<ItemNode, ItemAcquirerNode> onReleaseNo
         foreach (ItemNode item in Items)
         {
             List<ItemAcquirerNode> expired = 
-                item.Acquirers.Where(acquirer => time >= acquirer.AcquireTime + acquirer.Timeout).ToList();
+                item.Acquirers.Where(acquirer => time >= acquirer.AcquireTime + acquirer.Timeout && acquirer.Timeout != -1).ToList();
             
             if (expired.Count == 0) continue;
             
@@ -120,7 +120,7 @@ public class NetArbitrationServer(Action<ItemNode, ItemAcquirerNode> onReleaseNo
 
             foreach (ItemAcquirerNode acquirer in expired)
             {
-                Logger.LogDebug<NetArbitrationServer>($"NetItem release 0x{item.Uid:x8}, player 0x{acquirer.Uid:x8}");
+                Logger.LogDebug<NetArbitrationServer>($"NetItem release expired item 0x{item.Uid:x8}, player 0x{acquirer.Uid:x8}");
                 onReleaseNode(item, acquirer);
             }
         }

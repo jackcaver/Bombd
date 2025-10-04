@@ -105,6 +105,8 @@ public sealed class ServerComm : IDisposable
             
             Logger.LogInfo<ServerComm>("Successfully connected to Web API!");
             
+            WebApiManager.Initialize();
+
             Task send = Task.Run(async () => await Send());
             Task receive = Task.Run(async () => await Receive());
             

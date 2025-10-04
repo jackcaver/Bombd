@@ -1,5 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using Bombd.Helpers;
+using Bombd.Logging;
 using Bombd.Services;
 
 namespace Bombd.Core;
@@ -29,6 +30,7 @@ public class BombdServer
         
         // Used for COI updates in Modnation
         WebApiManager.Initialize();
+
         // Initialize connection to server communication gateway
         Comms = new ServerComm();
         
