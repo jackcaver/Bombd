@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System.Buffers.Text;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Bombd.Logging;
 using System.Net.WebSockets;
@@ -15,14 +16,19 @@ namespace Bombd.Core;
 public sealed class ServerComm : IDisposable
 {
     private const int MaxMessageSize = 4096;
+    private readonly int EncryptedHeaderSize = AesGcm.NonceByteSizes.MaxSize + AesGcm.TagByteSizes.MaxSize;
     private const string MasterServer = "API";
 
     private ClientWebSocket _socket;
     private readonly Uri _uri;
     
     private readonly Channel<GatewayMessage> _pendingMessages = Channel.CreateUnbounded<GatewayMessage>();
-    private readonly Aes _aes = Aes.Create();
-    private readonly bool _hasKey;
+    private readonly AesGcm? _aes;
+
+    private readonly byte[] _decryptBuffer = new byte[MaxMessageSize];
+    private readonly byte[] _encryptBuffer = new byte[MaxMessageSize];
+    private readonly byte[] _sendBuffer = new byte[MaxMessageSize];
+    private readonly byte[] _recvBuffer = new byte[MaxMessageSize];
     
     public ServerComm()
     {
@@ -31,13 +37,9 @@ public sealed class ServerComm : IDisposable
         _uri = new Uri($"{url}/api/Gateway");
         
         string key = BombdConfig.Instance.ServerCommunicationKey;
-        _hasKey = !string.IsNullOrEmpty(key);
-        
-        _aes.Mode = CipherMode.ECB;
-        _aes.Padding = PaddingMode.Zeros;
-        if (_hasKey)
+        if (!string.IsNullOrEmpty(key))
         {
-            _aes.Key = Encoding.UTF8.GetBytes(key);
+            _aes = new AesGcm(Encoding.UTF8.GetBytes(key), AesGcm.TagByteSizes.MaxSize);    
         }
     }
 
@@ -140,58 +142,86 @@ public sealed class ServerComm : IDisposable
     
     private async Task Send()
     {
-        byte[] buffer = new byte[MaxMessageSize];
         while (_socket.State == WebSocketState.Open)
         {
             await foreach (GatewayMessage message in _pendingMessages.Reader.ReadAllAsync())
             {
-                string json = JsonSerializer.Serialize(message);
-                if (!string.IsNullOrEmpty(BombdConfig.Instance.ServerCommunicationKey))
-                    json = Encrypt(json);
-
                 Logger.LogDebug<ServerComm>("SEND: " + message.Type);
                 Logger.LogDebug<ServerComm>("DATA: " + message.Content);
+
+                string json = JsonSerializer.Serialize(message);
+                int len = EncryptIntoSendBuffer(json);
+                var type = _aes != null ? WebSocketMessageType.Binary : WebSocketMessageType.Text;
+                var payload = new ArraySegment<byte>(_sendBuffer, 0, len);
                 
-                int len = Encoding.UTF8.GetBytes(json, 0, json.Length, buffer, 0);
-                var payload = new ArraySegment<byte>(buffer, 0, len);
                 if (_socket.State == WebSocketState.Open)
-                    await _socket.SendAsync(payload, WebSocketMessageType.Text, true, CancellationToken.None);   
+                    await _socket.SendAsync(payload, type, true, CancellationToken.None);   
             }
         }
     }
     
     private async Task Receive()
     {
-        byte[] buffer = new byte[MaxMessageSize];
         while (_socket.State == WebSocketState.Open)
         {
             WebSocketReceiveResult result;
             try
             {
-                result = await _socket.ReceiveAsync(buffer, CancellationToken.None);
+                result = await _socket.ReceiveAsync(_recvBuffer, CancellationToken.None);
             }
             catch (Exception)
             {
                 Logger.LogError<ServerComm>($"There was an error receiving message");
                 break;
             }
-            
+
+            string payload;
             if (result.MessageType == WebSocketMessageType.Text)
             {
-                string payload = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                if (_aes != null)
+                {
+                    Logger.LogWarning<ServerComm>("Received unencrypted message, ignoring!");
+                    continue;
+                }
+
+                payload = Encoding.UTF8.GetString(_recvBuffer, 0, result.Count);
+            }
+            else if (result.MessageType == WebSocketMessageType.Binary)
+            {
+                if (_aes == null)
+                {
+                    Logger.LogWarning<ServerComm>("Received encrypted message, ignoring!");
+                    continue;
+                }
+
+                if (result.Count < EncryptedHeaderSize)
+                {
+                    Logger.LogWarning<ServerComm>($"Received invalid message!");
+                    continue;
+                }
+                
                 try
                 {
-                    if (_hasKey) payload = Decrypt(payload);
-                    var message = JsonSerializer.Deserialize<GatewayMessage>(payload);
-                    if (message != null)
-                        OnMessage(message);
+                    payload = DecryptFromReceiveBuffer(result.Count);
                 }
                 catch (Exception e)
                 {
-                    Logger.LogDebug<ServerComm>($"Failed to process message: {e}");
+                    Logger.LogDebug<ServerComm>($"Failed to decrypt message: {e}");
+                    continue;
                 }
             }
-            else if (result.MessageType == WebSocketMessageType.Close) break;
+            else break;
+            
+            try
+            {
+                var message = JsonSerializer.Deserialize<GatewayMessage>(payload);
+                if (message != null)
+                    OnMessage(message);
+            }
+            catch (Exception e)
+            {
+                Logger.LogDebug<ServerComm>($"Failed to process message: {e}");
+            }
         }
 
         if (_socket is { State: WebSocketState.Aborted or WebSocketState.Closed or WebSocketState.CloseSent })
@@ -250,29 +280,37 @@ public sealed class ServerComm : IDisposable
         _pendingMessages.Writer.TryWrite(message);
     }
 
-    private string Encrypt(string message)
+    private int EncryptIntoSendBuffer(string message)
     {
-        using var stream = new MemoryStream();
-        using var cryptoTransform = _aes.CreateEncryptor(_aes.Key, null);
-        using var cryptoStream = new CryptoStream(stream, cryptoTransform, CryptoStreamMode.Write);
-        cryptoStream.Write(Encoding.UTF8.GetBytes(message));
+        if (_aes == null)
+            return Encoding.UTF8.GetBytes(message, 0, message.Length, _sendBuffer, 0);
         
-        return Convert.ToBase64String(stream.ToArray());
+        int len = Encoding.UTF8.GetBytes(message, 0, message.Length, _encryptBuffer, 0);
+        Span<byte> input = _encryptBuffer.AsSpan(0, len);
+        
+        Span<byte> nonce = _sendBuffer.AsSpan(0, AesGcm.NonceByteSizes.MaxSize);
+        Span<byte> tag = _sendBuffer.AsSpan(AesGcm.NonceByteSizes.MaxSize, AesGcm.TagByteSizes.MaxSize);
+        Span<byte> output = _sendBuffer.AsSpan(EncryptedHeaderSize, len);
+        
+        RandomNumberGenerator.Fill(nonce);
+        _aes.Encrypt(nonce, input, output, tag);
+        return EncryptedHeaderSize + len;
     }
 
-    private string Decrypt(string message)
+    private string DecryptFromReceiveBuffer(int len)
     {
-        using var stream = new MemoryStream(Convert.FromBase64String(message));
-        using var cryptoTransform = _aes.CreateDecryptor(_aes.Key, null);
-        using var cryptoStream = new CryptoStream(stream, cryptoTransform, CryptoStreamMode.Read);
-        using var streamReader = new StreamReader(cryptoStream, Encoding.UTF8);
+        Span<byte> nonce = _recvBuffer.AsSpan(0, AesGcm.NonceByteSizes.MaxSize);
+        Span<byte> tag = _recvBuffer.AsSpan(AesGcm.NonceByteSizes.MaxSize, AesGcm.TagByteSizes.MaxSize);
+        Span<byte> data = _recvBuffer.AsSpan(EncryptedHeaderSize, len - EncryptedHeaderSize);
+        Span<byte> output = _decryptBuffer.AsSpan(0, data.Length);
         
-        return streamReader.ReadToEnd();
+        _aes!.Decrypt(nonce, data, tag, output);
+        return Encoding.UTF8.GetString(output);
     }
 
     public void Dispose()
     {
         _socket.Dispose();
-        _aes.Dispose();
+        _aes?.Dispose();
     }
 }
