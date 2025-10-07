@@ -127,9 +127,8 @@ public class RoomManager
         {
             // The pod in LBPK should only be allowed to have 4 people when online
             ServerType.Pod => 4,
-            // Might be able to go higher? Not sure, but maximum racers is a decent size for
-            // the ModSpot
-            ServerType.KartPark => 12,
+            // MNR official servers reports a max player count of 24
+            ServerType.KartPark => 24,
             // Otherwise just default ot 8.
             _ => 8
         };
