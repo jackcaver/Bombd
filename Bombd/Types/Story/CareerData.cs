@@ -1,6 +1,7 @@
 using System.Xml.Serialization;
 using Bombd.Helpers;
 using Bombd.Types.Network.Objects;
+using Bombd.Types.Network.Races;
 
 namespace Bombd.Types.Story;
 
@@ -34,6 +35,7 @@ public class CareerData
         {
             AiEnabled = false,
             OwnerNetcodeUserId = owner,
+            KartSpeed = SpeedClass.Fastest,
             IsRanked = true
         };
     }
@@ -54,6 +56,7 @@ public class CareerData
             {
                 SeriesEventIndex = seriesIndex++,
                 AiEnabled = false,
+                KartSpeed = SpeedClass.Fastest,
                 OwnerNetcodeUserId = owner,
                 IsRanked = true
             });
