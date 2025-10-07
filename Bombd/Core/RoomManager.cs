@@ -127,8 +127,8 @@ public class RoomManager
         {
             // The pod in LBPK should only be allowed to have 4 people when online
             ServerType.Pod => 4,
-            // MNR official servers reports a max player count of 24
-            ServerType.KartPark => 24,
+            // MNR official servers reports a max player count of 24, but over 12 causes issues?
+            ServerType.KartPark => 12,
             // Otherwise just default ot 8.
             _ => 8
         };
