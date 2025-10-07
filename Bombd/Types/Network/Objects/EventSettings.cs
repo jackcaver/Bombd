@@ -20,7 +20,7 @@ public class EventSettings : INetworkReadable, INetworkWritable
     public bool Private;
     public int SeriesEventIndex = -1;
     public int MinHumans = 4;
-    public int MaxHumans = 12;
+    public int MaxHumans = 24;
     public bool AiEnabled = true;
     public int CareerEventIndex = -1;
     public EventUpdateReason UpdateReason = EventUpdateReason.None;
