@@ -2,7 +2,7 @@
     <ValuePair seconds="0" threshold="1.0" />
 </ThresholdDecaySetting>
 
-<MatchSizeDecaySetting type="1" maxmatchsize="12" default="true">
+<MatchSizeDecaySetting type="1" maxmatchsize="24" default="true">
     <ValuePair seconds="0" matchsize="0" />
 </MatchSizeDecaySetting>
 

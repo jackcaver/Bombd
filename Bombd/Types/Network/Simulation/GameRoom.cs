@@ -12,9 +12,9 @@ namespace Bombd.Types.Network.Simulation;
 
 public class GameRoom
 {
-    private const int MaxSlots = 16;
+    private const int MaxSlots = 24;
     private const int InvalidSlot = -1;
-    private const int SlotBitsMask = 0xf;
+    private const int SlotBitsMask = 0x1f;
     
     public readonly Platform Platform;
     

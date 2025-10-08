@@ -121,11 +121,18 @@ public class RoomManager
         else if (request.Platform == Platform.Karting)
             type = ServerType.Pod;
         
-        // The game generally doesn't tell us how many slots we need, so we'll just default to 8,
+        // The game generally doesn't tell us how many slots we need, so we'll just default to some value,
         // and then update it again when we receive the event settings from the host
-        int maxPlayers = 8;
-        // The pod in LBPK should only be allowed to have 4 people when online
-        if (type == ServerType.Pod) maxPlayers = 4;
+        int maxPlayers = type switch
+        {
+            // The pod in LBPK should only be allowed to have 4 people when online
+            ServerType.Pod => 4,
+            // MNR official servers reports a max player count of 24
+            ServerType.KartPark => 24,
+            // Otherwise just default ot 8.
+            _ => 8
+        };
+        
         request.Attributes["__MAX_PLAYERS"] = maxPlayers.ToString();
         
         bool isSeries = false;
