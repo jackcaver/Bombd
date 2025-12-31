@@ -47,4 +47,19 @@ public static class GatewayEvents
     /// Receive: New hot seat playlist has been set
     /// </summary>
     public const string HotSeatPlaylistReset = "HOT_SEAT_PLAYLIST_RESET";
+
+    /// <summary>
+    /// Receive: Web API wants to register these chat commands.
+    /// </summary>
+    public const string RegisterChatCommands = "REGISTER_CHAT_COMMANDS";
+
+    /// <summary>
+    /// Send: User executed a chat command registered by Web API.
+    /// </summary>
+    public const string ChatCommand = "CHAT_COMMAND";
+
+    /// <summary>
+    /// Receive: Chat command registered by Web API responded with a chat message.
+    /// </summary>
+    public const string ChatCommandResponse = "CHAT_COMMAND_RESPONSE";
 }
