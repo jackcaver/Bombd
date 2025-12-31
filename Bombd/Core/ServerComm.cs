@@ -299,6 +299,8 @@ public sealed class ServerComm : IDisposable
             case GatewayEvents.HotSeatPlaylistReset:
             {
                 BombdServer.Instance.GameServer.NotifyHotSeatReset();
+                break;
+            }
             case GatewayEvents.RegisterChatCommands:
             {
                 //Suggestion: maybe allow other servers to register chat commands? can't think of a potential use case though...
